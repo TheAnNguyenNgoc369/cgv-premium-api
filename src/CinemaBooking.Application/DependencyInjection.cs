@@ -1,31 +1,16 @@
 using System.Reflection;
-using CinemaBooking.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace CinemaBooking.Infrastructure;
+namespace CinemaBooking.Application;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructureServices(
-        this IServiceCollection services,
-        IConfiguration configuration)
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        var assembly = typeof(DependencyInjection).Assembly;
 
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new InvalidOperationException(
-                "Connection string 'DefaultConnection' is not configured.");
-        }
-
-        services.AddDbContext<CinemaBookingDbContext>(options =>
-            options.UseSqlServer(
-                connectionString,
-                b => b.MigrationsAssembly(typeof(CinemaBookingDbContext).Assembly.FullName)));
-
-        services.AddScopedByConvention(typeof(DependencyInjection).Assembly, "Repository");
+        services.AddAutoMapper(_ => { }, assembly);
+        services.AddScopedByConvention(assembly, "Service");
 
         return services;
     }
