@@ -438,3 +438,21 @@ Match explanation depth to the person you are working with:
 - If they are experienced: lead with findings and diffs. Skip definitions. Use precise technical language directly.
 
 Do not assume expertise level — read it from the conversation. Adjust as needed.
+
+## C# Coding Conventions
+
+Unless the repository explicitly uses a different convention:
+
+- Follow standard Microsoft C#/.NET coding conventions.
+- Use PascalCase for classes, methods, properties, enums, and public members.
+- Use camelCase for parameters and local variables.
+- Prefix interfaces with `I`.
+- Prefix private fields with `_`.
+- Async methods must end with `Async`.
+
+## File Organization
+
+- Use one public type per file.
+- File name must match the primary type name.
+- Do not create generic files such as `Models.cs`, `Entities.cs`, `Helpers.cs`, or `Utils.cs` that contain multiple unrelated types.
+- Place types in folders that reflect their responsibility and layer.
