@@ -15,6 +15,11 @@ public static class DependencyInjection
         IHostEnvironment environment)
     {
         services.AddControllers();
+
+        //Add Swagger
+        services.AddEndpointsApiExplorer();
+        services.AddSwaggerGen();
+
         services.AddApplicationServices();
 
         if (environment.IsDevelopment())

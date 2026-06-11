@@ -9,7 +9,6 @@ builder.Logging.AddConfiguration(builder.Configuration.GetSection("Logging"));
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 
-builder.Services.AddOpenApi();
 builder.Services.AddApiServices(builder.Configuration, builder.Environment);
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddHealthChecks()
@@ -19,10 +18,12 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
