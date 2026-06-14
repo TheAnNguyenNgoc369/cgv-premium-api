@@ -100,6 +100,23 @@ public sealed class UserRepository : IUserRepository
             .FirstOrDefaultAsync(t => t.Token == token, cancellationToken);
     }
 
+    public Task AddPasswordResetTokenAsync(
+        PasswordResetToken resetToken,
+        CancellationToken cancellationToken = default)
+    {
+        _dbContext.PasswordResetTokens.Add(resetToken);
+        return _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public Task<PasswordResetToken?> GetPasswordResetTokenAsync(
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.PasswordResetTokens
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.Token == token, cancellationToken);
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         return _dbContext.SaveChangesAsync(cancellationToken);

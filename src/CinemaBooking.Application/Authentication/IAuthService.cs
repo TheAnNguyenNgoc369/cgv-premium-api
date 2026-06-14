@@ -23,4 +23,14 @@ public interface IAuthService
     Task<(bool Succeeded, string? ErrorMessage)> VerifyEmailAsync(
         string token,
         CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage)> ForgotPasswordAsync(
+        string email,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage)> ResetPasswordAsync(
+        string token,
+        string newPassword,
+        string confirmPassword,
+        CancellationToken cancellationToken = default);
 }

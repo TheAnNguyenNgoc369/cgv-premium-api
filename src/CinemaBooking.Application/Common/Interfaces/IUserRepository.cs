@@ -30,5 +30,13 @@ public interface IUserRepository
         string token,
         CancellationToken cancellationToken = default);
 
+    Task AddPasswordResetTokenAsync(
+        PasswordResetToken resetToken,
+        CancellationToken cancellationToken = default);
+
+    Task<PasswordResetToken?> GetPasswordResetTokenAsync(
+        string token,
+        CancellationToken cancellationToken = default);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

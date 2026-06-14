@@ -149,44 +149,93 @@ public sealed class AuthService : IAuthService
         return (true, null, verificationEmailSent);
     }
 
-    public async Task<(bool Succeeded, string? ErrorMessage)> VerifyEmailAsync(
-        string token,
+    public async Task<(bool Succeeded, string? ErrorMessage)> ForgotPasswordAsync(
+        string email,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(token))
+        if (string.IsNullOrWhiteSpace(email))
         {
-            return (false, "Verification token is required");
+            return (false, "Vui lòng nhập email");
         }
 
-        var verificationToken = await _userRepository.GetEmailVerificationTokenAsync(
-            token.Trim(),
-            cancellationToken);
+        var normalizedEmail = email.Trim();
+        var user = await _userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
 
-        if (verificationToken is null)
-        {
-            return (false, "Verification token is invalid");
-        }
-
-        if (verificationToken.VerifiedAt.HasValue)
+        if (user is null)
         {
             return (true, null);
         }
 
         var now = DateTime.UtcNow;
-
-        if (verificationToken.ExpiresAt < now)
+        var resetToken = new PasswordResetToken
         {
-            return (false, "Verification token has expired");
+            Token = GeneratePasswordResetToken(),
+            ExpiresAt = now.AddMinutes(15),
+            CreatedAt = now,
+            UserID = user.UserID
+        };
+
+        await _userRepository.AddPasswordResetTokenAsync(resetToken, cancellationToken);
+
+        var emailSent = await _emailSender.SendAsync(
+            user.Email,
+            "Reset your Cinema Booking password",
+            BuildResetPasswordEmailBody(user.FullName, resetToken.Token),
+            cancellationToken);
+
+        return (true, null);
+    }
+
+    public async Task<(bool Succeeded, string? ErrorMessage)> ResetPasswordAsync(
+        string token,
+        string newPassword,
+        string confirmPassword,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return (false, "Reset token is required");
         }
 
-        verificationToken.VerifiedAt = now;
-
-        if (!string.Equals(verificationToken.User.Status, LockedStatus, StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(verificationToken.User.Status, InactiveStatus, StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(newPassword))
         {
-            verificationToken.User.Status = ActiveStatus;
-            verificationToken.User.UpdatedAt = now;
+            return (false, "Vui lòng nhập mật khẩu mới");
         }
+
+        if (newPassword.Length < 6)
+        {
+            return (false, "Mật khẩu mới phải có ít nhất 6 ký tự");
+        }
+
+        if (!string.Equals(newPassword, confirmPassword, StringComparison.Ordinal))
+        {
+            return (false, "Mật khẩu xác nhận không khớp");
+        }
+
+        var resetToken = await _userRepository.GetPasswordResetTokenAsync(
+            token.Trim(),
+            cancellationToken);
+
+        if (resetToken is null)
+        {
+            return (false, "Reset token is invalid");
+        }
+
+        if (resetToken.UsedAt.HasValue)
+        {
+            return (false, "Reset token has already been used");
+        }
+
+        var now = DateTime.UtcNow;
+
+        if (resetToken.ExpiresAt < now)
+        {
+            return (false, "Reset token has expired");
+        }
+
+        resetToken.User.PasswordHash = HashPassword(newPassword);
+        resetToken.User.UpdatedAt = now;
+        resetToken.UsedAt = now;
 
         await _userRepository.SaveChangesAsync(cancellationToken);
 
@@ -211,98 +260,101 @@ public sealed class AuthService : IAuthService
             .Replace('/', '_');
     }
 
+    private static string GeneratePasswordResetToken()
+    {
+        var bytes = RandomNumberGenerator.GetBytes(32);
+
+        return Convert.ToBase64String(bytes)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+    }
+
     private static string BuildVerificationEmailBody(string fullName, string token)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
+        var verifyUrl = $"https://your-domain.com/verify-email?token={Uri.EscapeDataString(token)}";
 
         return $"""
-    <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
+            <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
 
-        <!-- Header -->
-        <div style="background: #c62828; padding: 28px 32px; text-align: center;">
-            <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
-                <tr>
-                    <td style="vertical-align: middle; padding-right: 10px;">
-                        <img src="https://your-cdn.com/cgv-icon.png" alt="" width="28" height="28"
-                             style="display: block;"
-                             onerror="this.style.display='none'" />
-                    </td>
-                    <td style="vertical-align: middle;">
-                        <span style="color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: 1px;">CGV Premium</span>
-                    </td>
-                </tr>
-            </table>
-        </div>
+                <div style="background: #c62828; padding: 22px 32px; text-align: center;">
+                    <span style="color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: 1px;">CGV Premium</span>
+                </div>
 
-        <!-- Body -->
-        <div style="padding: 36px 40px 28px;">
-            <p style="margin: 0 0 8px; color: #111111; font-size: 22px; font-weight: 700;">
-                Verify your email
-            </p>
-            <p style="margin: 0 0 24px; color: #555555; font-size: 15px; line-height: 1.6;">
-                Hello <strong>{encodedFullName}</strong>, welcome to CGV Premium!<br />
-                Use the code below to activate your account.
-            </p>
+                <div style="padding: 32px 36px 24px;">
+                    <p style="margin: 0 0 6px; color: #111111; font-size: 20px; font-weight: 700;">Verify your email</p>
+                    <p style="margin: 0 0 24px; color: #555555; font-size: 14px; line-height: 1.6;">
+                        Hello <strong>{encodedFullName}</strong>, welcome to CGV Premium!<br />
+                        Click the button below to activate your account.
+                    </p>
 
-            <!-- OTP Box -->
-            <div style="
-                background: #fafafa;
-                border: 1px solid #e8e8e8;
-                border-top: 3px solid #c62828;
-                border-radius: 6px;
-                padding: 28px 20px;
-                text-align: center;
-                margin: 0 0 28px;">
-                <p style="margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 1.5px; color: #888888; text-transform: uppercase;">
-                    Verification code
-                </p>
-                <p style="
-                    margin: 0;
-                    font-size: 32px;
-                    font-weight: 700;
-                    letter-spacing: 10px;
-                    color: #c62828;">
-                    {token}
-                </p>
-                <p style="margin: 16px 0 0; font-size: 13px; color: #999999;">
-                    Expires in <strong style="color: #555555;">{VerificationTokenExpirationHours} hours</strong>
-                </p>
+                    <div style="text-align: center; margin: 0 0 24px;">
+                        <a href="{verifyUrl}" style="display: inline-block; background: #c62828; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 40px; border-radius: 6px;">
+                            Verify my account
+                        </a>
+                        <p style="margin: 12px 0 0; font-size: 12px; color: #999999;">This link expires in {VerificationTokenExpirationHours} hours</p>
+                    </div>
+
+                    <div style="background: #fff8e1; border-left: 3px solid #f9a825; border-radius: 0 4px 4px 0; padding: 10px 14px;">
+                        <p style="margin: 0; font-size: 13px; color: #7a6000; line-height: 1.5;">
+                            If you did not create this account, you can safely ignore this email.
+                        </p>
+                    </div>
+                </div>
+
+                <div style="background: #f9f9f9; border-top: 1px solid #eeeeee; padding: 14px 36px; text-align: center;">
+                    <p style="margin: 0 0 2px; font-size: 11px; color: #aaaaaa;">&copy; {DateTime.UtcNow.Year} CGV Premium. All rights reserved.</p>
+                    <p style="margin: 0; font-size: 11px; color: #bbbbbb;">This is an automated message &mdash; please do not reply to this email.</p>
+                </div>
+
             </div>
+            """;
+    }
 
-            <!-- Warning Notice -->
-            <div style="
-                background: #fff8e1;
-                border-left: 3px solid #f9a825;
-                border-radius: 4px;
-                padding: 12px 16px;
-                margin-bottom: 24px;">
-                <p style="margin: 0; font-size: 13px; color: #7a6000; line-height: 1.5;">
-                    If you did not create this account, you can safely ignore this email.
-                    Your account will not be activated without verification.
-                </p>
+    private static string BuildResetPasswordEmailBody(string fullName, string token)
+    {
+        var encodedFullName = WebUtility.HtmlEncode(fullName);
+        var resetUrl = $"https://your-domain.com/reset-password?token={Uri.EscapeDataString(token)}";
+
+        return $"""
+            <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
+
+                <div style="background: #c62828; padding: 22px 32px; text-align: center;">
+                    <span style="color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: 1px;">CGV Premium</span>
+                </div>
+
+                <div style="padding: 32px 36px 24px;">
+                    <p style="margin: 0 0 6px; color: #111111; font-size: 20px; font-weight: 700;">Reset your password</p>
+                    <p style="margin: 0 0 24px; color: #555555; font-size: 14px; line-height: 1.6;">
+                        Hello <strong>{encodedFullName}</strong>,<br />
+                        Click the button below to reset your password.
+                    </p>
+
+                    <div style="text-align: center; margin: 0 0 24px;">
+                        <a href="{resetUrl}" style="display: inline-block; background: #c62828; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 40px; border-radius: 6px;">
+                            Reset my password
+                        </a>
+                        <p style="margin: 12px 0 0; font-size: 12px; color: #999999;">This link expires in 15 minutes</p>
+                    </div>
+
+                    <div style="background: #fff8e1; border-left: 3px solid #f9a825; border-radius: 0 4px 4px 0; padding: 10px 14px;">
+                        <p style="margin: 0; font-size: 13px; color: #7a6000; line-height: 1.5;">
+                            If you did not request a password reset, you can ignore this email. The link will automatically expire.
+                        </p>
+                    </div>
+                </div>
+
+                <div style="background: #f9f9f9; border-top: 1px solid #eeeeee; padding: 14px 36px; text-align: center;">
+                    <p style="margin: 0; font-size: 11px; color: #aaaaaa;">&copy; {DateTime.UtcNow.Year} CGV Premium. All rights reserved.</p>
+                </div>
+
             </div>
+            """;
+    }
 
-            <p style="margin: 0; color: #555555; font-size: 14px; line-height: 1.7;">
-                Thank you for joining CGV Premium. We look forward to bringing you the best cinema experience.
-            </p>
-        </div>
-
-        <!-- Footer -->
-        <div style="
-            background: #f9f9f9;
-            border-top: 1px solid #eeeeee;
-            padding: 20px 40px;
-            text-align: center;">
-            <p style="margin: 0 0 4px; font-size: 12px; color: #aaaaaa;">
-                &copy; {DateTime.UtcNow.Year} CGV Premium. All rights reserved.
-            </p>
-            <p style="margin: 0; font-size: 12px; color: #bbbbbb;">
-                This is an automated message &mdash; please do not reply directly to this email.
-            </p>
-        </div>
-
-    </div>
-    """;
-
+    public Task<(bool Succeeded, string? ErrorMessage)> VerifyEmailAsync(string token, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
     }
 }
