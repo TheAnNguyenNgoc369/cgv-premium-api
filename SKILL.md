@@ -29,6 +29,11 @@ If no pattern exists yet, say so in the planning step and propose one before imp
 
 If the existing pattern is clearly wrong (security risk, architectural violation, broken in production), flag it explicitly rather than silently perpetuating it. Propose a correction as a separate task.
 
+If a file cannot be found:
+- Do not assume it does not exist.
+- Search first.
+- Only conclude absence after inspection.
+
 ---
 
 ## Minimize Scope
@@ -39,6 +44,20 @@ Only modify files directly related to the task. Avoid:
 - Renaming without a stated reason.
 - Moving code between layers unnecessarily.
 - Architecture changes unless explicitly requested.
+
+---
+
+## Preserve Existing Behavior
+
+Do not change observable behavior unless explicitly requested.
+
+For refactoring tasks:
+- Existing API contracts must remain unchanged.
+- Existing response structures must remain unchanged.
+- Existing routes must remain unchanged.
+- Existing business behavior must remain unchanged.
+
+If behavior changes are unavoidable, explain them first.
 
 ---
 
@@ -62,6 +81,18 @@ When the existing architecture has a problem, name it and propose a fix — but 
 
 ---
 
+## Confirmation Rules
+
+Large changes require confirmation before proceeding. Examples:
+
+- More than 10 files modified.
+- New package installation.
+- Authentication changes.
+- Database schema changes.
+- Cross-layer changes.
+
+---
+
 # Project Context
 
 ASP.NET Core Web API following Clean Architecture.
@@ -69,6 +100,20 @@ ASP.NET Core Web API following Clean Architecture.
 Layers: API, Application, Domain, Infrastructure, Shared.
 
 Multiple developers work simultaneously. Changes must be safe for team collaboration — keep scope tight, avoid large cross-cutting diffs.
+
+## Merge Rules
+
+When multiple codebases exist:
+- Current root project is the source of truth.
+- External projects are reference material only.
+- Never overwrite root blindly.
+
+Prefer in order:
+1. Reuse.
+2. Adapt.
+3. Extend.
+
+Only replace existing code if the replacement is clearly superior and low-risk.
 
 ---
 
@@ -111,6 +156,12 @@ No infrastructure implementation (no EF Core, no HTTP clients). Defines interfac
 - Entities, Value Objects, Enums
 - Domain rules and invariants
 - No framework dependencies
+
+When two entities have the same name:
+- Root version wins.
+- Only add missing properties if safe.
+- Never remove properties automatically.
+- Never rename properties automatically.
 
 ### Infrastructure
 - EF Core, DbContext, entity configurations
@@ -256,6 +307,16 @@ Avoid duplicate registrations. If a service is already registered, do not re-reg
 
 ---
 
+# Package Rules
+
+Before adding a NuGet package:
+
+1. Search whether an existing package already solves the problem.
+2. Prefer built-in .NET libraries.
+3. Avoid introducing dependencies unnecessarily.
+
+---
+
 # Version Control
 
 Changes should be safe for a multi-developer team:
@@ -264,6 +325,13 @@ Changes should be safe for a multi-developer team:
 - Do not bundle refactoring with feature work in the same commit.
 - Migration files must be committed with the code that requires them.
 - If you add a new package (`dotnet add package`), the `.csproj` change must be included.
+
+**Git Safety:**
+Never run the following unless explicitly requested:
+- `git reset --hard`
+- `git clean -fd`
+- `git checkout .`
+- `git restore .`
 
 ---
 
@@ -328,6 +396,16 @@ dotnet ef database update --project Infrastructure --startup-project API
 **New service / DI registration:**
 - Start the application and confirm it starts without exceptions
 - Run any existing integration tests: `dotnet test`
+
+A task is not complete until:
+- `dotnet build` succeeds.
+- No compile errors remain.
+- Startup succeeds if affected.
+
+Warnings:
+- Do not introduce new warnings.
+- Existing warnings may be reported but do not need to be fixed unless related to the task.
+- If warnings cannot be fixed safely, mention them in the final report.
 
 ---
 
@@ -428,9 +506,18 @@ Success criteria: application starts, no `SqlException` on startup, a test query
 - Keep refactoring commits separate from feature commits.
 - Document the motivation in the planning step — "cleans up code" is not sufficient.
 
+Do not:
+- Rename classes without reason.
+- Rename methods without reason.
+- Reorganize folders.
+- Introduce new architectural patterns.
+- Replace working code for stylistic reasons.
+
 ---
 
 # Adapting Communication Style
+
+Default response structure: Findings → Plan → Implementation → Validation. Use concise technical language. Avoid unnecessary explanations.
 
 Match explanation depth to the person you are working with:
 

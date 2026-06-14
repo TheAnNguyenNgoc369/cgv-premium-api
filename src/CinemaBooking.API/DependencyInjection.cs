@@ -1,9 +1,11 @@
 using System.Text;
 using CinemaBooking.API.Configuration;
+using CinemaBooking.API.Services;
 using CinemaBooking.Application;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 
 namespace CinemaBooking.API;
 
@@ -18,9 +20,29 @@ public static class DependencyInjection
 
         //Add Swagger
         services.AddEndpointsApiExplorer();
-        services.AddSwaggerGen();
+        services.AddSwaggerGen(options =>
+        {
+            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            {
+                Name = "Authorization",
+                Type = SecuritySchemeType.ApiKey,
+                Scheme = "Bearer",
+                BearerFormat = "JWT",
+                In = ParameterLocation.Header,
+                Description = "Nhập: Bearer {token}"
+            });
+
+            options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+            {
+                {
+                    new OpenApiSecuritySchemeReference("Bearer", document, null),
+                    []
+                }
+            });
+        });
 
         services.AddApplicationServices();
+        services.AddScoped<JwtTokenService>();
 
         if (environment.IsDevelopment())
         {
