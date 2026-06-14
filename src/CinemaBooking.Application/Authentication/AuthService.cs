@@ -216,10 +216,93 @@ public sealed class AuthService : IAuthService
         var encodedFullName = WebUtility.HtmlEncode(fullName);
 
         return $"""
-            <p>Hello {encodedFullName},</p>
-            <p>Please verify your Cinema Booking account using this token:</p>
-            <p><strong>{token}</strong></p>
-            <p>This token expires in {VerificationTokenExpirationHours} hours.</p>
-            """;
+    <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
+
+        <!-- Header -->
+        <div style="background: #c62828; padding: 28px 32px; text-align: center;">
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                <tr>
+                    <td style="vertical-align: middle; padding-right: 10px;">
+                        <img src="https://your-cdn.com/cgv-icon.png" alt="" width="28" height="28"
+                             style="display: block;"
+                             onerror="this.style.display='none'" />
+                    </td>
+                    <td style="vertical-align: middle;">
+                        <span style="color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: 1px;">CGV Premium</span>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Body -->
+        <div style="padding: 36px 40px 28px;">
+            <p style="margin: 0 0 8px; color: #111111; font-size: 22px; font-weight: 700;">
+                Verify your email
+            </p>
+            <p style="margin: 0 0 24px; color: #555555; font-size: 15px; line-height: 1.6;">
+                Hello <strong>{encodedFullName}</strong>, welcome to CGV Premium!<br />
+                Use the code below to activate your account.
+            </p>
+
+            <!-- OTP Box -->
+            <div style="
+                background: #fafafa;
+                border: 1px solid #e8e8e8;
+                border-top: 3px solid #c62828;
+                border-radius: 6px;
+                padding: 28px 20px;
+                text-align: center;
+                margin: 0 0 28px;">
+                <p style="margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 1.5px; color: #888888; text-transform: uppercase;">
+                    Verification code
+                </p>
+                <p style="
+                    margin: 0;
+                    font-size: 32px;
+                    font-weight: 700;
+                    letter-spacing: 10px;
+                    color: #c62828;">
+                    {token}
+                </p>
+                <p style="margin: 16px 0 0; font-size: 13px; color: #999999;">
+                    Expires in <strong style="color: #555555;">{VerificationTokenExpirationHours} hours</strong>
+                </p>
+            </div>
+
+            <!-- Warning Notice -->
+            <div style="
+                background: #fff8e1;
+                border-left: 3px solid #f9a825;
+                border-radius: 4px;
+                padding: 12px 16px;
+                margin-bottom: 24px;">
+                <p style="margin: 0; font-size: 13px; color: #7a6000; line-height: 1.5;">
+                    If you did not create this account, you can safely ignore this email.
+                    Your account will not be activated without verification.
+                </p>
+            </div>
+
+            <p style="margin: 0; color: #555555; font-size: 14px; line-height: 1.7;">
+                Thank you for joining CGV Premium. We look forward to bringing you the best cinema experience.
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div style="
+            background: #f9f9f9;
+            border-top: 1px solid #eeeeee;
+            padding: 20px 40px;
+            text-align: center;">
+            <p style="margin: 0 0 4px; font-size: 12px; color: #aaaaaa;">
+                &copy; {DateTime.UtcNow.Year} CGV Premium. All rights reserved.
+            </p>
+            <p style="margin: 0; font-size: 12px; color: #bbbbbb;">
+                This is an automated message &mdash; please do not reply directly to this email.
+            </p>
+        </div>
+
+    </div>
+    """;
+
     }
 }
