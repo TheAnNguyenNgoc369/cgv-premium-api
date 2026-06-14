@@ -16,6 +16,10 @@ public interface IAuthService
         string password,
         CancellationToken cancellationToken = default);
 
+    Task<(bool Succeeded, string? ErrorMessage, bool VerificationEmailSent)> ResendVerificationEmailAsync(
+        string email,
+        CancellationToken cancellationToken = default);
+
     Task<(bool Succeeded, string? ErrorMessage)> VerifyEmailAsync(
         string token,
         CancellationToken cancellationToken = default);

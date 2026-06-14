@@ -60,6 +60,33 @@ public sealed class AuthController : ControllerBase
         });
     }
 
+    [HttpPost("resend-verification-email")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResendVerificationEmail(
+        [FromBody] ResendVerificationEmailRequest model,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var result = await _authService.ResendVerificationEmailAsync(
+            model.Email,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { message = result.ErrorMessage });
+        }
+
+        return Ok(new
+        {
+            message = "Verification email sent successfully",
+            verificationEmailSent = result.VerificationEmailSent
+        });
+    }
+
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<IActionResult> Login(

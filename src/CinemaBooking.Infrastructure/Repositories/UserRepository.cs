@@ -83,6 +83,14 @@ public sealed class UserRepository : IUserRepository
         await transaction.CommitAsync(cancellationToken);
     }
 
+    public Task AddEmailVerificationTokenAsync(
+        EmailVerificationToken verificationToken,
+        CancellationToken cancellationToken = default)
+    {
+        _dbContext.EmailVerificationTokens.Add(verificationToken);
+        return _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public Task<EmailVerificationToken?> GetEmailVerificationTokenAsync(
         string token,
         CancellationToken cancellationToken = default)

@@ -32,6 +32,8 @@ public sealed class SmtpEmailSender : IEmailSender
             return false;
         }
 
+        _logger.LogInformation("Sending email to {ToEmail} via {Host}:{Port}", toEmail, _emailSettings.Host, _emailSettings.Port);
+
         try
         {
             using var message = new MailMessage
@@ -57,11 +59,16 @@ public sealed class SmtpEmailSender : IEmailSender
 
             await client.SendMailAsync(message, cancellationToken);
 
+            _logger.LogInformation("Email successfully sent to {ToEmail}", toEmail);
             return true;
         }
         catch (Exception ex) when (ex is SmtpException or InvalidOperationException or FormatException)
         {
-            _logger.LogWarning(ex, "Failed to send verification email to {ToEmail}", toEmail);
+            _logger.LogWarning(ex, "Failed to send email to {ToEmail}. Host={Host}, Port={Port}, EnableSsl={EnableSsl}",
+                toEmail,
+                _emailSettings.Host,
+                _emailSettings.Port,
+                _emailSettings.EnableSsl);
             return false;
         }
     }

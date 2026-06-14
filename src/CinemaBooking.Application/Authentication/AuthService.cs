@@ -112,6 +112,43 @@ public sealed class AuthService : IAuthService
         return (true, null, user);
     }
 
+    public async Task<(bool Succeeded, string? ErrorMessage, bool VerificationEmailSent)> ResendVerificationEmailAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return (false, "Vui lòng nhập email", false);
+        }
+
+        var normalizedEmail = email.Trim();
+        var user = await _userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
+
+        if (user is null)
+        {
+            return (false, "Email chưa được đăng ký", false);
+        }
+
+        var now = DateTime.UtcNow;
+        var verificationToken = new EmailVerificationToken
+        {
+            Token = GenerateEmailVerificationToken(),
+            ExpiresAt = now.AddHours(VerificationTokenExpirationHours),
+            CreatedAt = now,
+            UserID = user.UserID
+        };
+
+        await _userRepository.AddEmailVerificationTokenAsync(verificationToken, cancellationToken);
+
+        var verificationEmailSent = await _emailSender.SendAsync(
+            user.Email,
+            "Verify your Cinema Booking account",
+            BuildVerificationEmailBody(user.FullName, verificationToken.Token),
+            cancellationToken);
+
+        return (true, null, verificationEmailSent);
+    }
+
     public async Task<(bool Succeeded, string? ErrorMessage)> VerifyEmailAsync(
         string token,
         CancellationToken cancellationToken = default)

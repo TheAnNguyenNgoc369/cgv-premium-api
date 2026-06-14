@@ -22,6 +22,10 @@ public interface IUserRepository
         EmailVerificationToken verificationToken,
         CancellationToken cancellationToken = default);
 
+    Task AddEmailVerificationTokenAsync(
+        EmailVerificationToken verificationToken,
+        CancellationToken cancellationToken = default);
+
     Task<EmailVerificationToken?> GetEmailVerificationTokenAsync(
         string token,
         CancellationToken cancellationToken = default);
