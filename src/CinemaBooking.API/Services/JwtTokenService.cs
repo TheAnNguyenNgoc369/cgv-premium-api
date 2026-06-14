@@ -19,11 +19,18 @@ public sealed class JwtTokenService
 
     public string GenerateToken(User user)
     {
+        var now = DateTime.UtcNow;
         var claims = new[]
         {
+            new Claim(JwtRegisteredClaimNames.Sub, user.UserID.ToString()),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+            new Claim(JwtRegisteredClaimNames.Email, user.Email),
+            new Claim(ClaimTypes.NameIdentifier, user.UserID.ToString()),
+            new Claim(ClaimTypes.Email, user.Email),
             new Claim("userId", user.UserID.ToString()),
             new Claim("email", user.Email),
             new Claim("fullName", user.FullName),
+            new Claim("role", user.Role),
             new Claim(ClaimTypes.Role, user.Role)
         };
 
@@ -34,7 +41,8 @@ public sealed class JwtTokenService
             issuer: _jwtSettings.Issuer,
             audience: _jwtSettings.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes),
+            notBefore: now,
+            expires: now.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

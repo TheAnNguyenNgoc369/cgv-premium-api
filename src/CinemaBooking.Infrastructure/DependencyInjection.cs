@@ -1,8 +1,12 @@
 using System.Reflection;
+using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Infrastructure.Configuration;
+using CinemaBooking.Infrastructure.Email;
 using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace CinemaBooking.Infrastructure;
 
@@ -25,6 +29,23 @@ public static class DependencyInjection
                 connectionString,
                 b => b.MigrationsAssembly(typeof(CinemaBookingDbContext).Assembly.FullName)));
 
+        var emailSection = configuration.GetRequiredSection(EmailSettings.SectionName);
+        var emailSettings = new EmailSettings
+        {
+            Host = emailSection[nameof(EmailSettings.Host)] ?? string.Empty,
+            Port = int.TryParse(emailSection[nameof(EmailSettings.Port)], out var port)
+                ? port
+                : 587,
+            EnableSsl = !bool.TryParse(emailSection[nameof(EmailSettings.EnableSsl)], out var enableSsl)
+                || enableSsl,
+            FromAddress = emailSection[nameof(EmailSettings.FromAddress)] ?? string.Empty,
+            FromName = emailSection[nameof(EmailSettings.FromName)] ?? string.Empty,
+            Username = emailSection[nameof(EmailSettings.Username)],
+            Password = emailSection[nameof(EmailSettings.Password)]
+        };
+
+        services.AddSingleton(Options.Create(emailSettings));
+        services.AddScoped<IEmailSender, SmtpEmailSender>();
         services.AddScopedByConvention(typeof(DependencyInjection).Assembly, "Repository");
 
         return services;

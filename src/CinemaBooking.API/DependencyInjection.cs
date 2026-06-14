@@ -1,7 +1,10 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
 using CinemaBooking.API.Configuration;
 using CinemaBooking.API.Services;
 using CinemaBooking.Application;
+using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
@@ -25,11 +28,11 @@ public static class DependencyInjection
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Name = "Authorization",
-                Type = SecuritySchemeType.ApiKey,
+                Type = SecuritySchemeType.Http,
                 Scheme = "Bearer",
                 BearerFormat = "JWT",
                 In = ParameterLocation.Header,
-                Description = "Nhập: Bearer {token}"
+                Description = "JWT Authorization header using the Bearer scheme."
             });
 
             options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
@@ -41,8 +44,10 @@ public static class DependencyInjection
             });
         });
 
+
         services.AddApplicationServices();
         services.AddScoped<JwtTokenService>();
+        services.AddSingleton<ITokenRevocationService, InMemoryTokenRevocationService>();
 
         if (environment.IsDevelopment())
         {
@@ -93,11 +98,45 @@ public static class DependencyInjection
                     ValidAudience = jwtSettings.Audience,
                     IssuerSigningKey = new SymmetricSecurityKey(
                         Encoding.UTF8.GetBytes(jwtSettings.SigningKey)),
-                    ClockSkew = TimeSpan.FromMinutes(1)
+                    ClockSkew = TimeSpan.FromMinutes(1),
+                    NameClaimType = ClaimTypes.NameIdentifier,
+                    RoleClaimType = ClaimTypes.Role
+                };
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = context =>
+                    {
+                        var revocationService = context.HttpContext.RequestServices
+                            .GetRequiredService<ITokenRevocationService>();
+                        var rawToken = context.SecurityToken is JwtSecurityToken jwtToken
+                            ? jwtToken.RawData
+                            : null;
+
+                        if (!string.IsNullOrWhiteSpace(rawToken)
+                            && revocationService.IsRevoked(rawToken))
+                        {
+                            context.Fail("Token has been revoked.");
+                        }
+
+                        return Task.CompletedTask;
+                    },
+
+                    OnAuthenticationFailed = context =>
+                    {
+                        Console.WriteLine("JWT ERROR:");
+                        Console.WriteLine(context.Exception.Message);
+
+                        return Task.CompletedTask;
+                    }
                 };
             });
 
-        services.AddAuthorization();
+        services.AddAuthorization(options =>
+        {
+            options.AddPolicy(Roles.Customer, policy => policy.RequireRole(Roles.Customer));
+            options.AddPolicy(Roles.Staff, policy => policy.RequireRole(Roles.Staff));
+            options.AddPolicy(Roles.Admin, policy => policy.RequireRole(Roles.Admin));
+        });
 
         return services;
     }

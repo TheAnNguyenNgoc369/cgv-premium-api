@@ -4,7 +4,7 @@ namespace CinemaBooking.Application.Authentication;
 
 public interface IAuthService
 {
-    Task<(bool Succeeded, string? ErrorMessage, int? UserId)> RegisterAsync(
+    Task<(bool Succeeded, string? ErrorMessage, int? UserId, bool VerificationEmailSent)> RegisterAsync(
         string fullName,
         string email,
         string phone,
@@ -14,5 +14,9 @@ public interface IAuthService
     Task<(bool Succeeded, string? ErrorMessage, User? User)> LoginAsync(
         string email,
         string password,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage)> VerifyEmailAsync(
+        string token,
         CancellationToken cancellationToken = default);
 }

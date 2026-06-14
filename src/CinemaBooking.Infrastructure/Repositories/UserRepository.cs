@@ -19,6 +19,11 @@ public sealed class UserRepository : IUserRepository
         return _dbContext.Users.AnyAsync(u => u.Email == email, cancellationToken);
     }
 
+    public Task<bool> PhoneExistsAsync(string phone, CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Users.AnyAsync(u => u.Phone == phone, cancellationToken);
+    }
+
     public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         return _dbContext.Users
@@ -55,5 +60,40 @@ public sealed class UserRepository : IUserRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task AddUserWithWalletAndVerificationTokenAsync(
+        User user,
+        Wallet wallet,
+        EmailVerificationToken verificationToken,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        _dbContext.Users.Add(user);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        wallet.UserID = user.UserID;
+        verificationToken.UserID = user.UserID;
+
+        _dbContext.Wallets.Add(wallet);
+        _dbContext.EmailVerificationTokens.Add(verificationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public Task<EmailVerificationToken?> GetEmailVerificationTokenAsync(
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.EmailVerificationTokens
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.Token == token, cancellationToken);
+    }
+
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        return _dbContext.SaveChangesAsync(cancellationToken);
     }
 }
