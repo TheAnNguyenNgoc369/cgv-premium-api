@@ -16,6 +16,14 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
+//Seed initial data
+using (var scope = app.Services.CreateScope())
+{
+    var seeder = scope.ServiceProvider;
+
+    await CinemaBookingDbSeeder.SeedUsersAsync(seeder);
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
