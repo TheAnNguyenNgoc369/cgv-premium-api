@@ -1,9 +1,5 @@
-# PROMPT.md
-
-# Analysis Only
-
+# ANALYSIS ONLY PROMPT
 Read SKILL.md first.
-
 Do NOT implement.
 
 Task:
@@ -31,7 +27,7 @@ Stop after analysis.
 
 ---
 
-# Implementation
+# IMPLEMENTATION PROMPT
 
 Read SKILL.md first.
 
@@ -60,7 +56,7 @@ Stop after implementation.
 
 ---
 
-# Task Breakdown
+# TASK BREAKDOWN PROMPT
 
 Read SKILL.md first.
 
@@ -83,7 +79,7 @@ Output only the breakdown.
 
 ---
 
-# Bug Fix
+# BUG FIX PROMPT
 
 Read SKILL.md first.
 
@@ -103,7 +99,7 @@ Stop after completion.
 
 ---
 
-# New Feature
+# ADD NEW FEATURE PROMPT
 
 Read SKILL.md first.
 

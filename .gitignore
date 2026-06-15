@@ -12,6 +12,7 @@ obj/
 
 .env
 docker-compose.yml
+!deploy/docker-compose.yml
 
 ### VisualStudio ###
 ## Ignore Visual Studio temporary files, build results, and

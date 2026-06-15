@@ -1,0 +1,93 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: cinema-booking-sqlserver
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Express
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env}
+    ports:
+      - "${SQLSERVER_PORT:-1433}:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - cinema-booking-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" -b -o /dev/null',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  database-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: cinema-booking-database-init
+    restart: "no"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env}
+    volumes:
+      - ../database.sql:/scripts/database.sql:ro
+    networks:
+      - cinema-booking-network
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        SQLCMD=/opt/mssql-tools18/bin/sqlcmd
+        DATABASE_EXISTS="$$("$$SQLCMD" -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -h -1 -W -Q "SET NOCOUNT ON; SELECT CASE WHEN DB_ID(N'CGVPremiumDB') IS NULL THEN 0 ELSE 1 END")"
+        if [ "$$DATABASE_EXISTS" = "0" ]; then
+          "$$SQLCMD" -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -b -i /scripts/database.sql
+        else
+          echo "CGVPremiumDB already exists; skipping initialization."
+        fi
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: cinema-booking-api
+    restart: unless-stopped
+    depends_on:
+      database-init:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=CGVPremiumDB;User Id=sa;Password=${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env};Encrypt=False;TrustServerCertificate=True"
+      Jwt__Issuer: ${JWT_ISSUER:-CinemaBooking.API}
+      Jwt__Audience: ${JWT_AUDIENCE:-CinemaBooking.Client}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+      Jwt__AccessTokenExpirationMinutes: ${JWT_ACCESS_TOKEN_EXPIRATION_MINUTES:-60}
+      Email__Host: ${EMAIL_HOST:-localhost}
+      Email__Port: ${EMAIL_PORT:-25}
+      Email__EnableSsl: ${EMAIL_ENABLE_SSL:-false}
+      Email__FromAddress: ${EMAIL_FROM_ADDRESS:-no-reply@example.com}
+      Email__FromName: ${EMAIL_FROM_NAME:-Cinema Booking}
+      Email__Username: ${EMAIL_USERNAME:-}
+      Email__Password: ${EMAIL_PASSWORD:-}
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+    ports:
+      - "${API_PORT:-8080}:8080"
+    networks:
+      - cinema-booking-network
+    healthcheck:
+      test: ["CMD", "curl", "--silent", "--output", "/dev/null", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  cinema-booking-network:
+    driver: bridge
+
+volumes:
+  sqlserver_data:
+    driver: local
