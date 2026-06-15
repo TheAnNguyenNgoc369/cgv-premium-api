@@ -24,6 +24,16 @@ public sealed class UserRepository : IUserRepository
         return _dbContext.Users.AnyAsync(u => u.Phone == phone, cancellationToken);
     }
 
+    public Task<bool> PhoneExistsForAnotherUserAsync(
+        string phone,
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Users.AnyAsync(
+            u => u.Phone == phone && u.UserID != userId,
+            cancellationToken);
+    }
+
     public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         return _dbContext.Users
@@ -36,6 +46,31 @@ public sealed class UserRepository : IUserRepository
         return _dbContext.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.UserID == userId, cancellationToken);
+    }
+
+    public async Task<User?> UpdateProfileAsync(
+        int userId,
+        string fullName,
+        string? phone,
+        string? avatarUrl,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _dbContext.Users
+            .FirstOrDefaultAsync(u => u.UserID == userId, cancellationToken);
+
+        if (user is null)
+        {
+            return null;
+        }
+
+        user.FullName = fullName;
+        user.Phone = phone;
+        user.AvatarURL = avatarUrl;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return user;
     }
 
     public Task<Wallet?> GetWalletByUserIdAsync(int userId, CancellationToken cancellationToken = default)

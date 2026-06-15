@@ -41,11 +41,6 @@ public sealed class AuthService : IAuthService
             return (false, "Email này đã được đăng ký", null, false);
         }
 
-        if (await _userRepository.PhoneExistsAsync(normalizedPhone, cancellationToken))
-        {
-            return (false, "Số điện thoại này đã được đăng ký", null, false);
-        }
-
         var now = DateTime.UtcNow;
         var user = new User
         {
@@ -242,6 +237,42 @@ public sealed class AuthService : IAuthService
         return (true, null);
     }
 
+    public async Task<(bool Succeeded, string? ErrorMessage)> VerifyEmailAsync(
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return (false, "Token is required");
+        }
+
+        var verificationToken = await _userRepository.GetEmailVerificationTokenAsync(
+            token.Trim(),
+            cancellationToken);
+
+        if (verificationToken is null)
+        {
+            return (false, "Token không hợp lệ");
+        }
+
+        if (verificationToken.VerifiedAt.HasValue)
+        {
+            return (false, "Email đã được xác thực trước đó");
+        }
+
+        var now = DateTime.UtcNow;
+
+        if (verificationToken.ExpiresAt < now)
+        {
+            return (false, "Token đã hết hạn");
+        }
+
+        verificationToken.VerifiedAt = now;
+        await _userRepository.SaveChangesAsync(cancellationToken);
+
+        return (true, null);
+    }
+
     private static string HashPassword(string password)
     {
         using var sha = SHA256.Create();
@@ -346,15 +377,10 @@ public sealed class AuthService : IAuthService
                 </div>
 
                 <div style="background: #f9f9f9; border-top: 1px solid #eeeeee; padding: 14px 36px; text-align: center;">
-                    <p style="margin: 0; font-size: 11px; color: #aaaaaa;">&copy; {DateTime.UtcNow.Year} CGV Premium. All rights reserved.</p>
+                    <p style="margin: 0 0 2px; font-size: 11px; color: #aaaaaa;">&copy; {DateTime.UtcNow.Year} CGV Premium. All rights reserved.</p>
                 </div>
 
             </div>
             """;
-    }
-
-    public Task<(bool Succeeded, string? ErrorMessage)> VerifyEmailAsync(string token, CancellationToken cancellationToken = default)
-    {
-        throw new NotImplementedException();
     }
 }

@@ -1,4 +1,6 @@
+using CinemaBooking.API.Contracts.Users;
 using CinemaBooking.Application.Users;
+using CinemaBooking.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -31,17 +33,47 @@ public sealed class UserController : ControllerBase
             return NotFound();
         }
 
-        return Ok(new
+        return Ok(ToProfileResponse(user));
+    }
+
+    [HttpPut("profile")]
+    public async Task<IActionResult> UpdateProfile(
+        [FromBody] UpdateProfileRequest model,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
         {
-            user.UserID,
-            user.FullName,
-            user.Email,
-            user.Phone,
-            user.Role,
-            user.Status,
-            user.TotalPoints,
-            user.CreatedAt
-        });
+            return BadRequest(ModelState);
+        }
+
+        if (!TryGetCurrentUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await _userService.UpdateProfileAsync(
+            userId,
+            model.FullName,
+            model.Phone,
+            model.AvatarURL,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            if (result.ErrorMessage == "User not found")
+            {
+                return NotFound(new { message = result.ErrorMessage });
+            }
+
+            if (result.ErrorMessage == "Phone number is already registered")
+            {
+                return Conflict(new { message = result.ErrorMessage });
+            }
+
+            return BadRequest(new { message = result.ErrorMessage });
+        }
+
+        return Ok(ToProfileResponse(result.User!));
     }
 
     [HttpGet("wallet")]
@@ -70,5 +102,21 @@ public sealed class UserController : ControllerBase
     {
         var userIdValue = User.FindFirst("userId")?.Value;
         return int.TryParse(userIdValue, out userId);
+    }
+
+    private static object ToProfileResponse(User user)
+    {
+        return new
+        {
+            user.UserID,
+            user.FullName,
+            user.Email,
+            user.Phone,
+            user.Role,
+            user.Status,
+            user.AvatarURL,
+            user.TotalPoints,
+            user.CreatedAt
+        };
     }
 }

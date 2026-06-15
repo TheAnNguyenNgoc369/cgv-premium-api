@@ -14,8 +14,7 @@ public sealed class RegisterRequest
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập số điện thoại")]
-    [MaxLength(15, ErrorMessage = "Số điện thoại không được vượt quá 15 ký tự")]
-    [Phone(ErrorMessage = "Số điện thoại không hợp lệ")]
+    [RegularExpression(@"^0[0-9]{9}$", ErrorMessage = "Số điện thoại không hợp lệ (phải có 10 số, bắt đầu bằng 0)")]
     public string Phone { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập mật khẩu")]

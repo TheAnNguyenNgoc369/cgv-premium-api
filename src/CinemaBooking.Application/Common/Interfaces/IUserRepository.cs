@@ -8,9 +8,21 @@ public interface IUserRepository
 
     Task<bool> PhoneExistsAsync(string phone, CancellationToken cancellationToken = default);
 
+    Task<bool> PhoneExistsForAnotherUserAsync(
+        string phone,
+        int userId,
+        CancellationToken cancellationToken = default);
+
     Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
 
     Task<User?> GetByIdAsync(int userId, CancellationToken cancellationToken = default);
+
+    Task<User?> UpdateProfileAsync(
+        int userId,
+        string fullName,
+        string? phone,
+        string? avatarUrl,
+        CancellationToken cancellationToken = default);
 
     Task<Wallet?> GetWalletByUserIdAsync(int userId, CancellationToken cancellationToken = default);
 

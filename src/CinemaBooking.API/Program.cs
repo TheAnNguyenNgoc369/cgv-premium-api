@@ -11,8 +11,6 @@ builder.Logging.AddDebug();
 
 builder.Services.AddApiServices(builder.Configuration, builder.Environment);
 builder.Services.AddInfrastructureServices(builder.Configuration);
-builder.Services.AddHealthChecks()
-    .AddDbContextCheck<CinemaBookingDbContext>("database");
 
 var app = builder.Build();
 
@@ -36,6 +34,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHealthChecks("/health");
 
 app.Run();
+
+public partial class Program;
