@@ -13,6 +13,7 @@ public sealed class AuthService : IAuthService
     private const string LockedStatus = "locked";
     private const string InactiveStatus = "inactive";
     private const int VerificationTokenExpirationHours = 24;
+    private const int VerificationEmailResendCooldownSeconds = 60;
 
     private readonly IUserRepository _userRepository;
     private readonly IEmailSender _emailSender;
@@ -50,6 +51,7 @@ public sealed class AuthService : IAuthService
             PasswordHash = HashPassword(password),
             Role = Roles.Customer,
             Status = ActiveStatus,
+            EmailVerifiedAt = null,
             TotalPoints = 0,
             CreatedAt = now,
             UpdatedAt = now
@@ -104,6 +106,11 @@ public sealed class AuthService : IAuthService
             return (false, "Tài khoản chưa được kích hoạt", null);
         }
 
+        if (!user.EmailVerifiedAt.HasValue)
+        {
+            return (false, "Please verify your email before logging in.", null);
+        }
+
         return (true, null, user);
     }
 
@@ -125,6 +132,22 @@ public sealed class AuthService : IAuthService
         }
 
         var now = DateTime.UtcNow;
+
+        if (user.EmailVerifiedAt.HasValue)
+        {
+            return (false, "Email is already verified.", false);
+        }
+
+        var lastToken = await _userRepository.GetLatestEmailVerificationTokenAsync(
+            user.UserID,
+            cancellationToken);
+
+        if (lastToken is not null
+            && lastToken.CreatedAt > now.AddSeconds(-VerificationEmailResendCooldownSeconds))
+        {
+            return (false, "Please wait before requesting another verification email.", false);
+        }
+
         var verificationToken = new EmailVerificationToken
         {
             Token = GenerateEmailVerificationToken(),
@@ -133,7 +156,10 @@ public sealed class AuthService : IAuthService
             UserID = user.UserID
         };
 
-        await _userRepository.AddEmailVerificationTokenAsync(verificationToken, cancellationToken);
+        await _userRepository.ReplaceUnverifiedEmailVerificationTokensAsync(
+            user.UserID,
+            verificationToken,
+            cancellationToken);
 
         var verificationEmailSent = await _emailSender.SendAsync(
             user.Email,
@@ -262,11 +288,23 @@ public sealed class AuthService : IAuthService
 
         var now = DateTime.UtcNow;
 
-        if (verificationToken.ExpiresAt < now)
+        if (verificationToken.ExpiresAt <= now)
         {
             return (false, "Token đã hết hạn");
         }
 
+        if (verificationToken.User is null)
+        {
+            return (false, "Token is invalid");
+        }
+
+        if (verificationToken.User.EmailVerifiedAt.HasValue)
+        {
+            return (false, "Email is already verified.");
+        }
+
+        verificationToken.User.EmailVerifiedAt = now;
+        verificationToken.User.UpdatedAt = now;
         verificationToken.VerifiedAt = now;
         await _userRepository.SaveChangesAsync(cancellationToken);
 

@@ -77,7 +77,11 @@ public sealed class AuthController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new
+            {
+                success = false,
+                message = result.ErrorMessage
+            });
         }
 
         return Ok(new
@@ -150,7 +154,11 @@ public sealed class AuthController : ControllerBase
 
         if (!result.Succeeded || result.User is null)
         {
-            return Unauthorized(new { message = result.ErrorMessage });
+            return Unauthorized(new
+            {
+                success = false,
+                message = result.ErrorMessage
+            });
         }
 
         var token = _jwtTokenService.GenerateToken(result.User);
