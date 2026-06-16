@@ -304,7 +304,7 @@ public sealed class AuthService : IAuthService
     private static string BuildVerificationEmailBody(string fullName, string token)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var verifyUrl = $"https://your-domain.com/verify-email?token={Uri.EscapeDataString(token)}";
+        var verifyUrl = $"http://localhost:5173/register?token={Uri.EscapeDataString(token)}";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
@@ -346,7 +346,7 @@ public sealed class AuthService : IAuthService
     private static string BuildResetPasswordEmailBody(string fullName, string token)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var resetUrl = $"https://your-domain.com/reset-password?token={Uri.EscapeDataString(token)}";
+        var resetUrl = $"http://localhost:5173/resetPassword?token={Uri.EscapeDataString(token)}";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
