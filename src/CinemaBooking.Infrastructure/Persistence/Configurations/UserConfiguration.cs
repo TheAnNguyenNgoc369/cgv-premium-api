@@ -24,7 +24,6 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.UpdatedAt).HasDefaultValueSql("GETDATE()");
 
         builder.HasIndex(u => u.Email).IsUnique().HasDatabaseName("UQ_Users_Email");
-        builder.HasIndex(u => u.Phone).IsUnique().HasDatabaseName("UQ_Users_Phone");
         builder.HasIndex(u => new { u.Role, u.Status }).HasDatabaseName("IX_Users_Role_Status");
 
         builder.HasOne(u => u.Cinema)

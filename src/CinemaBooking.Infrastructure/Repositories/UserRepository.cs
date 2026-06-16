@@ -19,21 +19,6 @@ public sealed class UserRepository : IUserRepository
         return _dbContext.Users.AnyAsync(u => u.Email == email, cancellationToken);
     }
 
-    public Task<bool> PhoneExistsAsync(string phone, CancellationToken cancellationToken = default)
-    {
-        return _dbContext.Users.AnyAsync(u => u.Phone == phone, cancellationToken);
-    }
-
-    public Task<bool> PhoneExistsForAnotherUserAsync(
-        string phone,
-        int userId,
-        CancellationToken cancellationToken = default)
-    {
-        return _dbContext.Users.AnyAsync(
-            u => u.Phone == phone && u.UserID != userId,
-            cancellationToken);
-    }
-
     public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         return _dbContext.Users

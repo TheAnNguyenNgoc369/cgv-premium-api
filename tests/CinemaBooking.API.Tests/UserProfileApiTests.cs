@@ -2,6 +2,9 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CinemaBooking.Domain.Entities;
+using CinemaBooking.Infrastructure.Persistence;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace CinemaBooking.API.Tests;
@@ -60,6 +63,39 @@ public sealed class UserProfileApiTests
         Assert.Equal("Updated Customer", profile.GetProperty("fullName").GetString());
         Assert.Equal("0900000999", profile.GetProperty("phone").GetString());
         Assert.Equal("https://example.com/avatar.png", profile.GetProperty("avatarURL").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateProfile_WithAnotherUsersPhone_UpdatesCurrentUser()
+    {
+        using var factory = new CinemaBookingApiFactory();
+        using var client = await CreateAuthorizedClientAsync(factory);
+
+        var response = await client.PutAsJsonAsync("/api/user/profile", new
+        {
+            fullName = "Customer One",
+            phone = "0900000004"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var document = await ReadJsonAsync(response);
+        Assert.Equal("0900000004", document.RootElement.GetProperty("phone").GetString());
+    }
+
+    [Fact]
+    public void UserModel_PhoneDoesNotHaveUniqueIndex()
+    {
+        using var factory = new CinemaBookingApiFactory();
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<CinemaBookingDbContext>();
+        var userEntityType = dbContext.Model.FindEntityType(typeof(User));
+
+        Assert.NotNull(userEntityType);
+        Assert.DoesNotContain(
+            userEntityType.GetIndexes(),
+            index => index.IsUnique
+                && index.Properties.Any(property => property.Name == nameof(User.Phone)));
     }
 
     [Fact]

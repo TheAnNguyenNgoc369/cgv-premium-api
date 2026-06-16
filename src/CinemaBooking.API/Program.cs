@@ -12,6 +12,17 @@ builder.Logging.AddDebug();
 builder.Services.AddApiServices(builder.Configuration, builder.Environment);
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy
+            .WithOrigins("http://localhost:5173", "http://localhost:5174")
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 var app = builder.Build();
 
 //Seed initial data
@@ -28,7 +39,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+
+if (!app.Environment.IsDevelopment())
+{
+    //ch?a nên uncomment ?? deploy ngrok
+    //app.UseHttpsRedirection();
+}
+
+app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();

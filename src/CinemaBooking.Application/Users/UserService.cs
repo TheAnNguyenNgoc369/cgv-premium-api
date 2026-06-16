@@ -44,15 +44,6 @@ public sealed class UserService : IUserService
             ? null
             : avatarUrl.Trim();
 
-        if (!string.IsNullOrWhiteSpace(normalizedPhone)
-            && await _userRepository.PhoneExistsForAnotherUserAsync(
-                normalizedPhone,
-                userId,
-                cancellationToken))
-        {
-            return (false, "Phone number is already registered", null);
-        }
-
         var updatedUser = await _userRepository.UpdateProfileAsync(
             userId,
             normalizedFullName,

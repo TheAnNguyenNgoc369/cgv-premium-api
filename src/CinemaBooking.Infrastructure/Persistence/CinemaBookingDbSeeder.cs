@@ -39,6 +39,20 @@ public static class CinemaBookingDbSeeder
                 CreatedAt = now,
                 UpdatedAt = now
             },
+            
+            new User
+            {
+                FullName = "Manager User",
+                Email = "manager@cinema.com",
+                Phone = "0900000003",
+                PasswordHash = passwordHash,
+                Role = "manager",
+                Status = "active",
+                TotalPoints = 0,
+                CreatedAt = now,
+                UpdatedAt = now
+            },
+
             new User
             {
                 FullName = "Staff 1 User",

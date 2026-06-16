@@ -65,11 +65,6 @@ public sealed class UserController : ControllerBase
                 return NotFound(new { message = result.ErrorMessage });
             }
 
-            if (result.ErrorMessage == "Phone number is already registered")
-            {
-                return Conflict(new { message = result.ErrorMessage });
-            }
-
             return BadRequest(new { message = result.ErrorMessage });
         }
 

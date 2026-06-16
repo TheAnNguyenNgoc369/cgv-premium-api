@@ -77,7 +77,6 @@ CREATE TABLE Users (
     UpdatedAt DATETIME NOT NULL CONSTRAINT DF_Users_UpdatedAt DEFAULT GETDATE(),
     CONSTRAINT PK_Users PRIMARY KEY (UserID),
     CONSTRAINT UQ_Users_Email UNIQUE (Email),
-    CONSTRAINT UQ_Users_Phone UNIQUE (Phone),
     CONSTRAINT FK_Users_Cinema FOREIGN KEY (CinemaID) REFERENCES Cinema(CinemaID),
     CONSTRAINT FK_Users_LoyaltyTiers FOREIGN KEY (LoyaltyTierID) REFERENCES LoyaltyTiers(TierID),
     CONSTRAINT CK_Users_Role CHECK (Role IN ('customer', 'staff', 'admin', 'manager')),
