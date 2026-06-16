@@ -1,4 +1,6 @@
 using System;
+using CinemaBooking.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -6,6 +8,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace CinemaBooking.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(CinemaBookingDbContext))]
+    [Migration("20260616000100_AddUserEmailVerifiedAt")]
     public partial class AddUserEmailVerifiedAt : Migration
     {
         /// <inheritdoc />
