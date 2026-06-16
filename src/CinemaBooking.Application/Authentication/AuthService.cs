@@ -184,7 +184,7 @@ public sealed class AuthService : IAuthService
 
         if (user is null)
         {
-            return (true, null);
+            return (false, "Email does not exist.");
         }
 
         var now = DateTime.UtcNow;

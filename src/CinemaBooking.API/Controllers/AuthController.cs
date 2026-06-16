@@ -133,10 +133,18 @@ public sealed class AuthController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return Ok(new
+            {
+                success = false,
+                message = result.ErrorMessage
+            });
         }
 
-        return Ok(new { message = "Password has been reset successfully." });
+        return Ok(new
+        {
+            success = true,
+            message = "Email has been sent successfully. Please check your email."
+        });
     }
 
     [HttpPost("login")]
