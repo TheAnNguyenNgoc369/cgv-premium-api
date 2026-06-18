@@ -1,13 +1,12 @@
-﻿using CinemaBooking.Application.Common.Interfaces;
-using CinemaBooking.Domain.Entities;
-using CinemaBooking.Infrastructure.Persistence;
-using CinemaBooking.Shared.Constants;
-using Microsoft.EntityFrameworkCore;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Domain.Entities;
+using CinemaBooking.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace CinemaBooking.Infrastructure.Repositories;
 
@@ -75,9 +74,9 @@ public sealed class ShowtimeRepository : IShowtimeRepository
     {
         return await _db.BookingSeats
             .Where(bs => bs.Booking.ShowtimeID == showtimeId
-                      && (bs.Booking.Status == BookingStatus.Pending
-                          || bs.Booking.Status == BookingStatus.Paid
-                          || bs.Booking.Status == BookingStatus.Used))
+                      && (bs.Booking.Status == "pending"
+                          || bs.Booking.Status == "paid"
+                          || bs.Booking.Status == "used"))
             .Select(bs => bs.SeatID)
             .ToListAsync(cancellationToken);
     }
@@ -88,8 +87,8 @@ public sealed class ShowtimeRepository : IShowtimeRepository
     {
         return await _db.SeatHolds
             .Where(h => h.ShowtimeID == showtimeId
-                      && h.Status == SeatHoldStatus.Holding
-                      && h.ExpiresAt > DateTime.UtcNow)
+                      && h.Status == "holding"
+                      && h.ExpiresAt > DateTime.Now)
             .Select(h => h.SeatID)
             .ToListAsync(cancellationToken);
     }

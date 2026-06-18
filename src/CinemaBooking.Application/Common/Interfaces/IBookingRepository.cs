@@ -23,12 +23,7 @@ public interface IBookingRepository
         int currentUserId,
         CancellationToken cancellationToken = default);
 
-    Task ExpireStaleHoldsAsync(
-        int showtimeId,
-        List<int> seatIds,
-        CancellationToken cancellationToken = default);
-
-    Task<bool> TryAddSeatHoldsAsync(
+    Task AddSeatHoldsAsync(
         IEnumerable<SeatHold> seatHolds,
         CancellationToken cancellationToken = default);
 
@@ -38,9 +33,12 @@ public interface IBookingRepository
         List<int> seatIds,
         CancellationToken cancellationToken = default);
 
-    Task CreateBookingAndConfirmHoldsAsync(
+    Task AddBookingAsync(
         Booking booking,
-        IEnumerable<SeatHold> holdsToConfirm,
+        CancellationToken cancellationToken = default);
+
+    Task MarkHoldsAsConfirmedAsync(
+        IEnumerable<SeatHold> seatHolds,
         CancellationToken cancellationToken = default);
 
     Task<Booking?> GetBookingByIdAsync(
@@ -50,4 +48,4 @@ public interface IBookingRepository
     Task<List<Booking>> GetBookingsByUserAsync(
         int userId,
         CancellationToken cancellationToken = default);
-}
+}   
