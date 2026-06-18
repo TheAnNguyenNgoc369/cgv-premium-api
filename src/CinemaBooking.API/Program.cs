@@ -40,16 +40,17 @@ using (var scope = app.Services.CreateScope())
     await CinemaBookingDbSeeder.SeedUsersAsync(seeder);
 }
 
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "CGV Premium API v1");
+    c.RoutePrefix = "swagger"; // Đảm bảo đường dẫn là /swagger
+});
 
 
 if (!app.Environment.IsDevelopment())
 {
-    //ch?a n�n uncomment ?? deploy ngrok
+    //ch?a nên uncomment ?? deploy ngrok
     //app.UseHttpsRedirection();
 }
 
