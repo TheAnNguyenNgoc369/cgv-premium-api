@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
+using CinemaBooking.Shared.Constants;
 
 namespace CinemaBooking.Application.Showtimes;
 
@@ -39,7 +40,6 @@ public sealed class ShowtimeService : IShowtimeService
         CancellationToken cancellationToken = default)
     {
         var showtime = await _showtimeRepository.GetShowtimeByIdAsync(showtimeId, cancellationToken);
-
         if (showtime is null)
             return null;
 
@@ -54,9 +54,9 @@ public sealed class ShowtimeService : IShowtimeService
             seat.SeatType.TypeName,
             seat.SeatType.ExtraPrice,
             showtime.BasePrice + seat.SeatType.ExtraPrice,
-            bookedSeatIds.Contains(seat.SeatID) ? "booked"
-                : heldSeatIds.Contains(seat.SeatID) ? "held"
-                : "available"
+            bookedSeatIds.Contains(seat.SeatID) ? SeatStatus.Booked
+                : heldSeatIds.Contains(seat.SeatID) ? SeatStatus.Held
+                : SeatStatus.Available
         )).ToList();
 
         return new SeatMapResult(

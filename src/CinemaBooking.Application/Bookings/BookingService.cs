@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
+using CinemaBooking.Shared.Constants;
 
 namespace CinemaBooking.Application.Bookings;
 
@@ -32,13 +33,20 @@ public sealed class BookingService : IBookingService
         if (showtime is null)
             return (false, "Không tìm thấy suất chiếu", null, null);
 
+        var seatError = await ValidateSeatsBelongToRoomAsync(seatIds, showtime.RoomID, cancellationToken);
+        if (seatError is not null)
+            return (false, seatError, null, null);
+
+        // Dọn các hold đã hết hạn trước, tránh unique index chặn nhầm ghế thực ra đã trống
+        await _bookingRepository.ExpireStaleHoldsAsync(showtimeId, seatIds, cancellationToken);
+
         var unavailableSeatIds = await _bookingRepository.GetUnavailableSeatIdsAsync(
             showtimeId, seatIds, userId, cancellationToken);
 
         if (unavailableSeatIds.Count > 0)
             return (false, $"Ghế ID {string.Join(", ", unavailableSeatIds)} đã được đặt hoặc đang được giữ bởi người khác", null, null);
 
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         var expiresAt = now.AddMinutes(HoldDurationMinutes);
 
         var holds = seatIds.Select(seatId => new SeatHold
@@ -48,10 +56,15 @@ public sealed class BookingService : IBookingService
             UserID = userId,
             HeldAt = now,
             ExpiresAt = expiresAt,
-            Status = "holding"
+            Status = SeatHoldStatus.Holding
         }).ToList();
 
-        await _bookingRepository.AddSeatHoldsAsync(holds, cancellationToken);
+        // Lớp bảo vệ cuối: nếu 2 request chạy đồng thời vượt qua check ở trên,
+        // unique index trong DB sẽ chặn 1 trong 2 — TryAddSeatHoldsAsync bắt lỗi đó
+        var inserted = await _bookingRepository.TryAddSeatHoldsAsync(holds, cancellationToken);
+
+        if (!inserted)
+            return (false, "Một số ghế vừa được người khác giữ trước, vui lòng chọn lại", null, null);
 
         return (true, null, holds.Select(h => h.HoldID).ToList(), expiresAt);
     }
@@ -68,6 +81,10 @@ public sealed class BookingService : IBookingService
         var showtime = await _bookingRepository.GetShowtimeAsync(showtimeId, cancellationToken);
         if (showtime is null)
             return (false, "Không tìm thấy suất chiếu", null);
+
+        var seatError = await ValidateSeatsBelongToRoomAsync(seatIds, showtime.RoomID, cancellationToken);
+        if (seatError is not null)
+            return (false, seatError, null);
 
         var myHolds = await _bookingRepository.GetMyActiveHoldsAsync(
             userId, showtimeId, seatIds, cancellationToken);
@@ -93,14 +110,14 @@ public sealed class BookingService : IBookingService
             SubTotal = subTotal,
             DiscountAmount = 0,
             FinalAmount = subTotal,
-            Status = "pending",
-            BookingDate = DateTime.Now,
-            UpdatedAt = DateTime.Now,
+            Status = BookingStatus.Pending,
+            BookingDate = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
             BookingSeats = bookingSeats
         };
 
-        await _bookingRepository.AddBookingAsync(booking, cancellationToken);
-        await _bookingRepository.MarkHoldsAsConfirmedAsync(myHolds, cancellationToken);
+        // 1 lần SaveChanges duy nhất cho cả Booking + Hold → atomic (vấn đề 1)
+        await _bookingRepository.CreateBookingAndConfirmHoldsAsync(booking, myHolds, cancellationToken);
 
         var savedBooking = await _bookingRepository.GetBookingByIdAsync(booking.BookingID, cancellationToken);
 
@@ -121,8 +138,25 @@ public sealed class BookingService : IBookingService
         return await _bookingRepository.GetBookingsByUserAsync(userId, cancellationToken);
     }
 
+    // Vấn đề 3: ghế phải tồn tại VÀ thuộc đúng phòng của showtime
+    private async Task<string?> ValidateSeatsBelongToRoomAsync(
+        List<int> seatIds,
+        int roomId,
+        CancellationToken cancellationToken)
+    {
+        var seats = await _bookingRepository.GetSeatsByIdsAsync(seatIds, cancellationToken);
+
+        if (seats.Count != seatIds.Count)
+            return "Một hoặc nhiều ghế không tồn tại";
+
+        if (seats.Any(seat => seat.RoomID != roomId))
+            return "Một hoặc nhiều ghế không thuộc phòng chiếu của suất này";
+
+        return null;
+    }
+
     private static string GenerateBookingCode()
     {
-        return $"BK{DateTime.Now:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
+        return $"BK{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
     }
 }
