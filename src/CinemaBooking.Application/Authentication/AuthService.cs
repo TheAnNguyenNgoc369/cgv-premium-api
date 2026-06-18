@@ -14,6 +14,8 @@ public sealed class AuthService : IAuthService
     private const string InactiveStatus = "inactive";
     private const int VerificationTokenExpirationHours = 24;
     private const int VerificationEmailResendCooldownSeconds = 60;
+    private const int PasswordResetTokenExpirationMinutes = 15;
+    private const int ForgotPasswordCooldownSeconds = 60;
 
     private readonly IUserRepository _userRepository;
     private readonly IEmailSender _emailSender;
@@ -188,15 +190,34 @@ public sealed class AuthService : IAuthService
         }
 
         var now = DateTime.UtcNow;
+
+        if (!user.EmailVerifiedAt.HasValue)
+        {
+            return (false, "Account is not verified.");
+        }
+
+        var lastToken = await _userRepository.GetLatestPasswordResetTokenAsync(
+            user.UserID,
+            cancellationToken);
+
+        if (lastToken is not null
+            && lastToken.CreatedAt > now.AddSeconds(-ForgotPasswordCooldownSeconds))
+        {
+            return (false, "Please wait before requesting another password reset email.");
+        }
+
         var resetToken = new PasswordResetToken
         {
             Token = GeneratePasswordResetToken(),
-            ExpiresAt = now.AddMinutes(15),
+            ExpiresAt = now.AddMinutes(PasswordResetTokenExpirationMinutes),
             CreatedAt = now,
             UserID = user.UserID
         };
 
-        await _userRepository.AddPasswordResetTokenAsync(resetToken, cancellationToken);
+        await _userRepository.ReplaceUnusedPasswordResetTokensAsync(
+            user.UserID,
+            resetToken,
+            cancellationToken);
 
         var emailSent = await _emailSender.SendAsync(
             user.Email,
@@ -404,7 +425,7 @@ public sealed class AuthService : IAuthService
                         <a href="{resetUrl}" style="display: inline-block; background: #c62828; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 40px; border-radius: 6px;">
                             Reset my password
                         </a>
-                        <p style="margin: 12px 0 0; font-size: 12px; color: #999999;">This link expires in 15 minutes</p>
+                        <p style="margin: 12px 0 0; font-size: 12px; color: #999999;">This link expires in {PasswordResetTokenExpirationMinutes} minutes</p>
                     </div>
 
                     <div style="background: #fff8e1; border-left: 3px solid #f9a825; border-radius: 0 4px 4px 0; padding: 10px 14px;">

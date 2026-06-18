@@ -22,12 +22,14 @@ public sealed class CinemaBookingDbSeederTests
 
         await CinemaBookingDbSeeder.SeedUsersAsync(scope.ServiceProvider);
 
-        Assert.Equal(6, await dbContext.Users.CountAsync());
-        Assert.Equal(6, await dbContext.Wallets.CountAsync());
+        const int expectedSeededUsers = 7;
+
+        Assert.Equal(expectedSeededUsers, await dbContext.Users.CountAsync());
+        Assert.Equal(expectedSeededUsers, await dbContext.Wallets.CountAsync());
 
         await CinemaBookingDbSeeder.SeedUsersAsync(scope.ServiceProvider);
 
-        Assert.Equal(6, await dbContext.Users.CountAsync());
-        Assert.Equal(6, await dbContext.Wallets.CountAsync());
+        Assert.Equal(expectedSeededUsers, await dbContext.Users.CountAsync());
+        Assert.Equal(expectedSeededUsers, await dbContext.Wallets.CountAsync());
     }
 }

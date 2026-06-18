@@ -139,6 +139,32 @@ public sealed class UserRepository : IUserRepository
         return _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public Task<PasswordResetToken?> GetLatestPasswordResetTokenAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.PasswordResetTokens
+            .AsNoTracking()
+            .Where(t => t.UserID == userId)
+            .OrderByDescending(t => t.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task ReplaceUnusedPasswordResetTokensAsync(
+        int userId,
+        PasswordResetToken resetToken,
+        CancellationToken cancellationToken = default)
+    {
+        var unusedTokens = await _dbContext.PasswordResetTokens
+            .Where(t => t.UserID == userId && !t.UsedAt.HasValue)
+            .ToListAsync(cancellationToken);
+
+        _dbContext.PasswordResetTokens.RemoveRange(unusedTokens);
+        _dbContext.PasswordResetTokens.Add(resetToken);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task ReplaceUnverifiedEmailVerificationTokensAsync(
         int userId,
         EmailVerificationToken verificationToken,

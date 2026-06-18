@@ -43,6 +43,15 @@ public interface IUserRepository
         PasswordResetToken resetToken,
         CancellationToken cancellationToken = default);
 
+    Task<PasswordResetToken?> GetLatestPasswordResetTokenAsync(
+        int userId,
+        CancellationToken cancellationToken = default);
+
+    Task ReplaceUnusedPasswordResetTokensAsync(
+        int userId,
+        PasswordResetToken resetToken,
+        CancellationToken cancellationToken = default);
+
     Task ReplaceUnverifiedEmailVerificationTokensAsync(
         int userId,
         EmailVerificationToken verificationToken,
