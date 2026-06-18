@@ -93,7 +93,6 @@ Requirements:
 2. Find root cause.
 3. Implement minimal fix.
 4. Verify fix.
-5. Add tests if applicable.
 
 Stop after completion.
 
@@ -113,7 +112,6 @@ Requirements:
 2. Follow existing architecture.
 3. Implement minimal changes.
 4. Add validation.
-5. Add tests.
-6. Validate.
+5. Validate.
 
 Stop after completion.
