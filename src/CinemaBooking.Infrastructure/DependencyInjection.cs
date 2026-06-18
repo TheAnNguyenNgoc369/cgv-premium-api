@@ -3,6 +3,7 @@ using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Infrastructure.Configuration;
 using CinemaBooking.Infrastructure.Email;
 using CinemaBooking.Infrastructure.Persistence;
+using CinemaBooking.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,7 +46,18 @@ public static class DependencyInjection
         };
 
         services.AddSingleton(Options.Create(emailSettings));
+
+        var cloudinarySection = configuration.GetSection(CloudinarySettings.SectionName);
+        var cloudinarySettings = new CloudinarySettings
+        {
+            CloudName = cloudinarySection[nameof(CloudinarySettings.CloudName)] ?? string.Empty,
+            ApiKey = cloudinarySection[nameof(CloudinarySettings.ApiKey)] ?? string.Empty,
+            ApiSecret = cloudinarySection[nameof(CloudinarySettings.ApiSecret)] ?? string.Empty
+        };
+
+        services.AddSingleton(Options.Create(cloudinarySettings));
         services.AddScoped<IEmailSender, SmtpEmailSender>();
+        services.AddScoped<IImageStorageService, CloudinaryImageStorageService>();
         services.AddScopedByConvention(typeof(DependencyInjection).Assembly, "Repository");
 
         return services;

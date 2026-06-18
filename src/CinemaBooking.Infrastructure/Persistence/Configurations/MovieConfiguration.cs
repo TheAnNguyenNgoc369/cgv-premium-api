@@ -16,6 +16,7 @@ public class MovieConfiguration : IEntityTypeConfiguration<Movie>
         builder.Property(m => m.AgeRating).HasMaxLength(10).IsRequired();
         builder.Property(m => m.Director).HasMaxLength(100);
         builder.Property(m => m.PosterURL).HasMaxLength(500);
+        builder.Property(m => m.PosterPublicId).HasMaxLength(255);
         builder.Property(m => m.TrailerURL).HasMaxLength(500);
         builder.Property(m => m.Status).HasMaxLength(30).IsRequired().HasDefaultValue("coming_soon");
         builder.Property(m => m.CreatedAt).HasDefaultValueSql("GETDATE()");
