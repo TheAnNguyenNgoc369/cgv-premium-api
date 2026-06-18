@@ -18,7 +18,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend", policy =>
     {
         policy
-            .WithOrigins("http://localhost:5173", "http://localhost:5174")
+            .WithOrigins("http://localhost:5173", "http://localhost:5174", "https://cgv-premium-7ojmynrm0-minhtri-wotiso2pms-projects.vercel.app/")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -50,7 +50,6 @@ app.UseSwaggerUI(c =>
 
 if (!app.Environment.IsDevelopment())
 {
-    //ch?a nên uncomment ?? deploy ngrok
     //app.UseHttpsRedirection();
 }
 
