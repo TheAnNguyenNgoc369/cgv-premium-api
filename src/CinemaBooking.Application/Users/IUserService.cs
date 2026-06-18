@@ -10,7 +10,18 @@ public interface IUserService
         int userId,
         string fullName,
         string? phone,
-        string? avatarUrl,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage, User? User)> UploadAvatarAsync(
+        int userId,
+        Stream imageStream,
+        string fileName,
+        string? contentType,
+        long fileSize,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage, User? User)> DeleteAvatarAsync(
+        int userId,
         CancellationToken cancellationToken = default);
 
     Task<Wallet?> GetWalletAsync(int userId, CancellationToken cancellationToken = default);

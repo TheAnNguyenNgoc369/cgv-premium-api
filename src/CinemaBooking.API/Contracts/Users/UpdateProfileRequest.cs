@@ -10,8 +10,4 @@ public sealed class UpdateProfileRequest
 
     [RegularExpression(@"^0[0-9]{9}$", ErrorMessage = "Phone number is invalid (Start with 0, contains 10 number)")]
     public string? Phone { get; set; }
-
-    [MaxLength(500, ErrorMessage = "Avatar URL do not exceeds 500 characters")]
-    [Url(ErrorMessage = "Avatar URL is invalid")]
-    public string? AvatarURL { get; set; }
 }

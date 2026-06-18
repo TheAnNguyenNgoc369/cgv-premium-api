@@ -1,3 +1,4 @@
+using CinemaBooking.API.Contracts.Images;
 using CinemaBooking.API.Contracts.Users;
 using CinemaBooking.Application.Users;
 using CinemaBooking.Domain.Entities;
@@ -55,8 +56,72 @@ public sealed class UserController : ControllerBase
             userId,
             model.FullName,
             model.Phone,
-            model.AvatarURL,
             cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            if (result.ErrorMessage == "User not found")
+            {
+                return NotFound(new { message = result.ErrorMessage });
+            }
+
+            return BadRequest(new { message = result.ErrorMessage });
+        }
+
+        return Ok(ToProfileResponse(result.User!));
+    }
+
+    [HttpPut("/api/users/profile/avatar")]
+    public async Task<IActionResult> UploadAvatar(
+        [FromForm] ImageUploadRequest model,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        if (model.File is null)
+        {
+            return BadRequest(new { message = "Image file is required" });
+        }
+
+        await using var stream = model.File.OpenReadStream();
+        var result = await _userService.UploadAvatarAsync(
+            userId,
+            stream,
+            model.File.FileName,
+            model.File.ContentType,
+            model.File.Length,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            if (result.ErrorMessage == "User not found")
+            {
+                return NotFound(new { message = result.ErrorMessage });
+            }
+
+            return BadRequest(new { message = result.ErrorMessage });
+        }
+
+        return Ok(new
+        {
+            secureUrl = result.User!.AvatarURL,
+            publicId = result.User.AvatarPublicId,
+            user = ToProfileResponse(result.User)
+        });
+    }
+
+    [HttpDelete("/api/users/profile/avatar")]
+    public async Task<IActionResult> DeleteAvatar(CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await _userService.DeleteAvatarAsync(userId, cancellationToken);
 
         if (!result.Succeeded)
         {

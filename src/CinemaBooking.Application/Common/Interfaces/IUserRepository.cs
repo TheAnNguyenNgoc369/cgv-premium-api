@@ -14,7 +14,12 @@ public interface IUserRepository
         int userId,
         string fullName,
         string? phone,
+        CancellationToken cancellationToken = default);
+
+    Task<User?> UpdateAvatarAsync(
+        int userId,
         string? avatarUrl,
+        string? avatarPublicId,
         CancellationToken cancellationToken = default);
 
     Task<Wallet?> GetWalletByUserIdAsync(int userId, CancellationToken cancellationToken = default);

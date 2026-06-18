@@ -37,7 +37,6 @@ public sealed class UserRepository : IUserRepository
         int userId,
         string fullName,
         string? phone,
-        string? avatarUrl,
         CancellationToken cancellationToken = default)
     {
         var user = await _dbContext.Users
@@ -50,7 +49,29 @@ public sealed class UserRepository : IUserRepository
 
         user.FullName = fullName;
         user.Phone = phone;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return user;
+    }
+
+    public async Task<User?> UpdateAvatarAsync(
+        int userId,
+        string? avatarUrl,
+        string? avatarPublicId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _dbContext.Users
+            .FirstOrDefaultAsync(u => u.UserID == userId, cancellationToken);
+
+        if (user is null)
+        {
+            return null;
+        }
+
         user.AvatarURL = avatarUrl;
+        user.AvatarPublicId = avatarPublicId;
         user.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
