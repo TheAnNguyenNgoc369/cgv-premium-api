@@ -9,6 +9,7 @@ public class Movie
     public string? Cast { get; set; }
     public string? Description { get; set; }
     public string? PosterURL { get; set; }
+    public string? PosterPublicId { get; set; }
     public string? TrailerURL { get; set; }
     public int DurationMin { get; set; }
     public DateOnly? ShowingFrom { get; set; }

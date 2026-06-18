@@ -5,9 +5,11 @@ public class User
     public int UserID { get; set; }
     public string FullName { get; set; } = null!;
     public string Email { get; set; } = null!;
+    public DateTime? EmailVerifiedAt { get; set; }
     public string? Phone { get; set; }
     public string PasswordHash { get; set; } = null!;
     public string? AvatarURL { get; set; }
+    public string? AvatarPublicId { get; set; }
     public string Role { get; set; } = null!;
     public int? CinemaID { get; set; }
     public string Status { get; set; } = "unverified";
