@@ -613,6 +613,10 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("PosterPublicId")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
                     b.Property<DateOnly?>("ShowingFrom")
                         .HasColumnType("date");
 
@@ -1337,6 +1341,10 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("AvatarPublicId")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
                     b.Property<int?>("CinemaID")
                         .HasColumnType("int");
 
@@ -1349,6 +1357,9 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("EmailVerifiedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("FullName")
                         .IsRequired()
