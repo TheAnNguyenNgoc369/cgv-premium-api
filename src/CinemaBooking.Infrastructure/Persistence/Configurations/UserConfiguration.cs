@@ -18,6 +18,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Phone).HasMaxLength(15);
         builder.Property(u => u.PasswordHash).HasMaxLength(255).IsRequired();
         builder.Property(u => u.AvatarURL).HasMaxLength(500);
+        builder.Property(u => u.AvatarPublicId).HasMaxLength(255);
         builder.Property(u => u.Role).HasMaxLength(20).IsRequired();
         builder.Property(u => u.Status).HasMaxLength(20).IsRequired().HasDefaultValue("unverified");
         builder.Property(u => u.TotalPoints).HasDefaultValue(0);

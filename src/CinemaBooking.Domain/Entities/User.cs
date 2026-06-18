@@ -9,6 +9,7 @@ public class User
     public string? Phone { get; set; }
     public string PasswordHash { get; set; } = null!;
     public string? AvatarURL { get; set; }
+    public string? AvatarPublicId { get; set; }
     public string Role { get; set; } = null!;
     public int? CinemaID { get; set; }
     public string Status { get; set; } = "unverified";
