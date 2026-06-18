@@ -2,7 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using CinemaBooking.API.Contracts.Auth;
 using CinemaBooking.API.Services;
 using CinemaBooking.Application.Authentication;
-using CinemaBooking.Application.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,18 +12,15 @@ namespace CinemaBooking.API.Controllers;
 public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
-    private readonly IUserService _userService;
     private readonly JwtTokenService _jwtTokenService;
     private readonly ITokenRevocationService _tokenRevocationService;
 
     public AuthController(
         IAuthService authService,
-        IUserService userService,
         JwtTokenService jwtTokenService,
         ITokenRevocationService tokenRevocationService)
     {
         _authService = authService;
-        _userService = userService;
         _jwtTokenService = jwtTokenService;
         _tokenRevocationService = tokenRevocationService;
     }
@@ -231,42 +227,6 @@ public sealed class AuthController : ControllerBase
         }
 
         return Ok(new { message = "Email verified successfully" });
-    }
-
-    [HttpGet("me")]
-    [Authorize]
-    public async Task<IActionResult> Me(CancellationToken cancellationToken)
-    {
-        if (!TryGetCurrentUserId(out var userId))
-        {
-            return Unauthorized();
-        }
-
-        var user = await _userService.GetProfileAsync(userId, cancellationToken);
-
-        if (user is null)
-        {
-            return NotFound();
-        }
-
-        return Ok(new
-        {
-            user.UserID,
-            user.FullName,
-            user.Email,
-            user.Phone,
-            user.Role,
-            user.Status,
-            user.AvatarURL,
-            user.TotalPoints,
-            user.CreatedAt
-        });
-    }
-
-    private bool TryGetCurrentUserId(out int userId)
-    {
-        var userIdValue = User.FindFirst("userId")?.Value;
-        return int.TryParse(userIdValue, out userId);
     }
 
     private bool TryGetBearerToken(out string token)
