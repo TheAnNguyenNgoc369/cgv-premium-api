@@ -35,6 +35,7 @@ public static class CinemaBookingDbSeeder
                 PasswordHash = passwordHash,
                 Role = "admin",
                 Status = "active",
+                EmailVerifiedAt = now,
                 TotalPoints = 0,
                 CreatedAt = now,
                 UpdatedAt = now
@@ -48,6 +49,7 @@ public static class CinemaBookingDbSeeder
                 PasswordHash = passwordHash,
                 Role = "manager",
                 Status = "active",
+                EmailVerifiedAt = now,
                 TotalPoints = 0,
                 CreatedAt = now,
                 UpdatedAt = now
@@ -61,6 +63,7 @@ public static class CinemaBookingDbSeeder
                 PasswordHash = passwordHash,
                 Role = "staff",
                 Status = "active",
+                EmailVerifiedAt = now,
                 TotalPoints = 0,
                 CreatedAt = now,
                 UpdatedAt = now
@@ -73,6 +76,7 @@ public static class CinemaBookingDbSeeder
                 PasswordHash = passwordHash,
                 Role = "staff",
                 Status = "active",
+                EmailVerifiedAt = now,
                 TotalPoints = 0,
                 CreatedAt = now,
                 UpdatedAt = now
@@ -85,6 +89,7 @@ public static class CinemaBookingDbSeeder
                 PasswordHash = passwordHash,
                 Role = "customer",
                 Status = "active",
+                EmailVerifiedAt = now,
                 TotalPoints = 0,
                 CreatedAt = now,
                 UpdatedAt = now
@@ -97,6 +102,7 @@ public static class CinemaBookingDbSeeder
                 PasswordHash = passwordHash,
                 Role = "customer",
                 Status = "active",
+                EmailVerifiedAt = now,
                 TotalPoints = 0,
                 CreatedAt = now,
                 UpdatedAt = now
@@ -109,6 +115,7 @@ public static class CinemaBookingDbSeeder
                 PasswordHash = passwordHash,
                 Role = "customer",
                 Status = "active",
+                EmailVerifiedAt = now,
                 TotalPoints = 0,
                 CreatedAt = now,
                 UpdatedAt = now

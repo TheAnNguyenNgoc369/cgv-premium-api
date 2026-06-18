@@ -2,7 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using CinemaBooking.API.Contracts.Auth;
 using CinemaBooking.API.Services;
 using CinemaBooking.Application.Authentication;
-using CinemaBooking.Application.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,18 +12,15 @@ namespace CinemaBooking.API.Controllers;
 public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
-    private readonly IUserService _userService;
     private readonly JwtTokenService _jwtTokenService;
     private readonly ITokenRevocationService _tokenRevocationService;
 
     public AuthController(
         IAuthService authService,
-        IUserService userService,
         JwtTokenService jwtTokenService,
         ITokenRevocationService tokenRevocationService)
     {
         _authService = authService;
-        _userService = userService;
         _jwtTokenService = jwtTokenService;
         _tokenRevocationService = tokenRevocationService;
     }
@@ -77,7 +73,11 @@ public sealed class AuthController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new
+            {
+                success = false,
+                message = result.ErrorMessage
+            });
         }
 
         return Ok(new
@@ -104,10 +104,18 @@ public sealed class AuthController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return Ok(new
+            {
+                success = false,
+                message = result.ErrorMessage
+            });
         }
 
-        return Ok(new { message = "If the email exists, a password reset token has been sent." });
+        return Ok(new
+        {
+            success = true,
+            message = "Email has been sent successfully. Please check your email."
+        });
     }
 
     [HttpPost("reset-password")]
@@ -129,10 +137,18 @@ public sealed class AuthController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return Ok(new
+            {
+                success = false,
+                message = result.ErrorMessage
+            });
         }
 
-        return Ok(new { message = "Password has been reset successfully." });
+        return Ok(new
+        {
+            success = true,
+            message = "Email has been sent successfully. Please check your email."
+        });
     }
 
     [HttpPost("login")]
@@ -150,7 +166,11 @@ public sealed class AuthController : ControllerBase
 
         if (!result.Succeeded || result.User is null)
         {
-            return Unauthorized(new { message = result.ErrorMessage });
+            return Unauthorized(new
+            {
+                success = false,
+                message = result.ErrorMessage
+            });
         }
 
         var token = _jwtTokenService.GenerateToken(result.User);
@@ -207,42 +227,6 @@ public sealed class AuthController : ControllerBase
         }
 
         return Ok(new { message = "Email verified successfully" });
-    }
-
-    [HttpGet("me")]
-    [Authorize]
-    public async Task<IActionResult> Me(CancellationToken cancellationToken)
-    {
-        if (!TryGetCurrentUserId(out var userId))
-        {
-            return Unauthorized();
-        }
-
-        var user = await _userService.GetProfileAsync(userId, cancellationToken);
-
-        if (user is null)
-        {
-            return NotFound();
-        }
-
-        return Ok(new
-        {
-            user.UserID,
-            user.FullName,
-            user.Email,
-            user.Phone,
-            user.Role,
-            user.Status,
-            user.AvatarURL,
-            user.TotalPoints,
-            user.CreatedAt
-        });
-    }
-
-    private bool TryGetCurrentUserId(out int userId)
-    {
-        var userIdValue = User.FindFirst("userId")?.Value;
-        return int.TryParse(userIdValue, out userId);
     }
 
     private bool TryGetBearerToken(out string token)

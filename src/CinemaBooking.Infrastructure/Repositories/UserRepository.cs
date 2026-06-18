@@ -37,7 +37,6 @@ public sealed class UserRepository : IUserRepository
         int userId,
         string fullName,
         string? phone,
-        string? avatarUrl,
         CancellationToken cancellationToken = default)
     {
         var user = await _dbContext.Users
@@ -50,7 +49,29 @@ public sealed class UserRepository : IUserRepository
 
         user.FullName = fullName;
         user.Phone = phone;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return user;
+    }
+
+    public async Task<User?> UpdateAvatarAsync(
+        int userId,
+        string? avatarUrl,
+        string? avatarPublicId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _dbContext.Users
+            .FirstOrDefaultAsync(u => u.UserID == userId, cancellationToken);
+
+        if (user is null)
+        {
+            return null;
+        }
+
         user.AvatarURL = avatarUrl;
+        user.AvatarPublicId = avatarPublicId;
         user.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -120,12 +141,64 @@ public sealed class UserRepository : IUserRepository
             .FirstOrDefaultAsync(t => t.Token == token, cancellationToken);
     }
 
+    public Task<EmailVerificationToken?> GetLatestEmailVerificationTokenAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.EmailVerificationTokens
+            .AsNoTracking()
+            .Where(t => t.UserID == userId)
+            .OrderByDescending(t => t.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public Task AddPasswordResetTokenAsync(
         PasswordResetToken resetToken,
         CancellationToken cancellationToken = default)
     {
         _dbContext.PasswordResetTokens.Add(resetToken);
         return _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public Task<PasswordResetToken?> GetLatestPasswordResetTokenAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.PasswordResetTokens
+            .AsNoTracking()
+            .Where(t => t.UserID == userId)
+            .OrderByDescending(t => t.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task ReplaceUnusedPasswordResetTokensAsync(
+        int userId,
+        PasswordResetToken resetToken,
+        CancellationToken cancellationToken = default)
+    {
+        var unusedTokens = await _dbContext.PasswordResetTokens
+            .Where(t => t.UserID == userId && !t.UsedAt.HasValue)
+            .ToListAsync(cancellationToken);
+
+        _dbContext.PasswordResetTokens.RemoveRange(unusedTokens);
+        _dbContext.PasswordResetTokens.Add(resetToken);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ReplaceUnverifiedEmailVerificationTokensAsync(
+        int userId,
+        EmailVerificationToken verificationToken,
+        CancellationToken cancellationToken = default)
+    {
+        var unverifiedTokens = await _dbContext.EmailVerificationTokens
+            .Where(t => t.UserID == userId && !t.VerifiedAt.HasValue)
+            .ToListAsync(cancellationToken);
+
+        _dbContext.EmailVerificationTokens.RemoveRange(unverifiedTokens);
+        _dbContext.EmailVerificationTokens.Add(verificationToken);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public Task<PasswordResetToken?> GetPasswordResetTokenAsync(
