@@ -4,14 +4,14 @@ namespace CinemaBooking.API.Contracts.Users;
 
 public sealed class UpdateProfileRequest
 {
-    [Required(ErrorMessage = "Vui long nhap ho ten")]
-    [MaxLength(100, ErrorMessage = "Ho ten khong duoc vuot qua 100 ky tu")]
+    [Required(ErrorMessage = "Please enter fullname")]
+    [MaxLength(100, ErrorMessage = "Fullname do not exceed 100 characters")]
     public string FullName { get; set; } = string.Empty;
 
-    [RegularExpression(@"^0[0-9]{9}$", ErrorMessage = "So dien thoai khong hop le (phai co 10 so, bat dau bang 0)")]
+    [RegularExpression(@"^0[0-9]{9}$", ErrorMessage = "Phone number is invalid (Start with 0, contains 10 number)")]
     public string? Phone { get; set; }
 
-    [MaxLength(500, ErrorMessage = "Avatar URL khong duoc vuot qua 500 ky tu")]
-    [Url(ErrorMessage = "Avatar URL khong hop le")]
+    [MaxLength(500, ErrorMessage = "Avatar URL do not exceeds 500 characters")]
+    [Url(ErrorMessage = "Avatar URL is invalid")]
     public string? AvatarURL { get; set; }
 }
