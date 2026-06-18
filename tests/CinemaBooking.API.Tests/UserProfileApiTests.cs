@@ -51,8 +51,7 @@ public sealed class UserProfileApiTests
         var response = await client.PutAsJsonAsync("/api/user/profile", new
         {
             fullName = "Updated Customer",
-            phone = "0900000999",
-            avatarURL = "https://example.com/avatar.png"
+            phone = "0900000999"
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -62,7 +61,7 @@ public sealed class UserProfileApiTests
 
         Assert.Equal("Updated Customer", profile.GetProperty("fullName").GetString());
         Assert.Equal("0900000999", profile.GetProperty("phone").GetString());
-        Assert.Equal("https://example.com/avatar.png", profile.GetProperty("avatarURL").GetString());
+        Assert.Null(profile.GetProperty("avatarURL").GetString());
     }
 
     [Fact]
@@ -133,6 +132,7 @@ public sealed class UserProfileApiTests
             ["role"] = "admin",
             ["status"] = "locked",
             ["passwordHash"] = "hacked",
+            ["avatarURL"] = "https://example.com/manual-avatar.png",
             ["userID"] = 999,
             ["createdAt"] = DateTime.UtcNow
         });
@@ -145,6 +145,7 @@ public sealed class UserProfileApiTests
         Assert.Equal(originalUserId, profile.GetProperty("userID").GetInt32());
         Assert.Equal("customer", profile.GetProperty("role").GetString());
         Assert.Equal("active", profile.GetProperty("status").GetString());
+        Assert.Null(profile.GetProperty("avatarURL").GetString());
         Assert.Equal(originalCreatedAt, profile.GetProperty("createdAt").GetDateTime());
         Assert.False(profile.TryGetProperty("passwordHash", out _));
     }
