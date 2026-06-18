@@ -13,6 +13,9 @@ public sealed class AuthService : IAuthService
     private const string LockedStatus = "locked";
     private const string InactiveStatus = "inactive";
     private const int VerificationTokenExpirationHours = 24;
+    private const int VerificationEmailResendCooldownSeconds = 60;
+    private const int PasswordResetTokenExpirationMinutes = 15;
+    private const int ForgotPasswordCooldownSeconds = 60;
 
     private readonly IUserRepository _userRepository;
     private readonly IEmailSender _emailSender;
@@ -50,6 +53,7 @@ public sealed class AuthService : IAuthService
             PasswordHash = HashPassword(password),
             Role = Roles.Customer,
             Status = ActiveStatus,
+            EmailVerifiedAt = null,
             TotalPoints = 0,
             CreatedAt = now,
             UpdatedAt = now
@@ -104,6 +108,11 @@ public sealed class AuthService : IAuthService
             return (false, "Tài khoản chưa được kích hoạt", null);
         }
 
+        if (!user.EmailVerifiedAt.HasValue)
+        {
+            return (false, "Please verify your email before logging in.", null);
+        }
+
         return (true, null, user);
     }
 
@@ -125,6 +134,22 @@ public sealed class AuthService : IAuthService
         }
 
         var now = DateTime.UtcNow;
+
+        if (user.EmailVerifiedAt.HasValue)
+        {
+            return (false, "Email is already verified.", false);
+        }
+
+        var lastToken = await _userRepository.GetLatestEmailVerificationTokenAsync(
+            user.UserID,
+            cancellationToken);
+
+        if (lastToken is not null
+            && lastToken.CreatedAt > now.AddSeconds(-VerificationEmailResendCooldownSeconds))
+        {
+            return (false, "Please wait before requesting another verification email.", false);
+        }
+
         var verificationToken = new EmailVerificationToken
         {
             Token = GenerateEmailVerificationToken(),
@@ -133,7 +158,10 @@ public sealed class AuthService : IAuthService
             UserID = user.UserID
         };
 
-        await _userRepository.AddEmailVerificationTokenAsync(verificationToken, cancellationToken);
+        await _userRepository.ReplaceUnverifiedEmailVerificationTokensAsync(
+            user.UserID,
+            verificationToken,
+            cancellationToken);
 
         var verificationEmailSent = await _emailSender.SendAsync(
             user.Email,
@@ -158,19 +186,38 @@ public sealed class AuthService : IAuthService
 
         if (user is null)
         {
-            return (true, null);
+            return (false, "Email does not exist.");
         }
 
         var now = DateTime.UtcNow;
+
+        if (!user.EmailVerifiedAt.HasValue)
+        {
+            return (false, "Account is not verified.");
+        }
+
+        var lastToken = await _userRepository.GetLatestPasswordResetTokenAsync(
+            user.UserID,
+            cancellationToken);
+
+        if (lastToken is not null
+            && lastToken.CreatedAt > now.AddSeconds(-ForgotPasswordCooldownSeconds))
+        {
+            return (false, "Please wait before requesting another password reset email.");
+        }
+
         var resetToken = new PasswordResetToken
         {
             Token = GeneratePasswordResetToken(),
-            ExpiresAt = now.AddMinutes(15),
+            ExpiresAt = now.AddMinutes(PasswordResetTokenExpirationMinutes),
             CreatedAt = now,
             UserID = user.UserID
         };
 
-        await _userRepository.AddPasswordResetTokenAsync(resetToken, cancellationToken);
+        await _userRepository.ReplaceUnusedPasswordResetTokensAsync(
+            user.UserID,
+            resetToken,
+            cancellationToken);
 
         var emailSent = await _emailSender.SendAsync(
             user.Email,
@@ -262,11 +309,23 @@ public sealed class AuthService : IAuthService
 
         var now = DateTime.UtcNow;
 
-        if (verificationToken.ExpiresAt < now)
+        if (verificationToken.ExpiresAt <= now)
         {
             return (false, "Token đã hết hạn");
         }
 
+        if (verificationToken.User is null)
+        {
+            return (false, "Token is invalid");
+        }
+
+        if (verificationToken.User.EmailVerifiedAt.HasValue)
+        {
+            return (false, "Email is already verified.");
+        }
+
+        verificationToken.User.EmailVerifiedAt = now;
+        verificationToken.User.UpdatedAt = now;
         verificationToken.VerifiedAt = now;
         await _userRepository.SaveChangesAsync(cancellationToken);
 
@@ -304,7 +363,7 @@ public sealed class AuthService : IAuthService
     private static string BuildVerificationEmailBody(string fullName, string token)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var verifyUrl = $"https://your-domain.com/verify-email?token={Uri.EscapeDataString(token)}";
+        var verifyUrl = $"http://localhost:5173/register?token={Uri.EscapeDataString(token)}";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
@@ -346,7 +405,7 @@ public sealed class AuthService : IAuthService
     private static string BuildResetPasswordEmailBody(string fullName, string token)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var resetUrl = $"https://your-domain.com/reset-password?token={Uri.EscapeDataString(token)}";
+        var resetUrl = $"http://localhost:5173/resetPassword?token={Uri.EscapeDataString(token)}";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
@@ -366,7 +425,7 @@ public sealed class AuthService : IAuthService
                         <a href="{resetUrl}" style="display: inline-block; background: #c62828; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 40px; border-radius: 6px;">
                             Reset my password
                         </a>
-                        <p style="margin: 12px 0 0; font-size: 12px; color: #999999;">This link expires in 15 minutes</p>
+                        <p style="margin: 12px 0 0; font-size: 12px; color: #999999;">This link expires in {PasswordResetTokenExpirationMinutes} minutes</p>
                     </div>
 
                     <div style="background: #fff8e1; border-left: 3px solid #f9a825; border-radius: 0 4px 4px 0; padding: 10px 14px;">

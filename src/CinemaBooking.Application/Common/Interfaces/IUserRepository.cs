@@ -14,7 +14,12 @@ public interface IUserRepository
         int userId,
         string fullName,
         string? phone,
+        CancellationToken cancellationToken = default);
+
+    Task<User?> UpdateAvatarAsync(
+        int userId,
         string? avatarUrl,
+        string? avatarPublicId,
         CancellationToken cancellationToken = default);
 
     Task<Wallet?> GetWalletByUserIdAsync(int userId, CancellationToken cancellationToken = default);
@@ -35,8 +40,26 @@ public interface IUserRepository
         string token,
         CancellationToken cancellationToken = default);
 
+    Task<EmailVerificationToken?> GetLatestEmailVerificationTokenAsync(
+        int userId,
+        CancellationToken cancellationToken = default);
+
     Task AddPasswordResetTokenAsync(
         PasswordResetToken resetToken,
+        CancellationToken cancellationToken = default);
+
+    Task<PasswordResetToken?> GetLatestPasswordResetTokenAsync(
+        int userId,
+        CancellationToken cancellationToken = default);
+
+    Task ReplaceUnusedPasswordResetTokensAsync(
+        int userId,
+        PasswordResetToken resetToken,
+        CancellationToken cancellationToken = default);
+
+    Task ReplaceUnverifiedEmailVerificationTokensAsync(
+        int userId,
+        EmailVerificationToken verificationToken,
         CancellationToken cancellationToken = default);
 
     Task<PasswordResetToken?> GetPasswordResetTokenAsync(

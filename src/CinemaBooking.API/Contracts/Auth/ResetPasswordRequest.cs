@@ -4,17 +4,17 @@ namespace CinemaBooking.API.Contracts.Auth;
 
 public sealed class ResetPasswordRequest
 {
-    [Required(ErrorMessage = "Vui lòng nhập token")]
-    [MaxLength(255, ErrorMessage = "Token không hợp lệ")]
+    [Required(ErrorMessage = "Please enter token")]
+    [MaxLength(255, ErrorMessage = "Token is invalid")]
     public string Token { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Vui lòng nhập mật khẩu mới")]
-    [MinLength(6, ErrorMessage = "Mật khẩu tối thiểu 6 ký tự")]
+    [Required(ErrorMessage = "Please enter new password")]
+    [MinLength(6, ErrorMessage = "Password atlease 6 characters")]
     [DataType(DataType.Password)]
     public string NewPassword { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Vui lòng xác nhận mật khẩu")]
-    [Compare(nameof(NewPassword), ErrorMessage = "Mật khẩu xác nhận không khớp")]
+    [Required(ErrorMessage = "Please xác nhận password")]
+    [Compare(nameof(NewPassword), ErrorMessage = "Confirm password doesn't match")]
     [DataType(DataType.Password)]
     public string ConfirmPassword { get; set; } = string.Empty;
 }

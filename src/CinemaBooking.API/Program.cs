@@ -1,6 +1,7 @@
 using CinemaBooking.API;
 using CinemaBooking.Infrastructure;
 using CinemaBooking.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +23,12 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod();
     });
 });
+
+builder.Services.AddDbContext<CinemaBookingDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions => sqlOptions.CommandTimeout(120) // Gives it 2 minutes to run the scripts
+    ));
 
 var app = builder.Build();
 
