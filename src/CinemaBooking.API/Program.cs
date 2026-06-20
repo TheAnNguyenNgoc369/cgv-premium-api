@@ -18,7 +18,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend", policy =>
     {
         policy
-            .WithOrigins("http://localhost:5173", "http://localhost:5174", "https://cgv-premium-fe.vercel.app/")
+            .WithOrigins("http://localhost:5173", "http://localhost:5174", "https://cgv-premium-fe.vercel.app/", "https://cgv-premium-fe.vercel.app/")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
