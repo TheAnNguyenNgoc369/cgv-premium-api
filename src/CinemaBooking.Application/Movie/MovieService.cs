@@ -1,8 +1,8 @@
 using CinemaBooking.Application.Common.ImageFiles;
 using CinemaBooking.Application.Common.Interfaces;
-using CinemaBooking.Domain.Entities;
+using MovieEntity = CinemaBooking.Domain.Entities.Movie;
 
-namespace CinemaBooking.Application.Movies;
+namespace CinemaBooking.Application.Movie;
 
 public sealed class MovieService : IMovieService
 {
@@ -19,7 +19,7 @@ public sealed class MovieService : IMovieService
         _imageStorageService = imageStorageService;
     }
 
-    public async Task<(bool Succeeded, string? ErrorMessage, Movie? Movie)> UploadPosterAsync(
+    public async Task<(bool Succeeded, string? ErrorMessage, MovieEntity? Movie)> UploadPosterAsync(
         int movieId,
         Stream imageStream,
         string fileName,
@@ -68,7 +68,7 @@ public sealed class MovieService : IMovieService
         return (true, null, updatedMovie);
     }
 
-    public async Task<(bool Succeeded, string? ErrorMessage, Movie? Movie)> DeletePosterAsync(
+    public async Task<(bool Succeeded, string? ErrorMessage, MovieEntity? Movie)> DeletePosterAsync(
         int movieId,
         CancellationToken cancellationToken = default)
     {

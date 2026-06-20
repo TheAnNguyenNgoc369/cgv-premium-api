@@ -141,4 +141,30 @@ public sealed class UserService : IUserService
     {
         return _userRepository.GetWalletByUserIdAsync(userId, cancellationToken);
     }
+
+    public async Task<(bool Succeeded, string? ErrorMessage)> DeleteAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+
+        if (user is null)
+        {
+            return (false, "User not found");
+        }
+
+        var deleted = await _userRepository.DeleteAsync(userId, cancellationToken);
+
+        if (!deleted)
+        {
+            return (false, "User has related records and cannot be deleted");
+        }
+
+        if (!string.IsNullOrWhiteSpace(user.AvatarPublicId))
+        {
+            await _imageStorageService.DeleteImageAsync(user.AvatarPublicId, cancellationToken);
+        }
+
+        return (true, null);
+    }
 }

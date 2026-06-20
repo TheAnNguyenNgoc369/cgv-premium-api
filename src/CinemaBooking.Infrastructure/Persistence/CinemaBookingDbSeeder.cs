@@ -16,12 +16,6 @@ public static class CinemaBookingDbSeeder
 
         await PrepareDatabaseAsync(dbContext, cancellationToken);
 
-        // Only seed if no users exist yet
-        if (await dbContext.Users.AnyAsync(cancellationToken))
-        {
-            return;
-        }
-
         var now = DateTime.UtcNow;
         var passwordHash = HashPassword("Password@123");
 
@@ -29,7 +23,7 @@ public static class CinemaBookingDbSeeder
         {
             new User
             {
-                FullName = "Admin User",
+                FullName = "Admin Cinema",
                 Email = "admin@cinema.com",
                 Phone = "0900000001",
                 PasswordHash = passwordHash,
@@ -43,7 +37,7 @@ public static class CinemaBookingDbSeeder
             
             new User
             {
-                FullName = "Manager User",
+                FullName = "Manager Cinema",
                 Email = "manager@cinema.com",
                 Phone = "0900000003",
                 PasswordHash = passwordHash,
@@ -57,7 +51,7 @@ public static class CinemaBookingDbSeeder
 
             new User
             {
-                FullName = "Staff 1 User",
+                FullName = "Staff 1",
                 Email = "staff1@cinema.com",
                 Phone = "0900000023",
                 PasswordHash = passwordHash,
@@ -70,7 +64,7 @@ public static class CinemaBookingDbSeeder
             },
             new User
             {
-                FullName = "Staff 2 User",
+                FullName = "Staff 2",
                 Email = "staff2@cinema.com",
                 Phone = "0900000024",
                 PasswordHash = passwordHash,
@@ -83,7 +77,7 @@ public static class CinemaBookingDbSeeder
             },
             new User
             {
-                FullName = "Customer One",
+                FullName = "Customer 1",
                 Email = "c1@cinema.com",
                 Phone = "0900000003",
                 PasswordHash = passwordHash,
@@ -96,7 +90,7 @@ public static class CinemaBookingDbSeeder
             },
             new User
             {
-                FullName = "Customer Two",
+                FullName = "Customer 2",
                 Email = "c2@cinema.com",
                 Phone = "0900000004",
                 PasswordHash = passwordHash,
@@ -109,7 +103,7 @@ public static class CinemaBookingDbSeeder
             },
             new User
             {
-                FullName = "Customer Three",
+                FullName = "Customer 3",
                 Email = "c3@cinema.com",
                 Phone = "0900000005",
                 PasswordHash = passwordHash,
@@ -122,13 +116,29 @@ public static class CinemaBookingDbSeeder
             }
         };
 
-        dbContext.Users.AddRange(users);
+        var seedEmails = users.Select(user => user.Email).ToArray();
+        var existingEmails = await dbContext.Users
+            .Where(user => seedEmails.Contains(user.Email))
+            .Select(user => user.Email)
+            .ToListAsync(cancellationToken);
+
+        var existingEmailSet = existingEmails.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missingUsers = users
+            .Where(user => !existingEmailSet.Contains(user.Email))
+            .ToArray();
+
+        if (missingUsers.Length == 0)
+        {
+            return;
+        }
+
+        dbContext.Users.AddRange(missingUsers);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        // Create wallets for seeded users
-        var wallets = users.Select(u => new Wallet
+        // Create wallets only for accounts restored by this seed run.
+        var wallets = missingUsers.Select(user => new Wallet
         {
-            UserID = u.UserID,
+            UserID = user.UserID,
             Balance = 0m
         });
 

@@ -1,12 +1,12 @@
-using CinemaBooking.Domain.Entities;
+using MovieEntity = CinemaBooking.Domain.Entities.Movie;
 
 namespace CinemaBooking.Application.Common.Interfaces;
 
 public interface IMovieRepository
 {
-    Task<Movie?> GetByIdAsync(int movieId, CancellationToken cancellationToken = default);
+    Task<MovieEntity?> GetByIdAsync(int movieId, CancellationToken cancellationToken = default);
 
-    Task<Movie?> UpdatePosterAsync(
+    Task<MovieEntity?> UpdatePosterAsync(
         int movieId,
         string? posterUrl,
         string? posterPublicId,

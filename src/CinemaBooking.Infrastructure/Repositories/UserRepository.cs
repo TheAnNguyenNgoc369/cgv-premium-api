@@ -86,6 +86,43 @@ public sealed class UserRepository : IUserRepository
             .FirstOrDefaultAsync(w => w.UserID == userId, cancellationToken);
     }
 
+    public async Task<bool> DeleteAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _dbContext.Users
+            .FirstOrDefaultAsync(u => u.UserID == userId, cancellationToken);
+
+        if (user is null)
+        {
+            return false;
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var wallet = await _dbContext.Wallets
+            .FirstOrDefaultAsync(w => w.UserID == userId, cancellationToken);
+
+        if (wallet is not null)
+        {
+            _dbContext.Wallets.Remove(wallet);
+        }
+
+        _dbContext.Users.Remove(user);
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            _dbContext.ChangeTracker.Clear();
+            return false;
+        }
+    }
+
     public async Task AddUserWithWalletAsync(
         User user,
         Wallet wallet,

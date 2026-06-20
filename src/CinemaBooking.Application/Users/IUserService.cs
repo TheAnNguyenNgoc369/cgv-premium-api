@@ -25,4 +25,8 @@ public interface IUserService
         CancellationToken cancellationToken = default);
 
     Task<Wallet?> GetWalletAsync(int userId, CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage)> DeleteAsync(
+        int userId,
+        CancellationToken cancellationToken = default);
 }
