@@ -24,6 +24,8 @@ public interface IUserRepository
 
     Task<Wallet?> GetWalletByUserIdAsync(int userId, CancellationToken cancellationToken = default);
 
+    Task<bool> DeleteAsync(int userId, CancellationToken cancellationToken = default);
+
     Task AddUserWithWalletAsync(User user, Wallet wallet, CancellationToken cancellationToken = default);
 
     Task AddUserWithWalletAndVerificationTokenAsync(
