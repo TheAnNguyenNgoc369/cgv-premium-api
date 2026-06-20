@@ -18,7 +18,7 @@ public sealed class MovieRepository : IMovieRepository
         int movieId,
         CancellationToken cancellationToken = default)
     {
-        return _dbContext.Movies
+        return _dbContext.Movie
             .AsNoTracking()
             .FirstOrDefaultAsync(m => m.MovieID == movieId, cancellationToken);
     }
@@ -29,7 +29,7 @@ public sealed class MovieRepository : IMovieRepository
         string? posterPublicId,
         CancellationToken cancellationToken = default)
     {
-        var movie = await _dbContext.Movies
+        var movie = await _dbContext.Movie
             .FirstOrDefaultAsync(m => m.MovieID == movieId, cancellationToken);
 
         if (movie is null)
