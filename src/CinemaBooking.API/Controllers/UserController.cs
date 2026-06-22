@@ -134,7 +134,7 @@ public sealed class UserController : ControllerBase
             return BadRequest(new { message = result.ErrorMessage });
         }
 
-        return Ok(ToProfileResponse(result.User!));
+        return Ok(new { message = result.Message });
     }
 
     [HttpGet("wallet")]
