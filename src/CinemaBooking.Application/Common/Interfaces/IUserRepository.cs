@@ -68,8 +68,14 @@ public interface IUserRepository
         string token,
         CancellationToken cancellationToken = default);
 
-    Task<PasswordResetToken?> GetPasswordResetTokenAsync(
+    Task DeletePasswordResetTokenAsync(
         string token,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> TryResetPasswordAsync(
+        string token,
+        string passwordHash,
+        DateTime resetAt,
         CancellationToken cancellationToken = default);
 
     Task SaveChangesAsync(CancellationToken cancellationToken = default);

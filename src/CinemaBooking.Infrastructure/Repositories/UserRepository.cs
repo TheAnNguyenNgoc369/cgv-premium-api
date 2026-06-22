@@ -254,13 +254,66 @@ public sealed class UserRepository : IUserRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public Task<PasswordResetToken?> GetPasswordResetTokenAsync(
+    public async Task DeletePasswordResetTokenAsync(
         string token,
         CancellationToken cancellationToken = default)
     {
-        return _dbContext.PasswordResetTokens
-            .Include(t => t.User)
-            .FirstOrDefaultAsync(t => t.Token == token, cancellationToken);
+        await _dbContext.PasswordResetTokens
+            .Where(t => t.Token == token)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    public async Task<bool> TryResetPasswordAsync(
+        string token,
+        string passwordHash,
+        DateTime resetAt,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var userId = await _dbContext.PasswordResetTokens
+            .AsNoTracking()
+            .Where(t => t.Token == token)
+            .Select(t => (int?)t.UserID)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (!userId.HasValue)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        var consumedTokenCount = await _dbContext.PasswordResetTokens
+            .Where(t => t.Token == token
+                && !t.UsedAt.HasValue
+                && t.ExpiresAt > resetAt)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(t => t.UsedAt, resetAt),
+                cancellationToken);
+
+        if (consumedTokenCount == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        var updatedUserCount = await _dbContext.Users
+            .Where(u => u.UserID == userId.Value)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(u => u.PasswordHash, passwordHash)
+                    .SetProperty(u => u.UpdatedAt, resetAt)
+                    .SetProperty(u => u.TokenVersion, u => u.TokenVersion + 1),
+                cancellationToken);
+
+        if (updatedUserCount != 1)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default)

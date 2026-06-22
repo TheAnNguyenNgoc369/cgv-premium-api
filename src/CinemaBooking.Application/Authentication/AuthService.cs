@@ -21,6 +21,7 @@ public sealed class AuthService : IAuthService
     private const int VerificationEmailResendCooldownSeconds = 60;
     private const int PasswordResetTokenExpirationMinutes = 15;
     private const int ForgotPasswordCooldownSeconds = 60;
+    private const string EnumerationSafeEmailMessage = "If the email is eligible, an email has been sent.";
 
     private readonly IUserRepository _userRepository;
     private readonly IEmailSender _emailSender;
@@ -127,23 +128,18 @@ public sealed class AuthService : IAuthService
     {
         if (string.IsNullOrWhiteSpace(email))
         {
-            return (false, "Vui lòng nhập email", false);
+            return (true, EnumerationSafeEmailMessage, false);
         }
 
         var normalizedEmail = email.Trim();
         var user = await _userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
 
-        if (user is null)
+        if (user is null || user.EmailVerifiedAt.HasValue)
         {
-            return (false, "Email chưa được đăng ký", false);
+            return (true, EnumerationSafeEmailMessage, false);
         }
 
         var now = DateTime.UtcNow;
-
-        if (user.EmailVerifiedAt.HasValue)
-        {
-            return (false, "Email is already verified.", false);
-        }
 
         var lastToken = await _userRepository.GetLatestEmailVerificationTokenAsync(
             user.UserID,
@@ -152,7 +148,7 @@ public sealed class AuthService : IAuthService
         if (lastToken is not null
             && lastToken.CreatedAt > now.AddSeconds(-VerificationEmailResendCooldownSeconds))
         {
-            return (false, "Please wait before requesting another verification email.", false);
+            return (true, EnumerationSafeEmailMessage, false);
         }
 
         var verificationToken = new EmailVerificationToken
@@ -180,13 +176,10 @@ public sealed class AuthService : IAuthService
                 verificationToken.Token,
                 cancellationToken);
 
-            return (
-                false,
-                "Verification email could not be sent. Please try again later.",
-                false);
+            return (true, EnumerationSafeEmailMessage, false);
         }
 
-        return (true, null, true);
+        return (true, EnumerationSafeEmailMessage, false);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> ForgotPasswordAsync(
@@ -195,23 +188,18 @@ public sealed class AuthService : IAuthService
     {
         if (string.IsNullOrWhiteSpace(email))
         {
-            return (false, "Vui lòng nhập email");
+            return (true, EnumerationSafeEmailMessage);
         }
 
         var normalizedEmail = email.Trim();
         var user = await _userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
 
-        if (user is null)
+        if (user is null || !user.EmailVerifiedAt.HasValue)
         {
-            return (false, "Email does not exist.");
+            return (true, EnumerationSafeEmailMessage);
         }
 
         var now = DateTime.UtcNow;
-
-        if (!user.EmailVerifiedAt.HasValue)
-        {
-            return (false, "Account is not verified.");
-        }
 
         var lastToken = await _userRepository.GetLatestPasswordResetTokenAsync(
             user.UserID,
@@ -220,7 +208,7 @@ public sealed class AuthService : IAuthService
         if (lastToken is not null
             && lastToken.CreatedAt > now.AddSeconds(-ForgotPasswordCooldownSeconds))
         {
-            return (false, "Please wait before requesting another password reset email.");
+            return (true, EnumerationSafeEmailMessage);
         }
 
         var resetToken = new PasswordResetToken
@@ -242,7 +230,14 @@ public sealed class AuthService : IAuthService
             BuildResetPasswordEmailBody(user.FullName, resetToken.Token),
             cancellationToken);
 
-        return (true, null);
+        if (!emailSent)
+        {
+            await _userRepository.DeletePasswordResetTokenAsync(
+                resetToken.Token,
+                cancellationToken);
+        }
+
+        return (true, EnumerationSafeEmailMessage);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> ResetPasswordAsync(
@@ -271,32 +266,17 @@ public sealed class AuthService : IAuthService
             return (false, "Mật khẩu xác nhận không khớp");
         }
 
-        var resetToken = await _userRepository.GetPasswordResetTokenAsync(
+        var now = DateTime.UtcNow;
+        var passwordReset = await _userRepository.TryResetPasswordAsync(
             token.Trim(),
+            HashPassword(newPassword),
+            now,
             cancellationToken);
 
-        if (resetToken is null)
+        if (!passwordReset)
         {
-            return (false, "Reset token is invalid");
+            return (false, "Reset token is invalid, expired, or has already been used");
         }
-
-        if (resetToken.UsedAt.HasValue)
-        {
-            return (false, "Reset token has already been used");
-        }
-
-        var now = DateTime.UtcNow;
-
-        if (resetToken.ExpiresAt < now)
-        {
-            return (false, "Reset token has expired");
-        }
-
-        resetToken.User.PasswordHash = HashPassword(newPassword);
-        resetToken.User.UpdatedAt = now;
-        resetToken.UsedAt = now;
-
-        await _userRepository.SaveChangesAsync(cancellationToken);
 
         return (true, null);
     }

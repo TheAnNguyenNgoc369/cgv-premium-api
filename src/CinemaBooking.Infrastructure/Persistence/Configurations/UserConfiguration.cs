@@ -21,6 +21,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.AvatarPublicId).HasMaxLength(255);
         builder.Property(u => u.Role).HasMaxLength(20).IsRequired();
         builder.Property(u => u.Status).HasMaxLength(20).IsRequired().HasDefaultValue("unverified");
+        builder.Property(u => u.TokenVersion).HasDefaultValue(0);
         builder.Property(u => u.TotalPoints).HasDefaultValue(0);
         builder.Property(u => u.CreatedAt).HasDefaultValueSql("GETDATE()");
         builder.Property(u => u.UpdatedAt).HasDefaultValueSql("GETDATE()");

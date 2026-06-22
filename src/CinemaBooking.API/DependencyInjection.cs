@@ -4,6 +4,7 @@ using System.Text;
 using CinemaBooking.API.Configuration;
 using CinemaBooking.API.Services;
 using CinemaBooking.Application;
+using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
@@ -104,7 +105,7 @@ public static class DependencyInjection
                 };
                 options.Events = new JwtBearerEvents
                 {
-                    OnTokenValidated = context =>
+                    OnTokenValidated = async context =>
                     {
                         var revocationService = context.HttpContext.RequestServices
                             .GetRequiredService<ITokenRevocationService>();
@@ -116,9 +117,31 @@ public static class DependencyInjection
                             && revocationService.IsRevoked(rawToken))
                         {
                             context.Fail("Token has been revoked.");
+                            return;
                         }
 
-                        return Task.CompletedTask;
+                        var userIdValue = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                        var tokenVersionValue = context.Principal?.FindFirstValue(JwtTokenService.TokenVersionClaim);
+
+                        if (!int.TryParse(userIdValue, out var userId)
+                            || !int.TryParse(tokenVersionValue, out var tokenVersion))
+                        {
+                            context.Fail("Token authentication state is invalid.");
+                            return;
+                        }
+
+                        var userRepository = context.HttpContext.RequestServices
+                            .GetRequiredService<IUserRepository>();
+                        var user = await userRepository.GetByIdAsync(
+                            userId,
+                            context.HttpContext.RequestAborted);
+
+                        if (user is null
+                            || !string.Equals(user.Status, "active", StringComparison.OrdinalIgnoreCase)
+                            || user.TokenVersion != tokenVersion)
+                        {
+                            context.Fail("Token has been invalidated.");
+                        }
                     },
 
                     OnAuthenticationFailed = context =>
