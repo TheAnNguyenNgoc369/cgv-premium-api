@@ -76,7 +76,8 @@ public sealed class AuthController : ControllerBase
             return BadRequest(new
             {
                 success = false,
-                message = result.ErrorMessage
+                message = result.ErrorMessage,
+                verificationEmailSent = result.VerificationEmailSent
             });
         }
 

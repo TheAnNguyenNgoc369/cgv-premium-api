@@ -169,7 +169,15 @@ public sealed class AuthService : IAuthService
             BuildVerificationEmailBody(user.FullName, verificationToken.Token),
             cancellationToken);
 
-        return (true, null, verificationEmailSent);
+        if (!verificationEmailSent)
+        {
+            return (
+                false,
+                "Verification email could not be sent. Please try again later.",
+                false);
+        }
+
+        return (true, null, true);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> ForgotPasswordAsync(
