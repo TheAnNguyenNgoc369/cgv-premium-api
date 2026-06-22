@@ -171,6 +171,10 @@ public sealed class AuthService : IAuthService
 
         if (!verificationEmailSent)
         {
+            await _userRepository.DeleteEmailVerificationTokenAsync(
+                verificationToken.Token,
+                cancellationToken);
+
             return (
                 false,
                 "Verification email could not be sent. Please try again later.",

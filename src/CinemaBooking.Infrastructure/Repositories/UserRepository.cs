@@ -238,6 +238,22 @@ public sealed class UserRepository : IUserRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task DeleteEmailVerificationTokenAsync(
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        var verificationToken = await _dbContext.EmailVerificationTokens
+            .FirstOrDefaultAsync(t => t.Token == token, cancellationToken);
+
+        if (verificationToken is null)
+        {
+            return;
+        }
+
+        _dbContext.EmailVerificationTokens.Remove(verificationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public Task<PasswordResetToken?> GetPasswordResetTokenAsync(
         string token,
         CancellationToken cancellationToken = default)
