@@ -9,6 +9,11 @@ namespace CinemaBooking.Application.Authentication;
 
 public sealed class AuthService : IAuthService
 {
+    private const string PasswordHashAlgorithm = "pbkdf2-sha256";
+    private const string PasswordHashVersion = "v1";
+    private const int PasswordHashIterations = 700_000;
+    private const int PasswordSaltSize = 16;
+    private const int PasswordHashSize = 32;
     private const string ActiveStatus = "active";
     private const string LockedStatus = "locked";
     private const string InactiveStatus = "inactive";
@@ -93,7 +98,7 @@ public sealed class AuthService : IAuthService
     {
         var user = await _userRepository.GetByEmailAsync(email.Trim(), cancellationToken);
 
-        if (user is null || user.PasswordHash != HashPassword(password))
+        if (user is null || !VerifyPassword(password, user.PasswordHash))
         {
             return (false, "Email hoặc mật khẩu không đúng", null);
         }
@@ -346,10 +351,54 @@ public sealed class AuthService : IAuthService
 
     private static string HashPassword(string password)
     {
-        using var sha = SHA256.Create();
-        var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(password));
+        var salt = RandomNumberGenerator.GetBytes(PasswordSaltSize);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(
+            Encoding.UTF8.GetBytes(password),
+            salt,
+            PasswordHashIterations,
+            HashAlgorithmName.SHA256,
+            PasswordHashSize);
 
-        return Convert.ToHexString(bytes).ToLowerInvariant();
+        return $"${PasswordHashAlgorithm}${PasswordHashVersion}${PasswordHashIterations}${Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
+    }
+
+    private static bool VerifyPassword(string password, string encodedHash)
+    {
+        var parts = encodedHash.Split('$');
+
+        if (parts.Length != 6
+            || parts[0].Length != 0
+            || parts[1] != PasswordHashAlgorithm
+            || parts[2] != PasswordHashVersion
+            || !int.TryParse(parts[3], out var iterations)
+            || iterations != PasswordHashIterations)
+        {
+            return false;
+        }
+
+        try
+        {
+            var salt = Convert.FromBase64String(parts[4]);
+            var expectedHash = Convert.FromBase64String(parts[5]);
+
+            if (salt.Length != PasswordSaltSize || expectedHash.Length != PasswordHashSize)
+            {
+                return false;
+            }
+
+            var actualHash = Rfc2898DeriveBytes.Pbkdf2(
+                Encoding.UTF8.GetBytes(password),
+                salt,
+                iterations,
+                HashAlgorithmName.SHA256,
+                PasswordHashSize);
+
+            return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     private static string GenerateEmailVerificationToken()
