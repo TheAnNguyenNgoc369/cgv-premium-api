@@ -1,10 +1,10 @@
-using CinemaBooking.Domain.Entities;
+using MovieEntity = CinemaBooking.Domain.Entities.Movie;
 
-namespace CinemaBooking.Application.Movies;
+namespace CinemaBooking.Application.Movie;
 
 public interface IMovieService
 {
-    Task<(bool Succeeded, string? ErrorMessage, Movie? Movie)> UploadPosterAsync(
+    Task<(bool Succeeded, string? ErrorMessage, MovieEntity? Movie)> UploadPosterAsync(
         int movieId,
         Stream imageStream,
         string fileName,
@@ -12,7 +12,7 @@ public interface IMovieService
         long fileSize,
         CancellationToken cancellationToken = default);
 
-    Task<(bool Succeeded, string? ErrorMessage, Movie? Movie)> DeletePosterAsync(
+    Task<(bool Succeeded, string? ErrorMessage, MovieEntity? Movie)> DeletePosterAsync(
         int movieId,
         CancellationToken cancellationToken = default);
 }

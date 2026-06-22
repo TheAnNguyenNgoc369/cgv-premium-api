@@ -17,7 +17,7 @@ public class CinemaBookingDbContext : DbContext
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<Wallet> Wallets => Set<Wallet>();
     public DbSet<Genre> Genres => Set<Genre>();
-    public DbSet<Movie> Movies => Set<Movie>();
+    public DbSet<Movie> Movie => Set<Movie>();
     public DbSet<MovieGenre> MovieGenres => Set<MovieGenre>();
     public DbSet<Room> Rooms => Set<Room>();
     public DbSet<SeatType> SeatTypes => Set<SeatType>();

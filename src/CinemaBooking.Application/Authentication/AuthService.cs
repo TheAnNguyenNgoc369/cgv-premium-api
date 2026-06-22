@@ -12,7 +12,7 @@ public sealed class AuthService : IAuthService
     private const string ActiveStatus = "active";
     private const string LockedStatus = "locked";
     private const string InactiveStatus = "inactive";
-    private const int VerificationTokenExpirationHours = 24;
+    private const int VerificationTokenExpirationMinutes = 10;
     private const int VerificationEmailResendCooldownSeconds = 60;
     private const int PasswordResetTokenExpirationMinutes = 15;
     private const int ForgotPasswordCooldownSeconds = 60;
@@ -67,7 +67,7 @@ public sealed class AuthService : IAuthService
         var verificationToken = new EmailVerificationToken
         {
             Token = GenerateEmailVerificationToken(),
-            ExpiresAt = now.AddHours(VerificationTokenExpirationHours),
+            ExpiresAt = now.AddMinutes(VerificationTokenExpirationMinutes),
             CreatedAt = now
         };
 
@@ -153,7 +153,7 @@ public sealed class AuthService : IAuthService
         var verificationToken = new EmailVerificationToken
         {
             Token = GenerateEmailVerificationToken(),
-            ExpiresAt = now.AddHours(VerificationTokenExpirationHours),
+            ExpiresAt = now.AddMinutes(VerificationTokenExpirationMinutes),
             CreatedAt = now,
             UserID = user.UserID
         };
@@ -169,7 +169,19 @@ public sealed class AuthService : IAuthService
             BuildVerificationEmailBody(user.FullName, verificationToken.Token),
             cancellationToken);
 
-        return (true, null, verificationEmailSent);
+        if (!verificationEmailSent)
+        {
+            await _userRepository.DeleteEmailVerificationTokenAsync(
+                verificationToken.Token,
+                cancellationToken);
+
+            return (
+                false,
+                "Verification email could not be sent. Please try again later.",
+                false);
+        }
+
+        return (true, null, true);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> ForgotPasswordAsync(
@@ -363,7 +375,7 @@ public sealed class AuthService : IAuthService
     private static string BuildVerificationEmailBody(string fullName, string token)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var verifyUrl = $"http://localhost:5173/register?token={Uri.EscapeDataString(token)}";
+        var encodedToken = WebUtility.HtmlEncode(token);
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
@@ -376,14 +388,15 @@ public sealed class AuthService : IAuthService
                     <p style="margin: 0 0 6px; color: #111111; font-size: 20px; font-weight: 700;">Verify your email</p>
                     <p style="margin: 0 0 24px; color: #555555; font-size: 14px; line-height: 1.6;">
                         Hello <strong>{encodedFullName}</strong>, welcome to CGV Premium!<br />
-                        Click the button below to activate your account.
+                        Copy the verification code below and enter it in the verification screen.
                     </p>
 
                     <div style="text-align: center; margin: 0 0 24px;">
-                        <a href="{verifyUrl}" style="display: inline-block; background: #c62828; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 40px; border-radius: 6px;">
-                            Verify my account
-                        </a>
-                        <p style="margin: 12px 0 0; font-size: 12px; color: #999999;">This link expires in {VerificationTokenExpirationHours} hours</p>
+                        <div role="textbox" aria-label="Verification code" title="Select and copy this verification code" style="display: block; background: #f5f5f5; border: 2px dashed #c62828; border-radius: 6px; padding: 16px; color: #222222; font-family: Consolas, 'Courier New', monospace; font-size: 18px; font-weight: 700; letter-spacing: 1px; overflow-wrap: anywhere; cursor: text; user-select: all; -webkit-user-select: all;">
+                            {encodedToken}
+                        </div>
+                        <p style="margin: 12px 0 0; font-size: 12px; color: #777777;">Select the code, copy it, and paste it into the verification form.</p>
+                        <p style="margin: 6px 0 0; font-size: 12px; color: #999999;">This code expires in {VerificationTokenExpirationMinutes} minutes.</p>
                     </div>
 
                     <div style="background: #fff8e1; border-left: 3px solid #f9a825; border-radius: 0 4px 4px 0; padding: 10px 14px;">

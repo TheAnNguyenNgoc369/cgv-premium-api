@@ -79,6 +79,15 @@ public sealed class UserService : IUserService
             return (false, "User not found", null);
         }
 
+        if (!string.IsNullOrWhiteSpace(user.AvatarURL)
+            && string.IsNullOrWhiteSpace(user.AvatarPublicId))
+        {
+            return (
+                false,
+                "Avatar cannot be replaced because its Cloudinary public ID is missing",
+                null);
+        }
+
         var previousPublicId = user.AvatarPublicId;
         var uploadResult = await _imageStorageService.UploadImageAsync(
             imageStream,
@@ -86,27 +95,54 @@ public sealed class UserService : IUserService
             AvatarFolder,
             cancellationToken);
 
-        var updatedUser = await _userRepository.UpdateAvatarAsync(
-            userId,
-            uploadResult.SecureUrl,
-            uploadResult.PublicId,
-            cancellationToken);
+        if (!string.IsNullOrWhiteSpace(previousPublicId))
+        {
+            try
+            {
+                await _imageStorageService.DeleteImageAsync(previousPublicId, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                var cleanupError = await TryDeleteImageAsync(uploadResult.PublicId, cancellationToken);
+                var errorMessage = $"Failed to delete previous avatar from Cloudinary: {exception.Message}";
+
+                if (cleanupError is not null)
+                {
+                    errorMessage += $" The newly uploaded avatar could not be cleaned up: {cleanupError}";
+                }
+
+                return (false, errorMessage, null);
+            }
+        }
+
+        User? updatedUser;
+
+        try
+        {
+            updatedUser = await _userRepository.UpdateAvatarAsync(
+                userId,
+                uploadResult.SecureUrl,
+                uploadResult.PublicId,
+                cancellationToken);
+        }
+        catch
+        {
+            await TryDeleteImageAsync(uploadResult.PublicId, CancellationToken.None);
+            throw;
+        }
 
         if (updatedUser is null)
         {
-            await _imageStorageService.DeleteImageAsync(uploadResult.PublicId, cancellationToken);
-            return (false, "User not found", null);
-        }
-
-        if (!string.IsNullOrWhiteSpace(previousPublicId))
-        {
-            await _imageStorageService.DeleteImageAsync(previousPublicId, cancellationToken);
+            var cleanupError = await TryDeleteImageAsync(uploadResult.PublicId, cancellationToken);
+            return cleanupError is null
+                ? (false, "User not found", null)
+                : (false, $"User not found. The newly uploaded avatar could not be cleaned up: {cleanupError}", null);
         }
 
         return (true, null, updatedUser);
     }
 
-    public async Task<(bool Succeeded, string? ErrorMessage, User? User)> DeleteAvatarAsync(
+    public async Task<(bool Succeeded, string? ErrorMessage, User? User, string? Message)> DeleteAvatarAsync(
         int userId,
         CancellationToken cancellationToken = default)
     {
@@ -114,10 +150,39 @@ public sealed class UserService : IUserService
 
         if (user is null)
         {
-            return (false, "User not found", null);
+            return (false, "User not found", null, null);
         }
 
-        var previousPublicId = user.AvatarPublicId;
+        var hasAvatarUrl = !string.IsNullOrWhiteSpace(user.AvatarURL);
+        var hasPublicId = !string.IsNullOrWhiteSpace(user.AvatarPublicId);
+
+        if (!hasAvatarUrl && !hasPublicId)
+        {
+            return (true, null, user, "No avatar to delete");
+        }
+
+        if (!hasPublicId)
+        {
+            return (
+                false,
+                "Avatar cannot be deleted because its Cloudinary public ID is missing",
+                null,
+                null);
+        }
+
+        try
+        {
+            await _imageStorageService.DeleteImageAsync(user.AvatarPublicId!, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return (
+                false,
+                $"Failed to delete avatar from Cloudinary: {exception.Message}",
+                null,
+                null);
+        }
+
         var updatedUser = await _userRepository.UpdateAvatarAsync(
             userId,
             null,
@@ -126,19 +191,55 @@ public sealed class UserService : IUserService
 
         if (updatedUser is null)
         {
-            return (false, "User not found", null);
+            return (false, "User not found", null, null);
         }
 
-        if (!string.IsNullOrWhiteSpace(previousPublicId))
-        {
-            await _imageStorageService.DeleteImageAsync(previousPublicId, cancellationToken);
-        }
-
-        return (true, null, updatedUser);
+        return (true, null, updatedUser, "Avatar deleted successfully");
     }
 
     public Task<Wallet?> GetWalletAsync(int userId, CancellationToken cancellationToken = default)
     {
         return _userRepository.GetWalletByUserIdAsync(userId, cancellationToken);
+    }
+
+    public async Task<(bool Succeeded, string? ErrorMessage)> DeleteAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+
+        if (user is null)
+        {
+            return (false, "User not found");
+        }
+
+        var deleted = await _userRepository.DeleteAsync(userId, cancellationToken);
+
+        if (!deleted)
+        {
+            return (false, "User has related records and cannot be deleted");
+        }
+
+        if (!string.IsNullOrWhiteSpace(user.AvatarPublicId))
+        {
+            await _imageStorageService.DeleteImageAsync(user.AvatarPublicId, cancellationToken);
+        }
+
+        return (true, null);
+    }
+
+    private async Task<string?> TryDeleteImageAsync(
+        string publicId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _imageStorageService.DeleteImageAsync(publicId, cancellationToken);
+            return null;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return exception.Message;
+        }
     }
 }

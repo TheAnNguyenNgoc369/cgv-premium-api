@@ -1,20 +1,20 @@
 using CinemaBooking.API.Contracts.Images;
-using CinemaBooking.Application.Movies;
-using CinemaBooking.Domain.Entities;
+using CinemaBooking.Application.Movie;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MovieEntity = CinemaBooking.Domain.Entities.Movie;
 
 namespace CinemaBooking.API.Controllers;
 
 [ApiController]
-[Route("api/movies")]
+[Route("api/movie")]
 [Authorize(Roles = Roles.Admin + "," + Roles.Manager + "," + Roles.Staff)]
-public sealed class MoviesController : ControllerBase
+public sealed class MovieController : ControllerBase
 {
     private readonly IMovieService _movieService;
 
-    public MoviesController(IMovieService movieService)
+    public MovieController(IMovieService movieService)
     {
         _movieService = movieService;
     }
@@ -77,7 +77,7 @@ public sealed class MoviesController : ControllerBase
         return Ok(ToPosterResponse(result.Movie!));
     }
 
-    private static object ToPosterResponse(Movie movie)
+    private static object ToPosterResponse(MovieEntity movie)
     {
         return new
         {
