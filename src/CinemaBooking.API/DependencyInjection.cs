@@ -4,10 +4,10 @@ using System.Text;
 using CinemaBooking.API.Configuration;
 using CinemaBooking.API.Services;
 using CinemaBooking.Application;
-using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
@@ -48,7 +48,7 @@ public static class DependencyInjection
 
         services.AddApplicationServices();
         services.AddScoped<JwtTokenService>();
-        services.AddSingleton<ITokenRevocationService, InMemoryTokenRevocationService>();
+        services.AddScoped<ITokenRevocationService, DatabaseTokenRevocationService>();
 
         if (environment.IsDevelopment())
         {
@@ -109,38 +109,19 @@ public static class DependencyInjection
                     {
                         var revocationService = context.HttpContext.RequestServices
                             .GetRequiredService<ITokenRevocationService>();
-                        var rawToken = context.SecurityToken is JwtSecurityToken jwtToken
-                            ? jwtToken.RawData
-                            : null;
+                        var rawToken = context.SecurityToken switch
+                        {
+                            JsonWebToken jsonWebToken => jsonWebToken.EncodedToken,
+                            JwtSecurityToken jwtToken => jwtToken.RawData,
+                            _ => null
+                        };
 
-                        if (!string.IsNullOrWhiteSpace(rawToken)
-                            && revocationService.IsRevoked(rawToken))
+                        if (string.IsNullOrWhiteSpace(rawToken)
+                            || await revocationService.IsRevokedAsync(
+                                rawToken,
+                                context.HttpContext.RequestAborted))
                         {
                             context.Fail("Token has been revoked.");
-                            return;
-                        }
-
-                        var userIdValue = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
-                        var tokenVersionValue = context.Principal?.FindFirstValue(JwtTokenService.TokenVersionClaim);
-
-                        if (!int.TryParse(userIdValue, out var userId)
-                            || !int.TryParse(tokenVersionValue, out var tokenVersion))
-                        {
-                            context.Fail("Token authentication state is invalid.");
-                            return;
-                        }
-
-                        var userRepository = context.HttpContext.RequestServices
-                            .GetRequiredService<IUserRepository>();
-                        var user = await userRepository.GetByIdAsync(
-                            userId,
-                            context.HttpContext.RequestAborted);
-
-                        if (user is null
-                            || !string.Equals(user.Status, "active", StringComparison.OrdinalIgnoreCase)
-                            || user.TokenVersion != tokenVersion)
-                        {
-                            context.Fail("Token has been invalidated.");
                         }
                     },
 

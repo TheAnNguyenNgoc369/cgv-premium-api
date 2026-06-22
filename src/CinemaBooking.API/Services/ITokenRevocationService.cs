@@ -2,7 +2,12 @@ namespace CinemaBooking.API.Services;
 
 public interface ITokenRevocationService
 {
-    void Revoke(string token, DateTime expiresAtUtc);
+    Task RevokeAsync(
+        string token,
+        DateTime expiresAtUtc,
+        CancellationToken cancellationToken = default);
 
-    bool IsRevoked(string token);
+    Task<bool> IsRevokedAsync(
+        string token,
+        CancellationToken cancellationToken = default);
 }

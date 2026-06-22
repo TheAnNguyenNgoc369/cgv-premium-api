@@ -316,6 +316,39 @@ public sealed class UserRepository : IUserRepository
         return true;
     }
 
+    public async Task<bool> TryIncrementTokenVersionAsync(
+        int userId,
+        int expectedTokenVersion,
+        CancellationToken cancellationToken = default)
+    {
+        var updatedUserCount = await _dbContext.Users
+            .Where(u => u.UserID == userId && u.TokenVersion == expectedTokenVersion)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(u => u.TokenVersion, u => u.TokenVersion + 1)
+                    .SetProperty(u => u.UpdatedAt, DateTime.UtcNow),
+                cancellationToken);
+
+        return updatedUserCount == 1;
+    }
+
+    public async Task<bool> TryUpdatePasswordHashAsync(
+        int userId,
+        string expectedPasswordHash,
+        string newPasswordHash,
+        CancellationToken cancellationToken = default)
+    {
+        var updatedUserCount = await _dbContext.Users
+            .Where(u => u.UserID == userId && u.PasswordHash == expectedPasswordHash)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(u => u.PasswordHash, newPasswordHash)
+                    .SetProperty(u => u.UpdatedAt, DateTime.UtcNow),
+                cancellationToken);
+
+        return updatedUserCount == 1;
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         return _dbContext.SaveChangesAsync(cancellationToken);

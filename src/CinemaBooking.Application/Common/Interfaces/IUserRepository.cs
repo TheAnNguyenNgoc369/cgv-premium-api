@@ -78,5 +78,16 @@ public interface IUserRepository
         DateTime resetAt,
         CancellationToken cancellationToken = default);
 
+    Task<bool> TryIncrementTokenVersionAsync(
+        int userId,
+        int expectedTokenVersion,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> TryUpdatePasswordHashAsync(
+        int userId,
+        string expectedPasswordHash,
+        string newPasswordHash,
+        CancellationToken cancellationToken = default);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

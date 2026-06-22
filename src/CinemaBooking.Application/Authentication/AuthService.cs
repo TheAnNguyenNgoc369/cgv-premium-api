@@ -99,9 +99,26 @@ public sealed class AuthService : IAuthService
     {
         var user = await _userRepository.GetByEmailAsync(email.Trim(), cancellationToken);
 
-        if (user is null || !VerifyPassword(password, user.PasswordHash))
+        if (user is null || !VerifyPassword(password, user.PasswordHash, out var requiresRehash))
         {
             return (false, "Email hoặc mật khẩu không đúng", null);
+        }
+
+        if (requiresRehash)
+        {
+            var upgradedPasswordHash = HashPassword(password);
+            var passwordHashUpdated = await _userRepository.TryUpdatePasswordHashAsync(
+                user.UserID,
+                user.PasswordHash,
+                upgradedPasswordHash,
+                cancellationToken);
+
+            if (!passwordHashUpdated)
+            {
+                return (false, "Email hoặc mật khẩu không đúng", null);
+            }
+
+            user.PasswordHash = upgradedPasswordHash;
         }
 
         if (string.Equals(user.Status, LockedStatus, StringComparison.OrdinalIgnoreCase))
@@ -342,20 +359,29 @@ public sealed class AuthService : IAuthService
         return $"${PasswordHashAlgorithm}${PasswordHashVersion}${PasswordHashIterations}${Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
     }
 
-    private static bool VerifyPassword(string password, string encodedHash)
+    private static bool VerifyPassword(
+        string password,
+        string encodedHash,
+        out bool requiresRehash)
     {
+        requiresRehash = false;
         var parts = encodedHash.Split('$');
 
-        if (parts.Length != 6
-            || parts[0].Length != 0
-            || parts[1] != PasswordHashAlgorithm
-            || parts[2] != PasswordHashVersion
-            || !int.TryParse(parts[3], out var iterations)
-            || iterations != PasswordHashIterations)
+        if (parts.Length == 6
+            && parts[0].Length == 0
+            && parts[1] == PasswordHashAlgorithm
+            && parts[2] == PasswordHashVersion
+            && int.TryParse(parts[3], out var iterations)
+            && iterations == PasswordHashIterations)
         {
-            return false;
+            return VerifyPbkdf2Password(password, parts, iterations);
         }
 
+        return VerifyLegacySha256Password(password, encodedHash, out requiresRehash);
+    }
+
+    private static bool VerifyPbkdf2Password(string password, string[] parts, int iterations)
+    {
         try
         {
             var salt = Convert.FromBase64String(parts[4]);
@@ -374,6 +400,32 @@ public sealed class AuthService : IAuthService
                 PasswordHashSize);
 
             return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    private static bool VerifyLegacySha256Password(
+        string password,
+        string encodedHash,
+        out bool requiresRehash)
+    {
+        requiresRehash = false;
+
+        if (encodedHash.Length != 64)
+        {
+            return false;
+        }
+
+        try
+        {
+            var expectedHash = Convert.FromHexString(encodedHash);
+            var actualHash = SHA256.HashData(Encoding.UTF8.GetBytes(password));
+            var verified = CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
+            requiresRehash = verified;
+            return verified;
         }
         catch (FormatException)
         {

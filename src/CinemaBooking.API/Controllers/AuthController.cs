@@ -187,7 +187,7 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("logout")]
     [Authorize]
-    public IActionResult Logout()
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
         if (!TryGetBearerToken(out var token))
         {
@@ -197,7 +197,10 @@ public sealed class AuthController : ControllerBase
         try
         {
             var jwtToken = new JwtSecurityTokenHandler().ReadJwtToken(token);
-            _tokenRevocationService.Revoke(token, jwtToken.ValidTo);
+            await _tokenRevocationService.RevokeAsync(
+                token,
+                jwtToken.ValidTo,
+                cancellationToken);
         }
         catch (ArgumentException)
         {
