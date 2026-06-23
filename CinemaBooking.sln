@@ -15,6 +15,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CinemaBooking.Infrastructur
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CinemaBooking.Shared", "src\CinemaBooking.Shared\CinemaBooking.Shared.csproj", "{E2D32080-DC68-415C-9A90-F089843B52A0}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CinemaBooking.API.Tests", "tests\CinemaBooking.API.Tests\CinemaBooking.API.Tests.csproj", "{3CDC38FF-D0FF-4F31-AA15-0911E0D3E163}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

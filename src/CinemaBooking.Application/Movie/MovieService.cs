@@ -98,4 +98,30 @@ public sealed class MovieService : IMovieService
 
         return (true, null, updatedMovie);
     }
+
+    public Task<List<MovieEntity>> GetMoviesByStatusAsync(
+        string status,
+        CancellationToken cancellationToken = default)
+    {
+        return _movieRepository.GetMoviesByStatusAsync(status, cancellationToken);
+    }
+
+    public Task<MovieEntity?> GetMovieByIdAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        return _movieRepository.GetMovieByIdAsync(id, cancellationToken);
+    }
+
+    public Task<List<MovieEntity>> SearchMoviesAsync(
+        string keyword,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            return Task.FromResult(new List<MovieEntity>());
+        }
+
+        return _movieRepository.SearchMoviesAsync(keyword, cancellationToken);
+    }
 }

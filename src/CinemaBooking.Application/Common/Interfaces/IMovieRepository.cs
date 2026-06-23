@@ -11,4 +11,16 @@ public interface IMovieRepository
         string? posterUrl,
         string? posterPublicId,
         CancellationToken cancellationToken = default);
+
+    Task<List<MovieEntity>> GetMoviesByStatusAsync(
+        string status,
+        CancellationToken cancellationToken = default);
+
+    Task<MovieEntity?> GetMovieByIdAsync(
+        int id,
+        CancellationToken cancellationToken = default);
+
+    Task<List<MovieEntity>> SearchMoviesAsync(
+        string keyword,
+        CancellationToken cancellationToken = default);
 }
