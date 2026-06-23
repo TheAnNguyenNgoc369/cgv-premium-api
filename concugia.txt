@@ -1,0 +1,8 @@
+☐ Tạo 3 file: BookingStatus.cs, SeatHoldStatus.cs, SeatStatus.cs
+✅ KHÔNG cần SeatHoldConfiguration.cs — đã có sẵn, đúng luôn
+☐ Sửa: IBookingRepository.cs
+☐ Sửa: BookingRepository.cs
+☐ Sửa: BookingService.cs
+☐ Sửa: ShowtimeRepository.cs (2 method)
+☐ Sửa: ShowtimeService.cs (1 dòng)
+✅ KHÔNG cần Add-Migration / Update-Database — index đã có thật trong DB

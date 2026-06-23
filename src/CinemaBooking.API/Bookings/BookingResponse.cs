@@ -18,7 +18,9 @@ public sealed record BookingResponse(
     decimal FinalAmount,
     string Status,
     DateTime BookingDate,
-    List<BookingSeatResponse> Seats
+    List<BookingSeatResponse> Seats,
+    List<BookingFnBResponse> FnbItems,
+    BookingVoucherResponse? VoucherApplied
 );
 
 public sealed record BookingSeatResponse(
@@ -26,4 +28,16 @@ public sealed record BookingSeatResponse(
     string SeatRow,
     int SeatCol,
     decimal TicketPrice
+);
+
+public sealed record BookingFnBResponse(
+    string ItemName,
+    int Quantity,
+    decimal UnitPrice,
+    decimal SubTotal
+);
+
+public sealed record BookingVoucherResponse(
+    string VoucherCode,
+    decimal DiscountApplied
 );

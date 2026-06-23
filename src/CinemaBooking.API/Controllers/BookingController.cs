@@ -50,8 +50,12 @@ public sealed class BookingController : ControllerBase
 
         var userId = GetCurrentUserId();
 
+        var fnbItems = request.FnbItems
+            .Select(item => new BookingFnBItemDto(item.ItemId, item.Quantity))
+            .ToList();
+
         var result = await _bookingService.CreateBookingAsync(
-            userId, request.ShowtimeId, request.SeatIds, cancellationToken);
+            userId, request.ShowtimeId, request.SeatIds, fnbItems, request.VoucherCode, cancellationToken);
 
         if (!result.Succeeded)
             return BadRequest(new { message = result.ErrorMessage });
@@ -107,7 +111,19 @@ public sealed class BookingController : ControllerBase
             booking.BookingDate,
             booking.BookingSeats.Select(bs => new BookingSeatResponse(
                 bs.SeatID, bs.Seat.SeatRow, bs.Seat.SeatCol, bs.TicketPrice
-            )).ToList()
+            )).ToList(),
+            booking.BookingFnBs.Select(fnb => new BookingFnBResponse(
+                fnb.Product.ItemName,
+                fnb.Quantity,
+                fnb.UnitPrice,
+                fnb.SubTotal
+            )).ToList(),
+            booking.BookingVoucher != null
+                ? new BookingVoucherResponse(
+                    booking.BookingVoucher.Voucher.VoucherCode,
+                    booking.BookingVoucher.DiscountApplied
+                  )
+                : null
         );
     }
 }

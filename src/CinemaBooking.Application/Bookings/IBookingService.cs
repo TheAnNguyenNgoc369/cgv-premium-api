@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using CinemaBooking.Domain.Entities;
+﻿using CinemaBooking.Domain.Entities;
 
 namespace CinemaBooking.Application.Bookings;
 
@@ -19,6 +14,8 @@ public interface IBookingService
         int userId,
         int showtimeId,
         List<int> seatIds,
+        List<BookingFnBItemDto> fnbItems,
+        string? voucherCode,
         CancellationToken cancellationToken = default);
 
     Task<Booking?> GetBookingByIdAsync(
@@ -29,3 +26,5 @@ public interface IBookingService
         int userId,
         CancellationToken cancellationToken = default);
 }
+
+public record BookingFnBItemDto(int ItemId, int Quantity);

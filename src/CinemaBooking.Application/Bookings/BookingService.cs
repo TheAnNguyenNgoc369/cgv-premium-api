@@ -60,6 +60,8 @@ public sealed class BookingService : IBookingService
         int userId,
         int showtimeId,
         List<int> seatIds,
+        List<BookingFnBItemDto> fnbItems,
+        string? voucherCode,
         CancellationToken cancellationToken = default)
     {
         if (seatIds.Count == 0)
@@ -83,24 +85,120 @@ public sealed class BookingService : IBookingService
             TicketPrice = showtime.BasePrice + seat.SeatType.ExtraPrice
         }).ToList();
 
-        var subTotal = bookingSeats.Sum(bs => bs.TicketPrice);
+        var seatsSubTotal = bookingSeats.Sum(bs => bs.TicketPrice);
+
+        var bookingFnBs = new List<BookingFnB>();
+        var fnbSubTotal = 0m;
+
+        if (fnbItems.Any())
+        {
+            var productIds = fnbItems.Select(f => f.ItemId).Distinct().ToList();
+            var products = await _bookingRepository.GetProductsByIdsAsync(productIds, cancellationToken);
+
+            if (products.Count != productIds.Count)
+            {
+                var missingIds = productIds.Except(products.Select(p => p.ItemID)).ToList();
+                return (false, $"Không tìm thấy sản phẩm ID: {string.Join(", ", missingIds)}", null);
+            }
+
+            foreach (var fnbItem in fnbItems)
+            {
+                var product = products.First(p => p.ItemID == fnbItem.ItemId);
+
+                if (!product.IsOnMenu)
+                    return (false, $"Sản phẩm '{product.ItemName}' không còn phục vụ", null);
+
+                if (product.Status != "in_stock")
+                    return (false, $"Sản phẩm '{product.ItemName}' tạm hết hàng", null);
+
+                if (product.StockQuantity < fnbItem.Quantity)
+                    return (false, $"Sản phẩm '{product.ItemName}' chỉ còn {product.StockQuantity} sản phẩm", null);
+
+                var itemSubTotal = product.Price * fnbItem.Quantity;
+                fnbSubTotal += itemSubTotal;
+
+                bookingFnBs.Add(new BookingFnB
+                {
+                    ItemID = product.ItemID,
+                    Quantity = fnbItem.Quantity,
+                    UnitPrice = product.Price,
+                    SubTotal = itemSubTotal
+                });
+            }
+        }
+
+        var totalBeforeDiscount = seatsSubTotal + fnbSubTotal;
+        var discountAmount = 0m;
+        BookingVoucher? bookingVoucher = null;
+
+        if (!string.IsNullOrWhiteSpace(voucherCode))
+        {
+            var voucher = await _bookingRepository.GetVoucherByCodeAsync(voucherCode.Trim(), cancellationToken);
+
+            if (voucher is null)
+                return (false, "Mã giảm giá không tồn tại", null);
+
+            if (!voucher.IsActive)
+                return (false, "Mã giảm giá không còn khả dụng", null);
+
+            var now = DateTime.UtcNow;
+            if (now < voucher.ValidFrom)
+                return (false, "Mã giảm giá chưa có hiệu lực", null);
+
+            if (now > voucher.ValidUntil)
+                return (false, "Mã giảm giá đã hết hạn", null);
+
+            if (voucher.MaxUses.HasValue && voucher.UsedCount >= voucher.MaxUses.Value)
+                return (false, "Mã giảm giá đã hết lượt sử dụng", null);
+
+            if (voucher.MinOrderValue.HasValue && totalBeforeDiscount < voucher.MinOrderValue.Value)
+                return (false, $"Đơn hàng tối thiểu {voucher.MinOrderValue.Value:N0}đ để sử dụng mã này", null);
+
+            discountAmount = voucher.DiscountType == "percentage"
+                ? Math.Round(totalBeforeDiscount * voucher.DiscountValue / 100, 0)
+                : voucher.DiscountValue;
+
+            if (discountAmount > totalBeforeDiscount)
+                discountAmount = totalBeforeDiscount;
+
+            bookingVoucher = new BookingVoucher
+            {
+                VoucherID = voucher.VoucherID,
+                DiscountApplied = discountAmount,
+                UsedAt = DateTime.Now
+            };
+        }
+
+        var finalAmount = totalBeforeDiscount - discountAmount;
 
         var booking = new Booking
         {
             BookingCode = GenerateBookingCode(),
             UserID = userId,
             ShowtimeID = showtimeId,
-            SubTotal = subTotal,
-            DiscountAmount = 0,
-            FinalAmount = subTotal,
+            SubTotal = totalBeforeDiscount,
+            DiscountAmount = discountAmount,
+            FinalAmount = finalAmount,
             Status = "pending",
             BookingDate = DateTime.Now,
             UpdatedAt = DateTime.Now,
-            BookingSeats = bookingSeats
+            BookingSeats = bookingSeats,
+            BookingFnBs = bookingFnBs
         };
+
+        if (bookingVoucher is not null)
+        {
+            booking.BookingVoucher = bookingVoucher;
+        }
 
         await _bookingRepository.AddBookingAsync(booking, cancellationToken);
         await _bookingRepository.MarkHoldsAsConfirmedAsync(myHolds, cancellationToken);
+
+        if (bookingVoucher is not null)
+        {
+            await _bookingRepository.IncrementVoucherUsageAsync(
+                bookingVoucher.VoucherID, cancellationToken);
+        }
 
         var savedBooking = await _bookingRepository.GetBookingByIdAsync(booking.BookingID, cancellationToken);
 

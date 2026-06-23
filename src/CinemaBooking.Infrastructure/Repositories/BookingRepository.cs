@@ -115,6 +115,8 @@ public sealed class BookingRepository : IBookingRepository
             .Include(b => b.Showtime).ThenInclude(s => s.Movie)
             .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
+            .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
+            .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)
             .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
     }
 
@@ -126,8 +128,39 @@ public sealed class BookingRepository : IBookingRepository
             .Include(b => b.Showtime).ThenInclude(s => s.Movie)
             .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
+            .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
+            .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)
             .Where(b => b.UserID == userId)
             .OrderByDescending(b => b.BookingDate)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<Product>> GetProductsByIdsAsync(
+        List<int> productIds,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Products
+            .Where(p => productIds.Contains(p.ItemID))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Voucher?> GetVoucherByCodeAsync(
+        string voucherCode,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Vouchers
+            .FirstOrDefaultAsync(v => v.VoucherCode == voucherCode, cancellationToken);
+    }
+
+    public async Task IncrementVoucherUsageAsync(
+        int voucherId,
+        CancellationToken cancellationToken = default)
+    {
+        var voucher = await _db.Vouchers.FindAsync(new object[] { voucherId }, cancellationToken);
+        if (voucher is not null)
+        {
+            voucher.UsedCount++;
+            await _db.SaveChangesAsync(cancellationToken);
+        }
     }
 }

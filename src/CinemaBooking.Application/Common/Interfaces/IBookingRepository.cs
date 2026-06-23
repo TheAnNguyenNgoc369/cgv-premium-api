@@ -48,4 +48,16 @@ public interface IBookingRepository
     Task<List<Booking>> GetBookingsByUserAsync(
         int userId,
         CancellationToken cancellationToken = default);
-}   
+
+    Task<List<Product>> GetProductsByIdsAsync(
+        List<int> productIds,
+        CancellationToken cancellationToken = default);
+
+    Task<Voucher?> GetVoucherByCodeAsync(
+        string voucherCode,
+        CancellationToken cancellationToken = default);
+
+    Task IncrementVoucherUsageAsync(
+        int voucherId,
+        CancellationToken cancellationToken = default);
+}
