@@ -45,4 +45,40 @@ public sealed class MovieRepository : IMovieRepository
 
         return movie;
     }
+
+    public Task<List<Movie>> GetMoviesByStatusAsync(
+        string status,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Movie
+            .AsNoTracking()
+            .Include(m => m.MovieGenres)
+            .ThenInclude(mg => mg.Genre)
+            .Where(m => m.Status == status)
+            .OrderByDescending(m => m.ShowingFrom)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<Movie?> GetMovieByIdAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Movie
+            .AsNoTracking()
+            .Include(m => m.MovieGenres)
+            .ThenInclude(mg => mg.Genre)
+            .FirstOrDefaultAsync(m => m.MovieID == id, cancellationToken);
+    }
+
+    public Task<List<Movie>> SearchMoviesAsync(
+        string keyword,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Movie
+            .AsNoTracking()
+            .Include(m => m.MovieGenres)
+            .ThenInclude(mg => mg.Genre)
+            .Where(m => m.Title.Contains(keyword))
+            .ToListAsync(cancellationToken);
+    }
 }

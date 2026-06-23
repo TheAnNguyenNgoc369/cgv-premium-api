@@ -15,4 +15,16 @@ public interface IMovieService
     Task<(bool Succeeded, string? ErrorMessage, MovieEntity? Movie)> DeletePosterAsync(
         int movieId,
         CancellationToken cancellationToken = default);
+
+    Task<List<MovieEntity>> GetMoviesByStatusAsync(
+        string status,
+        CancellationToken cancellationToken = default);
+
+    Task<MovieEntity?> GetMovieByIdAsync(
+        int id,
+        CancellationToken cancellationToken = default);
+
+    Task<List<MovieEntity>> SearchMoviesAsync(
+        string keyword,
+        CancellationToken cancellationToken = default);
 }
