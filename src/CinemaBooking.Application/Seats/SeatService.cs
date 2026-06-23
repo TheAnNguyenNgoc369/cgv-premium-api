@@ -65,7 +65,7 @@ public sealed class SeatService : ISeatService
 
         if (await _seatRepository.CountSeatsByRoomAsync(roomId, cancellationToken) >= validation.Room!.Capacity)
         {
-            return (false, "Room capacity exceeded", null);
+            return (false, GetCapacityExceededMessage(validation.Room.Capacity), null);
         }
 
         var seat = new Seat
@@ -193,7 +193,7 @@ public sealed class SeatService : ISeatService
 
         if (totalRows * seatsPerRow > room.Capacity)
         {
-            return (false, "Room capacity exceeded", []);
+            return (false, GetCapacityExceededMessage(room.Capacity), []);
         }
 
         var normalizedType = NormalizeSeatType(seatType);
@@ -329,6 +329,11 @@ public sealed class SeatService : ISeatService
     private static string GetSeatCode(string rowLabel, int seatNumber)
     {
         return $"{rowLabel}{seatNumber}";
+    }
+
+    private static string GetCapacityExceededMessage(int capacity)
+    {
+        return $"Room capacity exceeded. Room capacity is {capacity} seats.";
     }
 
     private static string ToRowLabel(int rowNumber)

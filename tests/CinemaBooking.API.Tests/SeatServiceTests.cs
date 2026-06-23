@@ -50,7 +50,7 @@ public sealed class SeatServiceTests
             "ACTIVE");
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Room capacity exceeded", result.ErrorMessage);
+        Assert.Equal("Room capacity exceeded. Room capacity is 1 seats.", result.ErrorMessage);
         Assert.Single(repository.Seats);
     }
 
@@ -146,7 +146,7 @@ public sealed class SeatServiceTests
             seatStatus: "ACTIVE");
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Room capacity exceeded", result.ErrorMessage);
+        Assert.Equal("Room capacity exceeded. Room capacity is 3 seats.", result.ErrorMessage);
         Assert.Empty(repository.Seats);
     }
 
