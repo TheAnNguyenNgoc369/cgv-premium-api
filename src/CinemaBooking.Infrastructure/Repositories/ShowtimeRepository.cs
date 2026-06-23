@@ -29,7 +29,9 @@ public sealed class ShowtimeRepository : IShowtimeRepository
         var query = _db.Showtimes
             .Include(s => s.Room)
                 .ThenInclude(r => r.Cinema)
-            .Where(s => s.MovieID == movieId && s.Status == "scheduled");
+            .Where(s => s.MovieID == movieId
+                && s.Status == "scheduled"
+                && s.Room.Cinema.Status == "active");
 
         if (date.HasValue)
         {
@@ -54,7 +56,8 @@ public sealed class ShowtimeRepository : IShowtimeRepository
             .Include(s => s.Movie)
             .Include(s => s.Room)
                 .ThenInclude(r => r.Cinema)
-            .FirstOrDefaultAsync(s => s.ShowtimeID == id, cancellationToken);
+            .FirstOrDefaultAsync(s => s.ShowtimeID == id
+                && s.Room.Cinema.Status == "active", cancellationToken);
     }
 
     public async Task<List<Seat>> GetSeatsByRoomAsync(
