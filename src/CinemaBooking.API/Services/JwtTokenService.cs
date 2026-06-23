@@ -10,6 +10,8 @@ namespace CinemaBooking.API.Services;
 
 public sealed class JwtTokenService
 {
+    public const string TokenVersionClaim = "tokenVersion";
+
     private readonly JwtSettings _jwtSettings;
 
     public JwtTokenService(IOptions<JwtSettings> jwtSettings)
@@ -31,6 +33,7 @@ public sealed class JwtTokenService
             new Claim("email", user.Email),
             new Claim("fullName", user.FullName),
             new Claim("role", user.Role),
+            new Claim(TokenVersionClaim, user.TokenVersion.ToString()),
             new Claim(ClaimTypes.Role, user.Role)
         };
 
