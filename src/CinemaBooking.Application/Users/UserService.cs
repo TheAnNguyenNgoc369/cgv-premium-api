@@ -1,22 +1,28 @@
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.ImageFiles;
 using CinemaBooking.Domain.Entities;
+using Microsoft.Extensions.Logging;
 
 namespace CinemaBooking.Application.Users;
 
 public sealed class UserService : IUserService
 {
     private const string AvatarFolder = "cgvp/avatars";
+    private const string AvatarUpdateFailedMessage = "Avatar could not be updated. Please try again later.";
+    private const string AvatarDeleteFailedMessage = "Avatar could not be deleted. Please try again later.";
 
     private readonly IUserRepository _userRepository;
     private readonly IImageStorageService _imageStorageService;
+    private readonly ILogger<UserService> _logger;
 
     public UserService(
         IUserRepository userRepository,
-        IImageStorageService imageStorageService)
+        IImageStorageService imageStorageService,
+        ILogger<UserService> logger)
     {
         _userRepository = userRepository;
         _imageStorageService = imageStorageService;
+        _logger = logger;
     }
 
     public Task<User?> GetProfileAsync(int userId, CancellationToken cancellationToken = default)
@@ -95,26 +101,6 @@ public sealed class UserService : IUserService
             AvatarFolder,
             cancellationToken);
 
-        if (!string.IsNullOrWhiteSpace(previousPublicId))
-        {
-            try
-            {
-                await _imageStorageService.DeleteImageAsync(previousPublicId, cancellationToken);
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                var cleanupError = await TryDeleteImageAsync(uploadResult.PublicId, cancellationToken);
-                var errorMessage = $"Failed to delete previous avatar from Cloudinary: {exception.Message}";
-
-                if (cleanupError is not null)
-                {
-                    errorMessage += $" The newly uploaded avatar could not be cleaned up: {cleanupError}";
-                }
-
-                return (false, errorMessage, null);
-            }
-        }
-
         User? updatedUser;
 
         try
@@ -127,16 +113,32 @@ public sealed class UserService : IUserService
         }
         catch
         {
-            await TryDeleteImageAsync(uploadResult.PublicId, CancellationToken.None);
+            await TryDeleteImageAsync(uploadResult.PublicId, CreateCorrelationId(), CancellationToken.None);
             throw;
         }
 
         if (updatedUser is null)
         {
-            var cleanupError = await TryDeleteImageAsync(uploadResult.PublicId, cancellationToken);
-            return cleanupError is null
-                ? (false, "User not found", null)
-                : (false, $"User not found. The newly uploaded avatar could not be cleaned up: {cleanupError}", null);
+            var correlationId = CreateCorrelationId();
+
+            await TryDeleteImageAsync(uploadResult.PublicId, correlationId, cancellationToken);
+
+            return (false, "User not found", null);
+        }
+
+        if (!string.IsNullOrWhiteSpace(previousPublicId))
+        {
+            try
+            {
+                await _imageStorageService.DeleteImageAsync(previousPublicId, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger.LogError(
+                    exception,
+                    "Failed to delete previous avatar after avatar update. CorrelationId: {CorrelationId}",
+                    CreateCorrelationId());
+            }
         }
 
         return (true, null, updatedUser);
@@ -176,9 +178,16 @@ public sealed class UserService : IUserService
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            var correlationId = CreateCorrelationId();
+
+            _logger.LogError(
+                exception,
+                "Failed to delete avatar. CorrelationId: {CorrelationId}",
+                correlationId);
+
             return (
                 false,
-                $"Failed to delete avatar from Cloudinary: {exception.Message}",
+                AvatarDeleteFailedMessage,
                 null,
                 null);
         }
@@ -228,18 +237,26 @@ public sealed class UserService : IUserService
         return (true, null);
     }
 
-    private async Task<string?> TryDeleteImageAsync(
+    private async Task TryDeleteImageAsync(
         string publicId,
+        string correlationId,
         CancellationToken cancellationToken)
     {
         try
         {
             await _imageStorageService.DeleteImageAsync(publicId, cancellationToken);
-            return null;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            return exception.Message;
+            _logger.LogError(
+                exception,
+                "Failed to clean up uploaded avatar. CorrelationId: {CorrelationId}",
+                correlationId);
         }
+    }
+
+    private static string CreateCorrelationId()
+    {
+        return System.Diagnostics.Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
     }
 }
