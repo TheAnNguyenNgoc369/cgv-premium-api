@@ -13,7 +13,7 @@ public sealed class BookingServiceCinemaStatusTests
         {
             Showtime = CreateShowtime("inactive")
         };
-        var service = new BookingService(repository);
+        var service = new BookingService(repository, null!);
 
         var result = await service.HoldSeatsAsync(1, 10, [100]);
 
@@ -29,7 +29,7 @@ public sealed class BookingServiceCinemaStatusTests
         {
             Showtime = CreateShowtime("maintenance")
         };
-        var service = new BookingService(repository);
+        var service = new BookingService(repository, null!);
 
         var result = await service.CreateBookingAsync(1, 10, [100], [], null);
 
@@ -139,6 +139,12 @@ public sealed class BookingServiceCinemaStatusTests
 
         public Task IncrementVoucherUsageAsync(
             int voucherId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task UpdateBookingStatusAsync(
+            int bookingId,
+            string status,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
