@@ -1,4 +1,4 @@
-using CinemaBooking.API.Contracts.Payment;
+using CinemaBooking.Application.Contracts.Payment;
 
 namespace CinemaBooking.Application.Payments;
 

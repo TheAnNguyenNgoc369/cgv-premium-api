@@ -1,4 +1,4 @@
-using CinemaBooking.API.Contracts.Payment;
+using CinemaBooking.Application.Contracts.Payment;
 using CinemaBooking.Application.Payments;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;

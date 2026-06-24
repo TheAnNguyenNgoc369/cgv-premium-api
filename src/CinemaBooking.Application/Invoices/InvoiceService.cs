@@ -1,4 +1,4 @@
-using CinemaBooking.API.Contracts.Invoice;
+using CinemaBooking.Application.Contracts.Invoice;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 

@@ -1,3 +1,5 @@
+using CinemaBooking.Application.Contracts.Invoice;
+
 namespace CinemaBooking.Application.Invoices;
 
 public interface IInvoiceService

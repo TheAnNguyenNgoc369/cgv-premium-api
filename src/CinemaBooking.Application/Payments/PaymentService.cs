@@ -1,4 +1,4 @@
-using CinemaBooking.API.Contracts.Payment;
+using CinemaBooking.Application.Contracts.Payment;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Invoices;
 using CinemaBooking.Application.Payments.VNPay;
@@ -64,6 +64,7 @@ public sealed class PaymentService : IPaymentService
             request.PaymentId,
             PaymentStatus.Completed,
             DateTime.Now,
+            null,
             cancellationToken);
 
         await _bookingRepository.UpdateBookingStatusAsync(
@@ -133,16 +134,8 @@ public sealed class PaymentService : IPaymentService
             paymentId,
             newPaymentStatus,
             isSuccess ? DateTime.Now : null,
+            transactionNo,
             cancellationToken);
-
-        if (!string.IsNullOrEmpty(transactionNo))
-        {
-            var updatedPayment = await _paymentRepository.GetPaymentByIdAsync(paymentId, cancellationToken);
-            if (updatedPayment is not null)
-            {
-                updatedPayment.TransactionCode = transactionNo;
-            }
-        }
 
         await _bookingRepository.UpdateBookingStatusAsync(
             payment.BookingID,

@@ -20,6 +20,7 @@ public interface IPaymentRepository
         int paymentId,
         string status,
         DateTime? paidAt,
+        string? transactionCode = null,
         CancellationToken cancellationToken = default);
 
     Task<PaymentSession> CreatePaymentSessionAsync(

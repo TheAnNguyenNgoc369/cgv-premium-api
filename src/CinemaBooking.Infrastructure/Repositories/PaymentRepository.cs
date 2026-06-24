@@ -45,6 +45,7 @@ public sealed class PaymentRepository : IPaymentRepository
         int paymentId,
         string status,
         DateTime? paidAt,
+        string? transactionCode = null,
         CancellationToken cancellationToken = default)
     {
         var payment = await _db.Payments
@@ -56,6 +57,8 @@ public sealed class PaymentRepository : IPaymentRepository
         payment.Status = status;
         if (paidAt.HasValue)
             payment.PaidAt = paidAt.Value;
+        if (!string.IsNullOrEmpty(transactionCode))
+            payment.TransactionCode = transactionCode;
 
         await _db.SaveChangesAsync(cancellationToken);
     }
