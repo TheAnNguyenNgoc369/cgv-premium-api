@@ -20,9 +20,13 @@ public interface IUserService
         long fileSize,
         CancellationToken cancellationToken = default);
 
-    Task<(bool Succeeded, string? ErrorMessage, User? User)> DeleteAvatarAsync(
+    Task<(bool Succeeded, string? ErrorMessage, User? User, string? Message)> DeleteAvatarAsync(
         int userId,
         CancellationToken cancellationToken = default);
 
     Task<Wallet?> GetWalletAsync(int userId, CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage)> DeleteAsync(
+        int userId,
+        CancellationToken cancellationToken = default);
 }

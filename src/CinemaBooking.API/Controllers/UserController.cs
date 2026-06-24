@@ -71,7 +71,7 @@ public sealed class UserController : ControllerBase
         return Ok(ToProfileResponse(result.User!));
     }
 
-    [HttpPut("/api/users/profile/avatar")]
+    [HttpPut("profile/avatar")]
     public async Task<IActionResult> UploadAvatar(
         [FromForm] ImageUploadRequest model,
         CancellationToken cancellationToken)
@@ -113,7 +113,7 @@ public sealed class UserController : ControllerBase
         });
     }
 
-    [HttpDelete("/api/users/profile/avatar")]
+    [HttpDelete("profile/avatar")]
     public async Task<IActionResult> DeleteAvatar(CancellationToken cancellationToken)
     {
         if (!TryGetCurrentUserId(out var userId))
@@ -133,7 +133,7 @@ public sealed class UserController : ControllerBase
             return BadRequest(new { message = result.ErrorMessage });
         }
 
-        return Ok(ToProfileResponse(result.User!));
+        return Ok(new { message = result.Message });
     }
 
     [HttpGet("wallet")]

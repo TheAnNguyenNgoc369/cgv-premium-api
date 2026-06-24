@@ -24,6 +24,8 @@ public sealed class BookingRepository : IBookingRepository
         CancellationToken cancellationToken = default)
     {
         return await _db.Showtimes
+            .Include(s => s.Room)
+                .ThenInclude(r => r.Cinema)
             .FirstOrDefaultAsync(s => s.ShowtimeID == showtimeId, cancellationToken);
     }
 

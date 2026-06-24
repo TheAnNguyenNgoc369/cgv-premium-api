@@ -9,13 +9,19 @@ namespace CinemaBooking.Application.Authentication;
 
 public sealed class AuthService : IAuthService
 {
+    private const string PasswordHashAlgorithm = "pbkdf2-sha256";
+    private const string PasswordHashVersion = "v1";
+    private const int PasswordHashIterations = 700_000;
+    private const int PasswordSaltSize = 16;
+    private const int PasswordHashSize = 32;
     private const string ActiveStatus = "active";
     private const string LockedStatus = "locked";
     private const string InactiveStatus = "inactive";
-    private const int VerificationTokenExpirationHours = 24;
+    private const int VerificationTokenExpirationMinutes = 10;
     private const int VerificationEmailResendCooldownSeconds = 60;
     private const int PasswordResetTokenExpirationMinutes = 15;
     private const int ForgotPasswordCooldownSeconds = 60;
+    private const string EnumerationSafeEmailMessage = "If the email is eligible, an email has been sent.";
 
     private readonly IUserRepository _userRepository;
     private readonly IEmailSender _emailSender;
@@ -67,7 +73,7 @@ public sealed class AuthService : IAuthService
         var verificationToken = new EmailVerificationToken
         {
             Token = GenerateEmailVerificationToken(),
-            ExpiresAt = now.AddHours(VerificationTokenExpirationHours),
+            ExpiresAt = now.AddMinutes(VerificationTokenExpirationMinutes),
             CreatedAt = now
         };
 
@@ -93,9 +99,26 @@ public sealed class AuthService : IAuthService
     {
         var user = await _userRepository.GetByEmailAsync(email.Trim(), cancellationToken);
 
-        if (user is null || user.PasswordHash != HashPassword(password))
+        if (user is null || !VerifyPassword(password, user.PasswordHash, out var requiresRehash))
         {
             return (false, "Email hoặc mật khẩu không đúng", null);
+        }
+
+        if (requiresRehash)
+        {
+            var upgradedPasswordHash = HashPassword(password);
+            var passwordHashUpdated = await _userRepository.TryUpdatePasswordHashAsync(
+                user.UserID,
+                user.PasswordHash,
+                upgradedPasswordHash,
+                cancellationToken);
+
+            if (!passwordHashUpdated)
+            {
+                return (false, "Email hoặc mật khẩu không đúng", null);
+            }
+
+            user.PasswordHash = upgradedPasswordHash;
         }
 
         if (string.Equals(user.Status, LockedStatus, StringComparison.OrdinalIgnoreCase))
@@ -122,23 +145,18 @@ public sealed class AuthService : IAuthService
     {
         if (string.IsNullOrWhiteSpace(email))
         {
-            return (false, "Vui lòng nhập email", false);
+            return (true, EnumerationSafeEmailMessage, false);
         }
 
         var normalizedEmail = email.Trim();
         var user = await _userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
 
-        if (user is null)
+        if (user is null || user.EmailVerifiedAt.HasValue)
         {
-            return (false, "Email chưa được đăng ký", false);
+            return (true, EnumerationSafeEmailMessage, false);
         }
 
         var now = DateTime.UtcNow;
-
-        if (user.EmailVerifiedAt.HasValue)
-        {
-            return (false, "Email is already verified.", false);
-        }
 
         var lastToken = await _userRepository.GetLatestEmailVerificationTokenAsync(
             user.UserID,
@@ -147,13 +165,13 @@ public sealed class AuthService : IAuthService
         if (lastToken is not null
             && lastToken.CreatedAt > now.AddSeconds(-VerificationEmailResendCooldownSeconds))
         {
-            return (false, "Please wait before requesting another verification email.", false);
+            return (true, EnumerationSafeEmailMessage, false);
         }
 
         var verificationToken = new EmailVerificationToken
         {
             Token = GenerateEmailVerificationToken(),
-            ExpiresAt = now.AddHours(VerificationTokenExpirationHours),
+            ExpiresAt = now.AddMinutes(VerificationTokenExpirationMinutes),
             CreatedAt = now,
             UserID = user.UserID
         };
@@ -169,7 +187,16 @@ public sealed class AuthService : IAuthService
             BuildVerificationEmailBody(user.FullName, verificationToken.Token),
             cancellationToken);
 
-        return (true, null, verificationEmailSent);
+        if (!verificationEmailSent)
+        {
+            await _userRepository.DeleteEmailVerificationTokenAsync(
+                verificationToken.Token,
+                cancellationToken);
+
+            return (true, EnumerationSafeEmailMessage, false);
+        }
+
+        return (true, EnumerationSafeEmailMessage, false);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> ForgotPasswordAsync(
@@ -178,23 +205,18 @@ public sealed class AuthService : IAuthService
     {
         if (string.IsNullOrWhiteSpace(email))
         {
-            return (false, "Vui lòng nhập email");
+            return (true, EnumerationSafeEmailMessage);
         }
 
         var normalizedEmail = email.Trim();
         var user = await _userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
 
-        if (user is null)
+        if (user is null || !user.EmailVerifiedAt.HasValue)
         {
-            return (false, "Email does not exist.");
+            return (true, EnumerationSafeEmailMessage);
         }
 
         var now = DateTime.UtcNow;
-
-        if (!user.EmailVerifiedAt.HasValue)
-        {
-            return (false, "Account is not verified.");
-        }
 
         var lastToken = await _userRepository.GetLatestPasswordResetTokenAsync(
             user.UserID,
@@ -203,7 +225,7 @@ public sealed class AuthService : IAuthService
         if (lastToken is not null
             && lastToken.CreatedAt > now.AddSeconds(-ForgotPasswordCooldownSeconds))
         {
-            return (false, "Please wait before requesting another password reset email.");
+            return (true, EnumerationSafeEmailMessage);
         }
 
         var resetToken = new PasswordResetToken
@@ -225,7 +247,14 @@ public sealed class AuthService : IAuthService
             BuildResetPasswordEmailBody(user.FullName, resetToken.Token),
             cancellationToken);
 
-        return (true, null);
+        if (!emailSent)
+        {
+            await _userRepository.DeletePasswordResetTokenAsync(
+                resetToken.Token,
+                cancellationToken);
+        }
+
+        return (true, EnumerationSafeEmailMessage);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> ResetPasswordAsync(
@@ -254,32 +283,17 @@ public sealed class AuthService : IAuthService
             return (false, "Mật khẩu xác nhận không khớp");
         }
 
-        var resetToken = await _userRepository.GetPasswordResetTokenAsync(
+        var now = DateTime.UtcNow;
+        var passwordReset = await _userRepository.TryResetPasswordAsync(
             token.Trim(),
+            HashPassword(newPassword),
+            now,
             cancellationToken);
 
-        if (resetToken is null)
+        if (!passwordReset)
         {
-            return (false, "Reset token is invalid");
+            return (false, "Reset token is invalid, expired, or has already been used");
         }
-
-        if (resetToken.UsedAt.HasValue)
-        {
-            return (false, "Reset token has already been used");
-        }
-
-        var now = DateTime.UtcNow;
-
-        if (resetToken.ExpiresAt < now)
-        {
-            return (false, "Reset token has expired");
-        }
-
-        resetToken.User.PasswordHash = HashPassword(newPassword);
-        resetToken.User.UpdatedAt = now;
-        resetToken.UsedAt = now;
-
-        await _userRepository.SaveChangesAsync(cancellationToken);
 
         return (true, null);
     }
@@ -334,10 +348,89 @@ public sealed class AuthService : IAuthService
 
     private static string HashPassword(string password)
     {
-        using var sha = SHA256.Create();
-        var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(password));
+        var salt = RandomNumberGenerator.GetBytes(PasswordSaltSize);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(
+            Encoding.UTF8.GetBytes(password),
+            salt,
+            PasswordHashIterations,
+            HashAlgorithmName.SHA256,
+            PasswordHashSize);
 
-        return Convert.ToHexString(bytes).ToLowerInvariant();
+        return $"${PasswordHashAlgorithm}${PasswordHashVersion}${PasswordHashIterations}${Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
+    }
+
+    private static bool VerifyPassword(
+        string password,
+        string encodedHash,
+        out bool requiresRehash)
+    {
+        requiresRehash = false;
+        var parts = encodedHash.Split('$');
+
+        if (parts.Length == 6
+            && parts[0].Length == 0
+            && parts[1] == PasswordHashAlgorithm
+            && parts[2] == PasswordHashVersion
+            && int.TryParse(parts[3], out var iterations)
+            && iterations == PasswordHashIterations)
+        {
+            return VerifyPbkdf2Password(password, parts, iterations);
+        }
+
+        return VerifyLegacySha256Password(password, encodedHash, out requiresRehash);
+    }
+
+    private static bool VerifyPbkdf2Password(string password, string[] parts, int iterations)
+    {
+        try
+        {
+            var salt = Convert.FromBase64String(parts[4]);
+            var expectedHash = Convert.FromBase64String(parts[5]);
+
+            if (salt.Length != PasswordSaltSize || expectedHash.Length != PasswordHashSize)
+            {
+                return false;
+            }
+
+            var actualHash = Rfc2898DeriveBytes.Pbkdf2(
+                Encoding.UTF8.GetBytes(password),
+                salt,
+                iterations,
+                HashAlgorithmName.SHA256,
+                PasswordHashSize);
+
+            return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    private static bool VerifyLegacySha256Password(
+        string password,
+        string encodedHash,
+        out bool requiresRehash)
+    {
+        requiresRehash = false;
+
+        if (encodedHash.Length != 64)
+        {
+            return false;
+        }
+
+        try
+        {
+            var expectedHash = Convert.FromHexString(encodedHash);
+            var actualHash = SHA256.HashData(Encoding.UTF8.GetBytes(password));
+            var verified = CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
+            requiresRehash = verified;
+            return verified;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     private static string GenerateEmailVerificationToken()
@@ -363,7 +456,7 @@ public sealed class AuthService : IAuthService
     private static string BuildVerificationEmailBody(string fullName, string token)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var verifyUrl = $"http://localhost:5173/register?token={Uri.EscapeDataString(token)}";
+        var encodedToken = WebUtility.HtmlEncode(token);
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
@@ -376,14 +469,15 @@ public sealed class AuthService : IAuthService
                     <p style="margin: 0 0 6px; color: #111111; font-size: 20px; font-weight: 700;">Verify your email</p>
                     <p style="margin: 0 0 24px; color: #555555; font-size: 14px; line-height: 1.6;">
                         Hello <strong>{encodedFullName}</strong>, welcome to CGV Premium!<br />
-                        Click the button below to activate your account.
+                        Copy the verification code below and enter it in the verification screen.
                     </p>
 
                     <div style="text-align: center; margin: 0 0 24px;">
-                        <a href="{verifyUrl}" style="display: inline-block; background: #c62828; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 40px; border-radius: 6px;">
-                            Verify my account
-                        </a>
-                        <p style="margin: 12px 0 0; font-size: 12px; color: #999999;">This link expires in {VerificationTokenExpirationHours} hours</p>
+                        <div role="textbox" aria-label="Verification code" title="Select and copy this verification code" style="display: block; background: #f5f5f5; border: 2px dashed #c62828; border-radius: 6px; padding: 16px; color: #222222; font-family: Consolas, 'Courier New', monospace; font-size: 18px; font-weight: 700; letter-spacing: 1px; overflow-wrap: anywhere; cursor: text; user-select: all; -webkit-user-select: all;">
+                            {encodedToken}
+                        </div>
+                        <p style="margin: 12px 0 0; font-size: 12px; color: #777777;">Select the code, copy it, and paste it into the verification form.</p>
+                        <p style="margin: 6px 0 0; font-size: 12px; color: #999999;">This code expires in {VerificationTokenExpirationMinutes} minutes.</p>
                     </div>
 
                     <div style="background: #fff8e1; border-left: 3px solid #f9a825; border-radius: 0 4px 4px 0; padding: 10px 14px;">
@@ -405,7 +499,7 @@ public sealed class AuthService : IAuthService
     private static string BuildResetPasswordEmailBody(string fullName, string token)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var resetUrl = $"http://localhost:5173/resetPassword?token={Uri.EscapeDataString(token)}";
+        var resetUrl = $"https://cgv-premium-fe.vercel.app/resetPassword?token={Uri.EscapeDataString(token)}";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">

@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Diagnostics;
 using CinemaBooking.API.Contracts.Auth;
 using CinemaBooking.API.Services;
 using CinemaBooking.Application.Authentication;
@@ -11,6 +12,9 @@ namespace CinemaBooking.API.Controllers;
 [Route("api/auth")]
 public sealed class AuthController : ControllerBase
 {
+    private const string EnumerationSafeEmailMessage = "If the email is eligible, an email has been sent.";
+    private static readonly TimeSpan EnumerationSafeMinimumResponseDuration = TimeSpan.FromMilliseconds(500);
+
     private readonly IAuthService _authService;
     private readonly JwtTokenService _jwtTokenService;
     private readonly ITokenRevocationService _tokenRevocationService;
@@ -67,23 +71,18 @@ public sealed class AuthController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        var result = await _authService.ResendVerificationEmailAsync(
+        var startedAt = Stopwatch.GetTimestamp();
+
+        await _authService.ResendVerificationEmailAsync(
             model.Email,
             cancellationToken);
 
-        if (!result.Succeeded)
-        {
-            return BadRequest(new
-            {
-                success = false,
-                message = result.ErrorMessage
-            });
-        }
+        await EnsureMinimumResponseDurationAsync(startedAt, cancellationToken);
 
         return Ok(new
         {
-            message = "Verification email sent successfully",
-            verificationEmailSent = result.VerificationEmailSent
+            success = true,
+            message = EnumerationSafeEmailMessage
         });
     }
 
@@ -98,23 +97,18 @@ public sealed class AuthController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        var result = await _authService.ForgotPasswordAsync(
+        var startedAt = Stopwatch.GetTimestamp();
+
+        await _authService.ForgotPasswordAsync(
             model.Email,
             cancellationToken);
 
-        if (!result.Succeeded)
-        {
-            return Ok(new
-            {
-                success = false,
-                message = result.ErrorMessage
-            });
-        }
+        await EnsureMinimumResponseDurationAsync(startedAt, cancellationToken);
 
         return Ok(new
         {
             success = true,
-            message = "Email has been sent successfully. Please check your email."
+            message = EnumerationSafeEmailMessage
         });
     }
 
@@ -137,7 +131,7 @@ public sealed class AuthController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return Ok(new
+            return BadRequest(new
             {
                 success = false,
                 message = result.ErrorMessage
@@ -147,7 +141,7 @@ public sealed class AuthController : ControllerBase
         return Ok(new
         {
             success = true,
-            message = "Email has been sent successfully. Please check your email."
+            message = "Password has been reset successfully."
         });
     }
 
@@ -193,7 +187,7 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("logout")]
     [Authorize]
-    public IActionResult Logout()
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
         if (!TryGetBearerToken(out var token))
         {
@@ -203,7 +197,10 @@ public sealed class AuthController : ControllerBase
         try
         {
             var jwtToken = new JwtSecurityTokenHandler().ReadJwtToken(token);
-            _tokenRevocationService.Revoke(token, jwtToken.ValidTo);
+            await _tokenRevocationService.RevokeAsync(
+                token,
+                jwtToken.ValidTo,
+                cancellationToken);
         }
         catch (ArgumentException)
         {
@@ -248,5 +245,17 @@ public sealed class AuthController : ControllerBase
 
         token = authorizationValue[bearerPrefix.Length..].Trim();
         return token.Length > 0;
+    }
+
+    private static async Task EnsureMinimumResponseDurationAsync(
+        long startedAt,
+        CancellationToken cancellationToken)
+    {
+        var remaining = EnumerationSafeMinimumResponseDuration - Stopwatch.GetElapsedTime(startedAt);
+
+        if (remaining > TimeSpan.Zero)
+        {
+            await Task.Delay(remaining, cancellationToken);
+        }
     }
 }

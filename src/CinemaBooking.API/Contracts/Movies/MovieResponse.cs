@@ -1,27 +1,27 @@
 ﻿namespace CinemaBooking.API.Contracts.Movies;
 
 public sealed record MovieListResponse(
-    int MovieID,
+    int MovieId,
     string Title,
+    List<string> Genres,
     string AgeRating,
-    string? PosterURL,
-    int DurationMin,
-    string Status,
-    List<string> Genres
+    string? PosterUrl,
+    int DurationMinutes,
+    string Status
 );
 
 public sealed record MovieDetailResponse(
-    int MovieID,
+    int MovieId,
     string Title,
+    List<string> Genres,
     string AgeRating,
     string? Director,
     string? Cast,
-    string? Description,
-    string? PosterURL,
-    string? TrailerURL,
-    int DurationMin,
-    DateOnly? ShowingFrom,
-    DateOnly? ShowingTo,
-    string Status,
-    List<string> Genres
+    string? Synopsis,
+    int DurationMinutes,
+    DateOnly? ShowingFromDate,
+    DateOnly? ShowingToDate,
+    string? PosterUrl,
+    string? TrailerUrl,
+    string Status
 );

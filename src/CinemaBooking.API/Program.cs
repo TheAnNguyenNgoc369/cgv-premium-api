@@ -5,6 +5,18 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+Console.WriteLine(
+    $"ASPNETCORE_ENVIRONMENT = {Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")}"
+);
+
+Console.WriteLine(
+    $"DOTNET_ENVIRONMENT = {Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")}"
+);
+
+Console.WriteLine(
+    $"Current Environment = {builder.Environment.EnvironmentName}"
+);
+
 builder.Logging.ClearProviders();
 builder.Logging.AddConfiguration(builder.Configuration.GetSection("Logging"));
 builder.Logging.AddConsole();
@@ -18,7 +30,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend", policy =>
     {
         policy
-            .WithOrigins("http://localhost:5173", "http://localhost:5174")
+            .WithOrigins("http://localhost:5173", "http://localhost:5174", "https://cgv-premium-fe.vercel.app")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -46,11 +58,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-
 if (!app.Environment.IsDevelopment())
 {
-    //ch?a nên uncomment ?? deploy ngrok
-    //app.UseHttpsRedirection();
+    app.UseHttpsRedirection();
+    app.UseHsts();
 }
 
 app.UseCors("AllowFrontend");

@@ -8,6 +8,7 @@ using CinemaBooking.Application.Payments.VNPay;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
@@ -48,7 +49,7 @@ public static class DependencyInjection
 
         services.AddApplicationServices();
         services.AddScoped<JwtTokenService>();
-        services.AddSingleton<ITokenRevocationService, InMemoryTokenRevocationService>();
+        services.AddScoped<ITokenRevocationService, DatabaseTokenRevocationService>();
 
         if (environment.IsDevelopment())
         {
@@ -110,21 +111,24 @@ public static class DependencyInjection
                 };
                 options.Events = new JwtBearerEvents
                 {
-                    OnTokenValidated = context =>
+                    OnTokenValidated = async context =>
                     {
                         var revocationService = context.HttpContext.RequestServices
                             .GetRequiredService<ITokenRevocationService>();
-                        var rawToken = context.SecurityToken is JwtSecurityToken jwtToken
-                            ? jwtToken.RawData
-                            : null;
+                        var rawToken = context.SecurityToken switch
+                        {
+                            JsonWebToken jsonWebToken => jsonWebToken.EncodedToken,
+                            JwtSecurityToken jwtToken => jwtToken.RawData,
+                            _ => null
+                        };
 
-                        if (!string.IsNullOrWhiteSpace(rawToken)
-                            && revocationService.IsRevoked(rawToken))
+                        if (string.IsNullOrWhiteSpace(rawToken)
+                            || await revocationService.IsRevokedAsync(
+                                rawToken,
+                                context.HttpContext.RequestAborted))
                         {
                             context.Fail("Token has been revoked.");
                         }
-
-                        return Task.CompletedTask;
                     },
 
                     OnAuthenticationFailed = context =>

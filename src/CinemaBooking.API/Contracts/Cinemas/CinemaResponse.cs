@@ -1,7 +1,10 @@
 ﻿namespace CinemaBooking.API.Contracts.Cinemas;
 
 public sealed record CinemaResponse(
-    int CinemaID,
+    int CinemaId,
     string CinemaName,
-    string Address
+    string Address,
+    string Status,
+    DateTime CreatedAt,
+    DateTime UpdatedAt
 );

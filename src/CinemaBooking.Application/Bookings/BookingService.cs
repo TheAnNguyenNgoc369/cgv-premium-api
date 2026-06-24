@@ -36,6 +36,9 @@ public sealed class BookingService : IBookingService
         if (showtime is null)
             return (false, "Không tìm thấy suất chiếu", null, null);
 
+        if (showtime.Room.Cinema.Status != "active")
+            return (false, "Rạp không hoạt động", null, null);
+
         var unavailableSeatIds = await _bookingRepository.GetUnavailableSeatIdsAsync(
             showtimeId, seatIds, userId, cancellationToken);
 
@@ -74,6 +77,9 @@ public sealed class BookingService : IBookingService
         var showtime = await _bookingRepository.GetShowtimeAsync(showtimeId, cancellationToken);
         if (showtime is null)
             return (false, "Không tìm thấy suất chiếu", null);
+
+        if (showtime.Room.Cinema.Status != "active")
+            return (false, "Rạp không hoạt động", null);
 
         var myHolds = await _bookingRepository.GetMyActiveHoldsAsync(
             userId, showtimeId, seatIds, cancellationToken);
