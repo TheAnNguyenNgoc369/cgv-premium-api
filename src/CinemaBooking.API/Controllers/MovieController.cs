@@ -1,5 +1,6 @@
 using CinemaBooking.API.Contracts.Movies;
 using CinemaBooking.Application.Movie;
+using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -191,10 +192,10 @@ public sealed class MovieController : ControllerBase
             movie.MovieID,
             movie.Title,
             movie.MovieGenres.Select(mg => mg.Genre.GenreName).ToList(),
-            movie.AgeRating,
+            EnumValueMapper.ToApiValue(movie.AgeRating),
             movie.PosterURL,
             movie.DurationMin,
-            movie.Status);
+            EnumValueMapper.ToApiValue(movie.Status));
     }
 
     private static MovieDetailResponse ToDetailResponse(MovieEntity movie)
@@ -203,7 +204,7 @@ public sealed class MovieController : ControllerBase
             movie.MovieID,
             movie.Title,
             movie.MovieGenres.Select(mg => mg.Genre.GenreName).ToList(),
-            movie.AgeRating,
+            EnumValueMapper.ToApiValue(movie.AgeRating),
             movie.Director,
             movie.Cast,
             movie.Description,
@@ -213,6 +214,6 @@ public sealed class MovieController : ControllerBase
             movie.PosterURL,
             movie.PosterPublicId,
             movie.TrailerURL,
-            movie.Status);
+            EnumValueMapper.ToApiValue(movie.Status));
     }
 }

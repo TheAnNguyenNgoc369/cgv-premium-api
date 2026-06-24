@@ -1,25 +1,11 @@
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
 
 namespace CinemaBooking.Application.Rooms;
 
 public sealed class RoomService : IRoomService
 {
-    private static readonly Dictionary<string, string> RoomTypes = new(StringComparer.Ordinal)
-    {
-        ["STANDARD"] = "Standard",
-        ["VIP"] = "VIP",
-        ["IMAX"] = "IMAX",
-        ["THREE_D"] = "3D"
-    };
-
-    private static readonly Dictionary<string, string> Statuses = new(StringComparer.Ordinal)
-    {
-        ["ACTIVE"] = "active",
-        ["MAINTENANCE"] = "maintenance",
-        ["INACTIVE"] = "inactive"
-    };
-
     private readonly IRoomRepository _roomRepository;
 
     public RoomService(IRoomRepository roomRepository)
@@ -106,6 +92,14 @@ public sealed class RoomService : IRoomService
         if (!validation.Succeeded)
         {
             return (false, validation.ErrorMessage, null);
+        }
+
+        var seatCount = await _roomRepository.CountSeatsAsync(roomId, cancellationToken);
+        if (capacity < seatCount)
+        {
+            return (false,
+                $"Capacity cannot be less than the current seat count ({seatCount})",
+                null);
         }
 
         var updatedRoom = await _roomRepository.UpdateAsync(
@@ -202,14 +196,14 @@ public sealed class RoomService : IRoomService
     {
         return string.IsNullOrWhiteSpace(type)
             ? null
-            : RoomTypes.GetValueOrDefault(type.Trim().ToUpperInvariant());
+            : EnumValueMapper.Validate(type, "Type", DatabaseEnumMappings.RoomTypes).DatabaseValue;
     }
 
     private static string? NormalizeStatus(string status)
     {
         return string.IsNullOrWhiteSpace(status)
             ? null
-            : Statuses.GetValueOrDefault(status.Trim().ToUpperInvariant());
+            : EnumValueMapper.Validate(status, "Status", DatabaseEnumMappings.RoomStatuses).DatabaseValue;
     }
 
     private static string? NormalizeNullable(string? value)

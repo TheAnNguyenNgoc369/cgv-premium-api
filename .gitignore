@@ -231,6 +231,7 @@ csx/
 ecf/
 rcf/
 /agent/
+/tests/
 
 # Windows Store app package directories and files
 AppPackages/

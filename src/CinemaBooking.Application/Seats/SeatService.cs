@@ -1,25 +1,11 @@
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
 
 namespace CinemaBooking.Application.Seats;
 
 public sealed class SeatService : ISeatService
 {
-    private static readonly Dictionary<string, string> SeatTypes = new(StringComparer.Ordinal)
-    {
-        ["STANDARD"] = "standard",
-        ["VIP"] = "vip",
-        ["COUPLE"] = "couple"
-    };
-
-    private static readonly Dictionary<string, string> SeatStatuses = new(StringComparer.Ordinal)
-    {
-        ["ACTIVE"] = "active",
-        ["DISABLED"] = "inactive",
-        ["MAINTENANCE"] = "inactive",
-        ["INACTIVE"] = "inactive"
-    };
-
     private readonly ISeatRepository _seatRepository;
 
     public SeatService(ISeatRepository seatRepository)
@@ -309,14 +295,14 @@ public sealed class SeatService : ISeatService
     {
         return string.IsNullOrWhiteSpace(type)
             ? null
-            : SeatTypes.GetValueOrDefault(type.Trim().ToUpperInvariant());
+            : EnumValueMapper.Validate(type, "Type", DatabaseEnumMappings.SeatTypes).DatabaseValue;
     }
 
     private static string? NormalizeSeatStatus(string status)
     {
         return string.IsNullOrWhiteSpace(status)
             ? null
-            : SeatStatuses.GetValueOrDefault(status.Trim().ToUpperInvariant());
+            : EnumValueMapper.Validate(status, "Status", DatabaseEnumMappings.SeatStatuses).DatabaseValue;
     }
 
     private static string? NormalizeRowLabel(string rowLabel)

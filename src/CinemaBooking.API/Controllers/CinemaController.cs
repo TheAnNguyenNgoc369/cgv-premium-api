@@ -1,5 +1,6 @@
 using CinemaBooking.API.Contracts.Cinemas;
 using CinemaBooking.Application.Cinemas;
+using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -120,7 +121,7 @@ public sealed class CinemaController : ControllerBase
             cinema.CinemaID,
             cinema.CinemaName,
             cinema.Address,
-            cinema.Status,
+            EnumValueMapper.ToApiValue(cinema.Status),
             cinema.CreatedAt,
             cinema.UpdatedAt);
     }

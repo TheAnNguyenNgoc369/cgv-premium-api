@@ -16,7 +16,8 @@ public static class MembershipTiers
 
 public static class LoyaltyTransactionTypes
 {
-    public const string Earned = "earned";
-    public const string Redeemed = "redeemed";
-    public const string Adjusted = "adjusted";
+    public const string Earned = "earn";
+    public const string Redeemed = "redeem";
+    public const string Expired = "expire";
+    public const string Adjusted = "adjust";
 }

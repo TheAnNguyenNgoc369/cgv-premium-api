@@ -16,6 +16,10 @@ public interface IRoomRepository
         int? excludingRoomId = null,
         CancellationToken cancellationToken = default);
 
+    Task<int> CountSeatsAsync(
+        int roomId,
+        CancellationToken cancellationToken = default);
+
     Task<Room> AddAsync(Room room, CancellationToken cancellationToken = default);
 
     Task<Room?> UpdateAsync(

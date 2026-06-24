@@ -1,5 +1,6 @@
 using CinemaBooking.API.Contracts.Seats;
 using CinemaBooking.Application.Seats;
+using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -145,7 +146,7 @@ public sealed class SeatController : ControllerBase
             seat.SeatRow,
             seat.SeatCol,
             $"{seat.SeatRow}{seat.SeatCol}",
-            seat.SeatType.TypeName,
-            seat.Status);
+            EnumValueMapper.ToApiValue(seat.SeatType.TypeName),
+            EnumValueMapper.ToApiValue(seat.Status));
     }
 }

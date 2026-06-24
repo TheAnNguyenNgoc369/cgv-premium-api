@@ -31,6 +31,9 @@ public sealed class PaymentController : ControllerBase
 
         var result = await _paymentService.InitiatePaymentAsync(request, ipAddress, cancellationToken);
 
+        if (result is PaymentValidationErrorResponse validationError)
+            return BadRequest(validationError);
+
         return Ok(result);
     }
 
