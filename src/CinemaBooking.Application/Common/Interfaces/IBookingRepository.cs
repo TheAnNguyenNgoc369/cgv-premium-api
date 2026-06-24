@@ -23,7 +23,7 @@ public interface IBookingRepository
         int currentUserId,
         CancellationToken cancellationToken = default);
 
-    Task AddSeatHoldsAsync(
+    Task<bool> TryAddSeatHoldsAsync(
         IEnumerable<SeatHold> seatHolds,
         CancellationToken cancellationToken = default);
 

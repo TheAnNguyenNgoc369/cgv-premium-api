@@ -127,6 +127,25 @@ public sealed class RoomServiceTests
     }
 
     [Fact]
+    public async Task UpdateRoomRejectsCapacityBelowExistingSeatCount()
+    {
+        var repository = new RoomRepositoryFake
+        {
+            CinemaIds = { 1 },
+            Rooms = { CreateRoom(1, 1, "Room 1") },
+            SeatCounts = { [1] = 50 }
+        };
+        var service = new RoomService(repository);
+
+        var result = await service.UpdateRoomAsync(
+            1, 1, "Room 1", "STANDARD", 49, "ACTIVE", null);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Capacity cannot be less than the current seat count (50)", result.ErrorMessage);
+        Assert.Equal(100, repository.Rooms[0].Capacity);
+    }
+
+    [Fact]
     public async Task DeleteRoomRejectsActiveOrUpcomingSchedules()
     {
         var repository = new RoomRepositoryFake
@@ -182,6 +201,7 @@ public sealed class RoomServiceTests
         public List<Room> Rooms { get; init; } = [];
 
         public HashSet<int> RoomIdsWithActiveOrUpcomingShowtimes { get; init; } = [];
+        public Dictionary<int, int> SeatCounts { get; init; } = [];
 
         public Task<List<Room>> GetRoomsAsync(CancellationToken cancellationToken = default)
         {
@@ -213,6 +233,11 @@ public sealed class RoomServiceTests
                 && r.RoomName == roomName
                 && (!excludingRoomId.HasValue || r.RoomID != excludingRoomId.Value)));
         }
+
+        public Task<int> CountSeatsAsync(
+            int roomId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(SeatCounts.GetValueOrDefault(roomId));
 
         public Task<Room> AddAsync(
             Room room,

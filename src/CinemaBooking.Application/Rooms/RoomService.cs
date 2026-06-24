@@ -94,6 +94,14 @@ public sealed class RoomService : IRoomService
             return (false, validation.ErrorMessage, null);
         }
 
+        var seatCount = await _roomRepository.CountSeatsAsync(roomId, cancellationToken);
+        if (capacity < seatCount)
+        {
+            return (false,
+                $"Capacity cannot be less than the current seat count ({seatCount})",
+                null);
+        }
+
         var updatedRoom = await _roomRepository.UpdateAsync(
             roomId,
             cinemaId,

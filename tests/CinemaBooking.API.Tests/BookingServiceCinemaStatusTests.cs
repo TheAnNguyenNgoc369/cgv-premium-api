@@ -75,13 +75,12 @@ public sealed class BookingServiceCinemaStatusTests
             return Task.FromResult(Showtime?.ShowtimeID == showtimeId ? Showtime : null);
         }
 
-        public Task AddSeatHoldsAsync(
+        public Task<bool> TryAddSeatHoldsAsync(
             IEnumerable<SeatHold> seatHolds,
             CancellationToken cancellationToken = default)
         {
             AddedSeatHolds.AddRange(seatHolds);
-
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
         public Task AddBookingAsync(

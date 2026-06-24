@@ -13,7 +13,7 @@ public class SeatHoldConfiguration : IEntityTypeConfiguration<SeatHold>
         builder.HasKey(h => h.HoldID);
 
         builder.Property(h => h.Status).HasMaxLength(20).IsRequired().HasDefaultValue("holding");
-        builder.Property(h => h.HeldAt).HasDefaultValueSql("GETDATE()");
+        builder.Property(h => h.HeldAt).HasDefaultValueSql("SYSUTCDATETIME()");
 
         builder.HasIndex(h => new { h.SeatID, h.ShowtimeID, h.Status })
             .HasDatabaseName("IX_SeatHold_Status_Lookup");

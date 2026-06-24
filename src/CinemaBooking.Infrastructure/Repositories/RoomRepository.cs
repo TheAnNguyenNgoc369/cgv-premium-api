@@ -59,6 +59,11 @@ public sealed class RoomRepository : IRoomRepository
         return query.AnyAsync(cancellationToken);
     }
 
+    public Task<int> CountSeatsAsync(
+        int roomId,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.Seats.CountAsync(seat => seat.RoomID == roomId, cancellationToken);
+
     public async Task<Room> AddAsync(
         Room room,
         CancellationToken cancellationToken = default)

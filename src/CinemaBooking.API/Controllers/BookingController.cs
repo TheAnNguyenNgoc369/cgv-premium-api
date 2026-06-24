@@ -34,7 +34,12 @@ public sealed class BookingController : ControllerBase
             userId, request.ShowtimeId, request.SeatIds, cancellationToken);
 
         if (!result.Succeeded)
+        {
+            if (result.ErrorMessage == "One or more seats are already booked or being held")
+                return Conflict(new { message = result.ErrorMessage });
+
             return BadRequest(new { message = result.ErrorMessage });
+        }
 
         return Ok(new HoldSeatsResponse(result.HoldIds!, result.ExpiresAt!.Value));
     }

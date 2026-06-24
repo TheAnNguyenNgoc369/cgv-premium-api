@@ -45,7 +45,7 @@ public sealed class BookingService : IBookingService
         if (unavailableSeatIds.Count > 0)
             return (false, $"Ghế ID {string.Join(", ", unavailableSeatIds)} đã được đặt hoặc đang được giữ bởi người khác", null, null);
 
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         var expiresAt = now.AddMinutes(HoldDurationMinutes);
 
         var holds = seatIds.Select(seatId => new SeatHold
@@ -58,7 +58,8 @@ public sealed class BookingService : IBookingService
             Status = "holding"
         }).ToList();
 
-        await _bookingRepository.AddSeatHoldsAsync(holds, cancellationToken);
+        if (!await _bookingRepository.TryAddSeatHoldsAsync(holds, cancellationToken))
+            return (false, "One or more seats are already booked or being held", null, null);
 
         return (true, null, holds.Select(h => h.HoldID).ToList(), expiresAt);
     }

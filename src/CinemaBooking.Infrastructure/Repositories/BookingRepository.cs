@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -58,7 +58,7 @@ public sealed class BookingRepository : IBookingRepository
             .Where(h => h.ShowtimeID == showtimeId
                       && seatIds.Contains(h.SeatID)
                       && h.Status == "holding"
-                      && h.ExpiresAt > DateTime.Now
+                      && h.ExpiresAt > DateTime.UtcNow
                       && h.UserID != currentUserId)
             .Select(h => h.SeatID)
             .ToListAsync(cancellationToken);
@@ -66,12 +66,21 @@ public sealed class BookingRepository : IBookingRepository
         return bookedSeatIds.Union(heldByOthersSeatIds).ToList();
     }
 
-    public async Task AddSeatHoldsAsync(
+    public async Task<bool> TryAddSeatHoldsAsync(
         IEnumerable<SeatHold> seatHolds,
         CancellationToken cancellationToken = default)
     {
-        await _db.SeatHolds.AddRangeAsync(seatHolds, cancellationToken);
-        await _db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _db.SeatHolds.AddRangeAsync(seatHolds, cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            _db.ChangeTracker.Clear();
+            return false;
+        }
     }
 
     public async Task<List<SeatHold>> GetMyActiveHoldsAsync(
@@ -85,7 +94,7 @@ public sealed class BookingRepository : IBookingRepository
                       && h.ShowtimeID == showtimeId
                       && seatIds.Contains(h.SeatID)
                       && h.Status == "holding"
-                      && h.ExpiresAt > DateTime.Now)
+                      && h.ExpiresAt > DateTime.UtcNow)
             .ToListAsync(cancellationToken);
     }
 
@@ -178,7 +187,7 @@ public sealed class BookingRepository : IBookingRepository
             throw new InvalidOperationException($"Booking {bookingId} not found");
 
         booking.Status = status;
-        booking.UpdatedAt = DateTime.Now;
+        booking.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
     }
 }
