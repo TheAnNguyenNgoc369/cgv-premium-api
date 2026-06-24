@@ -61,7 +61,7 @@ public sealed class BookingRepository : IBookingRepository
             .Select(h => h.SeatID)
             .ToListAsync(cancellationToken);
 
-        return bookedSeatIds.Union(heldByOthersSeatIds).Distinct().ToList();
+        return bookedSeatIds.Union(heldByOthersSeatIds).ToList();
     }
 
     public async Task AddSeatHoldsAsync(
@@ -162,5 +162,21 @@ public sealed class BookingRepository : IBookingRepository
             voucher.UsedCount++;
             await _db.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    public async Task UpdateBookingStatusAsync(
+        int bookingId,
+        string status,
+        CancellationToken cancellationToken = default)
+    {
+        var booking = await _db.Bookings
+            .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
+
+        if (booking is null)
+            throw new InvalidOperationException($"Booking {bookingId} not found");
+
+        booking.Status = status;
+        booking.UpdatedAt = DateTime.Now;
+        await _db.SaveChangesAsync(cancellationToken);
     }
 }

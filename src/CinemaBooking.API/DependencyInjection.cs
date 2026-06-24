@@ -4,6 +4,7 @@ using System.Text;
 using CinemaBooking.API.Configuration;
 using CinemaBooking.API.Services;
 using CinemaBooking.Application;
+using CinemaBooking.Application.Payments.VNPay;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
@@ -75,6 +76,11 @@ public static class DependencyInjection
 
         services.AddOptions<EmailSettings>()
             .Bind(configuration.GetRequiredSection(EmailSettings.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<VNPaySettings>()
+            .Bind(configuration.GetRequiredSection("VNPay"))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
