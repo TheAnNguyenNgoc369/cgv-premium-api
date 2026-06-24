@@ -172,7 +172,7 @@ public sealed class BookingService : IBookingService
             if (voucher.MinOrderValue.HasValue && totalBeforeDiscount < voucher.MinOrderValue.Value)
                 return (false, $"Đơn hàng tối thiểu {voucher.MinOrderValue.Value:N0}đ để sử dụng mã này", null);
 
-            var voucherDiscount = voucher.DiscountType == "percentage"
+            var voucherDiscount = voucher.DiscountType == "percent"
                 ? Math.Round(totalBeforeDiscount * voucher.DiscountValue / 100, 0)
                 : voucher.DiscountValue;
 

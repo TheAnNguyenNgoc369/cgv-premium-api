@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 
@@ -14,8 +15,6 @@ public sealed class ShowtimeService : IShowtimeService
     private const string InvalidStatusMessage =
         "Invalid showtime status. (scheduled, ongoing, completed, cancelled)";
 
-    private static readonly HashSet<string> ValidStatuses =
-        new(StringComparer.OrdinalIgnoreCase) { "scheduled", "ongoing", "completed", "cancelled" };
     private readonly IShowtimeRepository _showtimeRepository;
 
     public ShowtimeService(IShowtimeRepository showtimeRepository)
@@ -28,9 +27,14 @@ public sealed class ShowtimeService : IShowtimeService
         int page, int pageSize, string? sortBy, string? sortDir,
         CancellationToken cancellationToken = default)
     {
-        var normalizedStatus = string.IsNullOrWhiteSpace(status) ? null : status.Trim().ToLowerInvariant();
-        if (normalizedStatus is not null && !ValidStatuses.Contains(normalizedStatus))
-            return (false, InvalidStatusMessage, null);
+        string? normalizedStatus = null;
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var statusResult = EnumValueMapper.Validate(
+                status, "Status", DatabaseEnumMappings.ShowtimeStatuses);
+            if (!statusResult.Succeeded) return (false, InvalidStatusMessage, null);
+            normalizedStatus = statusResult.DatabaseValue;
+        }
 
         page = page < 1 ? 1 : page;
         pageSize = pageSize < 1 ? 10 : pageSize;
@@ -78,8 +82,10 @@ public sealed class ShowtimeService : IShowtimeService
         Showtime? existing, int movieId, int roomId, DateTime startTime,
         decimal basePrice, string status, CancellationToken cancellationToken)
     {
-        var normalizedStatus = status?.Trim().ToLowerInvariant();
-        if (normalizedStatus is null || !ValidStatuses.Contains(normalizedStatus))
+        var statusResult = EnumValueMapper.Validate(
+            status, "Status", DatabaseEnumMappings.ShowtimeStatuses);
+        var normalizedStatus = statusResult.DatabaseValue;
+        if (!statusResult.Succeeded)
             return (false, InvalidStatusMessage, null);
         if (basePrice < 0) return (false, "Base price must be greater than or equal to 0", null);
         var movie = await _showtimeRepository.GetMovieAsync(movieId, cancellationToken);
@@ -100,7 +106,7 @@ public sealed class ShowtimeService : IShowtimeService
         var showtime = existing ?? new Showtime { CreatedAt = DateTime.UtcNow };
         showtime.MovieID = movieId; showtime.RoomID = roomId;
         showtime.StartTime = startTime; showtime.EndTime = endTime;
-        showtime.BasePrice = basePrice; showtime.Status = normalizedStatus;
+        showtime.BasePrice = basePrice; showtime.Status = normalizedStatus!;
         var saved = existing is null
             ? await _showtimeRepository.AddAsync(showtime, cancellationToken)
             : await _showtimeRepository.UpdateAsync(showtime, cancellationToken);

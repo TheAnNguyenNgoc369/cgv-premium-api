@@ -4,19 +4,13 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
 
 namespace CinemaBooking.Application.Cinemas;
 
 public sealed class CinemaService : ICinemaService
 {
-    private static readonly HashSet<string> ValidStatuses = new(StringComparer.Ordinal)
-    {
-        "active",
-        "inactive",
-        "maintenance"
-    };
-
     private readonly ICinemaRepository _cinemaRepository;
 
     public CinemaService(ICinemaRepository cinemaRepository)
@@ -166,10 +160,7 @@ public sealed class CinemaService : ICinemaService
             return defaultToActive ? "active" : null;
         }
 
-        var normalizedStatus = status.Trim().ToLowerInvariant();
-
-        return ValidStatuses.Contains(normalizedStatus)
-            ? normalizedStatus
-            : null;
+        return EnumValueMapper.Validate(
+            status, "Status", DatabaseEnumMappings.CinemaStatuses).DatabaseValue;
     }
 }

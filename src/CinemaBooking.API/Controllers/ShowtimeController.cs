@@ -1,5 +1,6 @@
 ﻿using CinemaBooking.API.Contracts.Showtimes;
 using CinemaBooking.Application.Showtimes;
+using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -115,7 +116,8 @@ public sealed class ShowtimeController : ControllerBase
             new(showtime.MovieID, showtime.Movie.Title, showtime.Movie.AgeRating,
                 showtime.Movie.DurationMin, showtime.Movie.PosterURL),
             new(showtime.RoomID, showtime.Room.RoomName, showtime.Room.RoomType, showtime.Room.Capacity),
-            showtime.StartTime, showtime.EndTime, showtime.BasePrice, showtime.Status,
+            showtime.StartTime, showtime.EndTime, showtime.BasePrice,
+            EnumValueMapper.ToApiValue(showtime.Status),
             await _showtimeService.IsSoldOutAsync(showtime, cancellationToken));
 
     private IActionResult MapWriteError(string? message) => message switch

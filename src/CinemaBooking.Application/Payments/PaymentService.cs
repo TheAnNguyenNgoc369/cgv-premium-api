@@ -4,6 +4,7 @@ using CinemaBooking.Application.Invoices;
 using CinemaBooking.Application.Payments.VNPay;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
+using CinemaBooking.Application.Common.Enums;
 
 namespace CinemaBooking.Application.Payments;
 
@@ -37,12 +38,17 @@ public sealed class PaymentService : IPaymentService
         string ipAddress = "127.0.0.1",
         CancellationToken cancellationToken = default)
     {
-        return request.PaymentMethod.ToLowerInvariant() switch
+        var paymentMethod = EnumValueMapper.Validate(
+            request.PaymentMethod, "PaymentMethod", DatabaseEnumMappings.PaymentMethods);
+        if (!paymentMethod.Succeeded)
+            return new PaymentValidationErrorResponse(false, paymentMethod.ErrorMessage!);
+
+        return paymentMethod.DatabaseValue switch
         {
             PaymentMethod.Wallet => await ProcessWalletPaymentAsync(request.BookingId, cancellationToken),
             PaymentMethod.VNPay => await ProcessVNPayPaymentAsync(request.BookingId, ipAddress, cancellationToken),
             PaymentMethod.Cash => await ProcessCashPaymentAsync(request.BookingId, cancellationToken),
-            _ => throw new ArgumentException($"Invalid payment method: {request.PaymentMethod}")
+            _ => new PaymentValidationErrorResponse(false, paymentMethod.ErrorMessage!)
         };
     }
 
@@ -123,7 +129,7 @@ public sealed class PaymentService : IPaymentService
                 Message: "Payment already processed",
                 PaymentId: payment.PaymentID,
                 BookingId: payment.BookingID,
-                PaymentStatus: payment.Status);
+                PaymentStatus: EnumValueMapper.ToApiValue(payment.Status));
         }
 
         var isSuccess = responseCode == VNPayResponseCode.Success;
@@ -152,8 +158,8 @@ public sealed class PaymentService : IPaymentService
             Message: isSuccess ? "Payment completed successfully" : $"Payment failed with code: {responseCode}",
             PaymentId: payment.PaymentID,
             BookingId: payment.BookingID,
-            PaymentStatus: newPaymentStatus,
-            BookingStatus: newBookingStatus);
+            PaymentStatus: EnumValueMapper.ToApiValue(newPaymentStatus),
+            BookingStatus: EnumValueMapper.ToApiValue(newBookingStatus));
     }
 
     public async Task<PaymentResponse?> GetPaymentByIdAsync(
@@ -241,10 +247,10 @@ public sealed class PaymentService : IPaymentService
             Success: true,
             PaymentId: payment.PaymentID,
             BookingId: bookingId,
-            PaymentMethod: PaymentMethod.Wallet,
+            PaymentMethod: EnumValueMapper.ToApiValue(PaymentMethod.Wallet),
             Amount: booking.FinalAmount,
-            Status: PaymentStatus.Completed,
-            BookingStatus: BookingStatus.Paid,
+            Status: EnumValueMapper.ToApiValue(PaymentStatus.Completed),
+            BookingStatus: EnumValueMapper.ToApiValue(BookingStatus.Paid),
             InvoiceCode: invoice.InvoiceCode,
             PointsEarned: pointsEarned
         );
@@ -284,7 +290,7 @@ public sealed class PaymentService : IPaymentService
             new PaymentSession
             {
                 PaymentID = payment.PaymentID,
-                GatewayName = "VNPay",
+                GatewayName = PaymentMethod.VNPay,
                 QRCodeURL = qrCodeUrl,
                 ExpiresAt = expiresAt,
                 Status = "waiting",
@@ -296,9 +302,9 @@ public sealed class PaymentService : IPaymentService
             Success: true,
             PaymentId: payment.PaymentID,
             BookingId: bookingId,
-            PaymentMethod: PaymentMethod.VNPay,
+            PaymentMethod: EnumValueMapper.ToApiValue(PaymentMethod.VNPay),
             Amount: booking.FinalAmount,
-            Status: PaymentStatus.Pending,
+            Status: EnumValueMapper.ToApiValue(PaymentStatus.Pending),
             QrCodeUrl: qrCodeUrl,
             SessionId: session.SessionID,
             ExpiresAt: expiresAt
@@ -335,9 +341,9 @@ public sealed class PaymentService : IPaymentService
             Success: true,
             PaymentId: payment.PaymentID,
             BookingId: bookingId,
-            PaymentMethod: PaymentMethod.Cash,
+            PaymentMethod: EnumValueMapper.ToApiValue(PaymentMethod.Cash),
             Amount: booking.FinalAmount,
-            Status: PaymentStatus.Pending,
+            Status: EnumValueMapper.ToApiValue(PaymentStatus.Pending),
             Message: "Please pay at the counter before the showtime"
         );
     }
@@ -350,9 +356,9 @@ public sealed class PaymentService : IPaymentService
         return new PaymentResponse(
             PaymentId: payment.PaymentID,
             BookingId: payment.BookingID,
-            PaymentMethod: payment.PaymentMethod,
+            PaymentMethod: EnumValueMapper.ToApiValue(payment.PaymentMethod),
             Amount: payment.Amount,
-            Status: payment.Status,
+            Status: EnumValueMapper.ToApiValue(payment.Status),
             PaidAt: payment.PaidAt,
             CreatedAt: payment.CreatedAt
         );

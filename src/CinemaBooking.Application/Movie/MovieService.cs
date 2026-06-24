@@ -1,5 +1,6 @@
 using CinemaBooking.Application.Common.ImageFiles;
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Common.Enums;
 using MovieEntity = CinemaBooking.Domain.Entities.Movie;
 
 namespace CinemaBooking.Application.Movie;
@@ -9,21 +10,6 @@ public sealed class MovieService : IMovieService
     private const string PosterFolder = "cgvp/movie-posters";
     private const string PosterUploadFailedMessage = "Movie poster could not be uploaded. Please try again later.";
     private const string PosterDeleteFailedMessage = "Movie poster could not be deleted. Please try again later.";
-
-    private static readonly HashSet<string> ValidAgeRatings = new(StringComparer.Ordinal)
-    {
-        "P",
-        "C13",
-        "C16",
-        "C18"
-    };
-
-    private static readonly HashSet<string> ValidStatuses = new(StringComparer.Ordinal)
-    {
-        "coming_soon",
-        "now_showing",
-        "ended"
-    };
 
     private readonly IMovieRepository _movieRepository;
     private readonly IImageStorageService _imageStorageService;
@@ -363,7 +349,8 @@ public sealed class MovieService : IMovieService
         }
 
         var normalizedAgeRating = ageRating.Trim().ToUpperInvariant();
-        if (!ValidAgeRatings.Contains(normalizedAgeRating))
+        if (!EnumValueMapper.Validate(
+                normalizedAgeRating, "AgeRating", DatabaseEnumMappings.MovieAgeRatings).Succeeded)
         {
             return (false, "AgeRating must be P, C13, C16, or C18", null);
         }
@@ -391,11 +378,8 @@ public sealed class MovieService : IMovieService
             return defaultToComingSoon ? "coming_soon" : InvalidStatus;
         }
 
-        var normalizedStatus = status.Trim();
-
-        return ValidStatuses.Contains(normalizedStatus)
-            ? normalizedStatus
-            : InvalidStatus;
+        return EnumValueMapper.Validate(
+            status, "Status", DatabaseEnumMappings.MovieStatuses).DatabaseValue ?? InvalidStatus;
     }
 
     private static string? NormalizeOptionalStatus(string? status)
@@ -405,11 +389,8 @@ public sealed class MovieService : IMovieService
             return null;
         }
 
-        var normalizedStatus = status.Trim();
-
-        return ValidStatuses.Contains(normalizedStatus)
-            ? normalizedStatus
-            : InvalidStatus;
+        return EnumValueMapper.Validate(
+            status, "Status", DatabaseEnumMappings.MovieStatuses).DatabaseValue ?? InvalidStatus;
     }
 
     private static string? NormalizeNullable(string? value)

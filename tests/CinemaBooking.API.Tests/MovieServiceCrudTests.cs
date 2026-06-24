@@ -116,7 +116,7 @@ public sealed class MovieServiceCrudTests
     }
 
     [Fact]
-    public async Task CreateMovieRejectsInvalidStatus()
+    public async Task CreateMovieMapsUppercaseStatusToDatabaseValue()
     {
         var repository = new MovieRepositoryFake();
         var service = CreateService(repository);
@@ -136,9 +136,8 @@ public sealed class MovieServiceCrudTests
             null,
             "NOW_SHOWING");
 
-        Assert.False(result.Succeeded);
-        Assert.Equal("Status must be coming_soon, now_showing, or ended", result.ErrorMessage);
-        Assert.Null(result.Movie);
+        Assert.True(result.Succeeded);
+        Assert.Equal("now_showing", result.Movie!.Status);
     }
 
     [Fact]

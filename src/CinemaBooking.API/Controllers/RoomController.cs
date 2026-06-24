@@ -1,5 +1,6 @@
 using CinemaBooking.API.Contracts.Rooms;
 using CinemaBooking.Application.Rooms;
+using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -124,9 +125,9 @@ public sealed class RoomController : ControllerBase
             room.RoomID,
             room.CinemaID,
             room.RoomName,
-            room.RoomType,
+            EnumValueMapper.ToApiValue(room.RoomType == "3D" ? "THREE_D" : room.RoomType),
             room.Capacity,
-            room.Status,
+            EnumValueMapper.ToApiValue(room.Status),
             room.Description,
             room.CreatedAt);
     }
