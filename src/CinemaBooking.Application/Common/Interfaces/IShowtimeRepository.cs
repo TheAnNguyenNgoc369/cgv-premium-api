@@ -9,6 +9,23 @@ namespace CinemaBooking.Application.Common.Interfaces;
 
 public interface IShowtimeRepository
 {
+    Task<(List<Showtime> Items, int TotalItems)> GetShowtimesAsync(
+        string? movieName, string? roomName, DateOnly? date, string? status,
+        int page, int pageSize, string sortBy, bool descending,
+        CancellationToken cancellationToken = default);
+
+    Task<CinemaBooking.Domain.Entities.Movie?> GetMovieAsync(
+        int movieId, CancellationToken cancellationToken = default);
+    Task<Room?> GetRoomAsync(int roomId, CancellationToken cancellationToken = default);
+    Task<bool> HasConflictAsync(int roomId, DateTime startTime, DateTime endTime,
+        int? excludingShowtimeId = null, CancellationToken cancellationToken = default);
+    Task<bool> HasActiveBookingOrHoldAsync(int showtimeId, DateTime now,
+        CancellationToken cancellationToken = default);
+    Task<bool> IsSoldOutAsync(int showtimeId, int capacity, DateTime now,
+        CancellationToken cancellationToken = default);
+    Task<Showtime> AddAsync(Showtime showtime, CancellationToken cancellationToken = default);
+    Task<Showtime?> UpdateAsync(Showtime showtime, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(int showtimeId, CancellationToken cancellationToken = default);
     Task<List<Showtime>> GetShowtimesByMovieAsync(
         int movieId,
         DateOnly? date,

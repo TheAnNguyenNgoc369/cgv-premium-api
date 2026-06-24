@@ -41,6 +41,13 @@ public interface IMovieRepository
         DateTime updatedAt,
         CancellationToken cancellationToken = default);
 
+    Task<MovieEntity?> UpdatePosterAsync(
+        int movieId,
+        string posterUrl,
+        string posterPublicId,
+        DateTime updatedAt,
+        CancellationToken cancellationToken = default);
+
     Task<bool> HasActiveOrUpcomingShowtimesAsync(
         int movieId,
         DateTime now,

@@ -11,11 +11,100 @@ namespace CinemaBooking.Application.Showtimes;
 
 public sealed class ShowtimeService : IShowtimeService
 {
+    private const string InvalidStatusMessage =
+        "Invalid showtime status. (scheduled, ongoing, completed, cancelled)";
+
+    private static readonly HashSet<string> ValidStatuses =
+        new(StringComparer.OrdinalIgnoreCase) { "scheduled", "ongoing", "completed", "cancelled" };
     private readonly IShowtimeRepository _showtimeRepository;
 
     public ShowtimeService(IShowtimeRepository showtimeRepository)
     {
         _showtimeRepository = showtimeRepository;
+    }
+
+    public async Task<(bool Succeeded, string? ErrorMessage, ShowtimePageResult? Page)> GetShowtimesAsync(
+        string? movieName, string? roomName, DateOnly? date, string? status,
+        int page, int pageSize, string? sortBy, string? sortDir,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedStatus = string.IsNullOrWhiteSpace(status) ? null : status.Trim().ToLowerInvariant();
+        if (normalizedStatus is not null && !ValidStatuses.Contains(normalizedStatus))
+            return (false, InvalidStatusMessage, null);
+
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize < 1 ? 10 : pageSize;
+        var normalizedSort = sortBy?.Trim().ToLowerInvariant();
+        normalizedSort = normalizedSort is "endtime" or "baseprice" or "status" ? normalizedSort : "starttime";
+        var descending = string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase);
+        var result = await _showtimeRepository.GetShowtimesAsync(
+            movieName?.Trim(), roomName?.Trim(), date, normalizedStatus,
+            page, pageSize, normalizedSort, descending, cancellationToken);
+        return (true, null, new ShowtimePageResult(result.Items, page, pageSize, result.TotalItems));
+    }
+
+    public Task<(bool Succeeded, string? ErrorMessage, Showtime? Showtime)> CreateShowtimeAsync(
+        int movieId, int roomId, DateTime startTime, decimal basePrice, string status,
+        CancellationToken cancellationToken = default) =>
+        SaveAsync(null, movieId, roomId, startTime, basePrice, status, cancellationToken);
+
+    public async Task<(bool Succeeded, string? ErrorMessage, Showtime? Showtime)> UpdateShowtimeAsync(
+        int id, int movieId, int roomId, DateTime startTime, decimal basePrice, string status,
+        CancellationToken cancellationToken = default)
+    {
+        var existing = await _showtimeRepository.GetShowtimeByIdAsync(id, cancellationToken);
+        if (existing is null) return (false, "Showtime not found", null);
+        if (await _showtimeRepository.HasActiveBookingOrHoldAsync(id, DateTime.UtcNow, cancellationToken))
+            return (false, "Showtime has active bookings or seat holds", null);
+        return await SaveAsync(existing, movieId, roomId, startTime, basePrice, status, cancellationToken);
+    }
+
+    public async Task<(bool Succeeded, string? ErrorMessage)> DeleteShowtimeAsync(
+        int id, CancellationToken cancellationToken = default)
+    {
+        if (await _showtimeRepository.GetShowtimeByIdAsync(id, cancellationToken) is null)
+            return (false, "Showtime not found");
+        if (await _showtimeRepository.HasActiveBookingOrHoldAsync(id, DateTime.UtcNow, cancellationToken))
+            return (false, "Showtime has active bookings or seat holds");
+        return await _showtimeRepository.DeleteAsync(id, cancellationToken)
+            ? (true, null) : (false, "Showtime not found");
+    }
+
+    public Task<bool> IsSoldOutAsync(Showtime showtime, CancellationToken cancellationToken = default) =>
+        _showtimeRepository.IsSoldOutAsync(
+            showtime.ShowtimeID, showtime.Room.Capacity, DateTime.UtcNow, cancellationToken);
+
+    private async Task<(bool Succeeded, string? ErrorMessage, Showtime? Showtime)> SaveAsync(
+        Showtime? existing, int movieId, int roomId, DateTime startTime,
+        decimal basePrice, string status, CancellationToken cancellationToken)
+    {
+        var normalizedStatus = status?.Trim().ToLowerInvariant();
+        if (normalizedStatus is null || !ValidStatuses.Contains(normalizedStatus))
+            return (false, InvalidStatusMessage, null);
+        if (basePrice < 0) return (false, "Base price must be greater than or equal to 0", null);
+        var movie = await _showtimeRepository.GetMovieAsync(movieId, cancellationToken);
+        if (movie is null) return (false, "Movie not found", null);
+        if (movie.Status != "now_showing")
+            return (false,
+                "The movie must be 'now_showing' to update or create showtimes.",
+                null);
+        var room = await _showtimeRepository.GetRoomAsync(roomId, cancellationToken);
+        if (room is null) return (false, "Room not found", null);
+        if (room.Status != "active") return (false, "Room must be active", null);
+        var endTime = startTime.AddMinutes(movie.DurationMin + 30);
+        if (normalizedStatus != "cancelled" &&
+            await _showtimeRepository.HasConflictAsync(roomId, startTime, endTime,
+                existing?.ShowtimeID, cancellationToken))
+            return (false, "Showtime conflicts with another showtime in the same room", null);
+
+        var showtime = existing ?? new Showtime { CreatedAt = DateTime.UtcNow };
+        showtime.MovieID = movieId; showtime.RoomID = roomId;
+        showtime.StartTime = startTime; showtime.EndTime = endTime;
+        showtime.BasePrice = basePrice; showtime.Status = normalizedStatus;
+        var saved = existing is null
+            ? await _showtimeRepository.AddAsync(showtime, cancellationToken)
+            : await _showtimeRepository.UpdateAsync(showtime, cancellationToken);
+        return saved is null ? (false, "Showtime not found", null) : (true, null, saved);
     }
 
     public async Task<List<Showtime>> GetShowtimesByMovieAsync(

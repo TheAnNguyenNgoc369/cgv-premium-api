@@ -22,6 +22,7 @@ public sealed record MovieDetailResponse(
     DateOnly? ShowingFromDate,
     DateOnly? ShowingToDate,
     string? PosterUrl,
+    string? PosterPublicId,
     string? TrailerUrl,
     string Status
 );

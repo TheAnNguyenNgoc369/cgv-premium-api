@@ -22,7 +22,7 @@ public sealed class MovieRequest
 
     public string? PosterUrl { get; init; }
 
-    public IFormFile? PosterFile { get; init; }
+    public string? PosterPublicId { get; init; }
 
     public string? TrailerUrl { get; init; }
 

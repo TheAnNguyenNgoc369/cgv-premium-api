@@ -131,6 +131,25 @@ public sealed class MovieRepository : IMovieRepository
         return await GetMovieByIdAsync(movieId, cancellationToken);
     }
 
+    public async Task<Movie?> UpdatePosterAsync(
+        int movieId,
+        string posterUrl,
+        string posterPublicId,
+        DateTime updatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        var movie = await _dbContext.Movie
+            .FirstOrDefaultAsync(m => m.MovieID == movieId, cancellationToken);
+        if (movie is null)
+            return null;
+
+        movie.PosterURL = posterUrl;
+        movie.PosterPublicId = posterPublicId;
+        movie.UpdatedAt = updatedAt;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return await GetMovieByIdAsync(movieId, cancellationToken);
+    }
+
     public Task<bool> HasActiveOrUpcomingShowtimesAsync(
         int movieId,
         DateTime now,
