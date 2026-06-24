@@ -25,6 +25,7 @@ public sealed class MovieServiceCrudTests
             null,
             null,
             null,
+            null,
             null);
 
         Assert.True(result.Succeeded);
@@ -37,7 +38,7 @@ public sealed class MovieServiceCrudTests
     }
 
     [Fact]
-    public async Task CreateMovieUploadsPosterFile()
+    public async Task UpdatePosterStoresNewPosterMetadata()
     {
         var repository = new MovieRepositoryFake();
         var storage = new ImageStorageServiceFake
@@ -46,23 +47,9 @@ public sealed class MovieServiceCrudTests
         };
         var service = CreateService(repository, storage);
 
-        var result = await service.CreateMovieAsync(
-            "Avatar",
-            null,
-            "P",
-            "Director",
-            null,
-            null,
-            120,
-            null,
-            null,
-            "https://example.com/manual.png",
-            null,
-            "coming_soon",
-            posterImageStream: new MemoryStream([1, 2, 3]),
-            posterFileName: "poster.png",
-            posterContentType: "image/png",
-            posterFileSize: 3);
+        repository.Movies.Add(CreateMovie(1));
+        var result = await service.UpdatePosterAsync(
+            1, new MemoryStream([1, 2, 3]), "poster.png", "image/png", 3);
 
         Assert.True(result.Succeeded);
         Assert.NotNull(result.Movie);
@@ -89,12 +76,43 @@ public sealed class MovieServiceCrudTests
             null,
             null,
             null,
+            null,
             "coming_soon");
 
         Assert.False(result.Succeeded);
         Assert.Equal("Title is required", result.ErrorMessage);
         Assert.Null(result.Movie);
         Assert.Empty(repository.Movies);
+    }
+
+    [Fact]
+    public async Task CreateMovieStoresUploadedPosterMetadata()
+    {
+        var repository = new MovieRepositoryFake();
+        var service = CreateService(repository);
+
+        var result = await service.CreateMovieAsync(
+            "Avatar", null, "P", "Director", null, null, 120,
+            null, null, "https://example.com/poster.png", "poster-public-id",
+            null, "coming_soon");
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("https://example.com/poster.png", result.Movie!.PosterURL);
+        Assert.Equal("poster-public-id", result.Movie.PosterPublicId);
+    }
+
+    [Fact]
+    public async Task CreateMovieRejectsIncompletePosterMetadata()
+    {
+        var service = CreateService(new MovieRepositoryFake());
+
+        var result = await service.CreateMovieAsync(
+            "Avatar", null, "P", "Director", null, null, 120,
+            null, null, "https://example.com/poster.png", null,
+            null, "coming_soon");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("PosterUrl and PosterPublicId must be provided together", result.ErrorMessage);
     }
 
     [Fact]
@@ -111,6 +129,7 @@ public sealed class MovieServiceCrudTests
             null,
             null,
             120,
+            null,
             null,
             null,
             null,
@@ -141,6 +160,7 @@ public sealed class MovieServiceCrudTests
             null,
             null,
             null,
+            null,
             "now_showing");
 
         Assert.False(result.Succeeded);
@@ -149,7 +169,7 @@ public sealed class MovieServiceCrudTests
     }
 
     [Fact]
-    public async Task UpdateMovieUploadsNewPosterAndDeletesOldPoster()
+    public async Task UpdateMovieWithNewPosterMetadataDeletesOldPoster()
     {
         var movie = CreateMovie(1);
         movie.PosterURL = "https://example.com/old.png";
@@ -175,13 +195,10 @@ public sealed class MovieServiceCrudTests
             130,
             null,
             null,
+            "https://example.com/new.png",
+            "new-public-id",
             null,
-            null,
-            "now_showing",
-            posterImageStream: new MemoryStream([1, 2, 3]),
-            posterFileName: "poster.png",
-            posterContentType: "image/png",
-            posterFileSize: 3);
+            "now_showing");
 
         Assert.True(result.Succeeded);
         Assert.NotNull(result.Movie);
@@ -192,7 +209,7 @@ public sealed class MovieServiceCrudTests
     }
 
     [Fact]
-    public async Task UpdateMovieWithNewPosterUrlDeletesOldPosterAsset()
+    public async Task UpdateMovieWithNewPosterMetadataDeletesOldPosterAsset()
     {
         var movie = CreateMovie(1);
         movie.PosterURL = "https://example.com/old.png";
@@ -216,13 +233,14 @@ public sealed class MovieServiceCrudTests
             null,
             null,
             "https://example.com/new-external.png",
+            "new-public-id",
             null,
             "now_showing");
 
         Assert.True(result.Succeeded);
         Assert.NotNull(result.Movie);
         Assert.Equal("https://example.com/new-external.png", result.Movie.PosterURL);
-        Assert.Null(result.Movie.PosterPublicId);
+        Assert.Equal("new-public-id", result.Movie.PosterPublicId);
         Assert.Contains("old-public-id", storage.DeletedPublicIds);
     }
 
@@ -251,6 +269,7 @@ public sealed class MovieServiceCrudTests
             null,
             null,
             "https://example.com/old.png",
+            "old-public-id",
             null,
             "now_showing");
 
@@ -259,7 +278,7 @@ public sealed class MovieServiceCrudTests
     }
 
     [Fact]
-    public async Task UpdateMovieDoesNotChangeDatabaseWhenPosterUploadFails()
+    public async Task UpdatePosterReturnsFailureWhenStorageFails()
     {
         var movie = CreateMovie(1);
         movie.PosterURL = "https://example.com/old.png";
@@ -274,34 +293,43 @@ public sealed class MovieServiceCrudTests
         };
         var service = CreateService(repository, storage);
 
-        var result = await service.UpdateMovieAsync(
-            1,
-            "Avatar 2",
-            null,
-            "P",
-            "Director",
-            null,
-            null,
-            130,
-            null,
-            null,
-            null,
-            null,
-            "now_showing",
-            posterImageStream: new MemoryStream([1, 2, 3]),
-            posterFileName: "poster.png",
-            posterContentType: "image/png",
-            posterFileSize: 3);
+        var result = await service.UpdatePosterAsync(
+            1, new MemoryStream([1, 2, 3]), "poster.png", "image/png", 3);
 
         Assert.False(result.Succeeded);
         Assert.Equal("Movie poster could not be uploaded. Please try again later.", result.ErrorMessage);
-        Assert.Equal("Avatar", movie.Title);
-        Assert.Equal("https://example.com/old.png", movie.PosterURL);
-        Assert.Equal("old-public-id", movie.PosterPublicId);
+        Assert.Null(result.Movie);
     }
 
     [Fact]
-    public async Task UpdateMovieCleansUpNewPosterWhenDatabaseUpdateFails()
+    public async Task UpdatePosterRollsBackNewPosterWhenOldPosterDeletionFails()
+    {
+        var movie = CreateMovie(1);
+        movie.PosterURL = "https://example.com/old.png";
+        movie.PosterPublicId = "old-public-id";
+        var repository = new MovieRepositoryFake { Movies = { movie } };
+        var storage = new ImageStorageServiceFake
+        {
+            UploadResult = new("https://example.com/new.png", "new-public-id"),
+            DeleteFailures =
+            {
+                ["old-public-id"] = new InvalidOperationException("Delete failed")
+            }
+        };
+        var service = CreateService(repository, storage);
+
+        var result = await service.UpdatePosterAsync(
+            1, new MemoryStream([1, 2, 3]), "poster.png", "image/png", 3);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Movie poster could not be deleted. Please try again later.", result.ErrorMessage);
+        Assert.Equal("https://example.com/old.png", movie.PosterURL);
+        Assert.Equal("old-public-id", movie.PosterPublicId);
+        Assert.Contains("new-public-id", storage.DeletedPublicIds);
+    }
+
+    [Fact]
+    public async Task UpdateMovieStopsWhenOldPosterDeletionFails()
     {
         var movie = CreateMovie(1);
         movie.PosterURL = "https://example.com/old.png";
@@ -309,11 +337,13 @@ public sealed class MovieServiceCrudTests
         var repository = new MovieRepositoryFake
         {
             Movies = { movie },
-            ReturnNullOnUpdate = true
         };
         var storage = new ImageStorageServiceFake
         {
-            UploadResult = new StoredImageResult("https://example.com/new.png", "new-public-id")
+            DeleteFailures =
+            {
+                ["old-public-id"] = new InvalidOperationException("Cloudinary delete failed")
+            }
         };
         var service = CreateService(repository, storage);
 
@@ -328,18 +358,15 @@ public sealed class MovieServiceCrudTests
             130,
             null,
             null,
+            "https://example.com/new.png",
+            "new-public-id",
             null,
-            null,
-            "now_showing",
-            posterImageStream: new MemoryStream([1, 2, 3]),
-            posterFileName: "poster.png",
-            posterContentType: "image/png",
-            posterFileSize: 3);
+            "now_showing");
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Movie not found", result.ErrorMessage);
-        Assert.Contains("new-public-id", storage.DeletedPublicIds);
-        Assert.DoesNotContain("old-public-id", storage.DeletedPublicIds);
+        Assert.Equal("Movie poster could not be deleted. Please try again later.", result.ErrorMessage);
+        Assert.Equal("https://example.com/old.png", movie.PosterURL);
+        Assert.Equal("old-public-id", movie.PosterPublicId);
     }
 
     [Fact]
@@ -513,6 +540,23 @@ public sealed class MovieServiceCrudTests
             movie.UpdatedAt = updatedAt;
             LastGenreNames = genreNames ?? [];
 
+            return Task.FromResult<MovieEntity?>(movie);
+        }
+
+        public Task<MovieEntity?> UpdatePosterAsync(
+            int movieId,
+            string posterUrl,
+            string posterPublicId,
+            DateTime updatedAt,
+            CancellationToken cancellationToken = default)
+        {
+            var movie = Movies.FirstOrDefault(m => m.MovieID == movieId);
+            if (movie is null)
+                return Task.FromResult<MovieEntity?>(null);
+
+            movie.PosterURL = posterUrl;
+            movie.PosterPublicId = posterPublicId;
+            movie.UpdatedAt = updatedAt;
             return Task.FromResult<MovieEntity?>(movie);
         }
 

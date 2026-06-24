@@ -77,13 +77,10 @@ public sealed class MovieService : IMovieService
         DateOnly? showingFromDate,
         DateOnly? showingToDate,
         string? posterUrl,
+        string? posterPublicId,
         string? trailerUrl,
         string? status,
-        CancellationToken cancellationToken = default,
-        Stream? posterImageStream = null,
-        string? posterFileName = null,
-        string? posterContentType = null,
-        long? posterFileSize = null)
+        CancellationToken cancellationToken = default)
     {
         var validation = ValidateMovie(
             title,
@@ -100,32 +97,9 @@ public sealed class MovieService : IMovieService
             return (false, validation.ErrorMessage, null);
         }
 
-        StoredImageResult? uploadedPoster = null;
-        if (posterImageStream is not null)
-        {
-            var posterValidationError = ImageFileValidator.Validate(
-                posterFileName ?? string.Empty,
-                posterContentType,
-                posterFileSize ?? 0);
-
-            if (posterValidationError is not null)
-            {
-                return (false, posterValidationError, null);
-            }
-
-            try
-            {
-                uploadedPoster = await _imageStorageService.UploadImageAsync(
-                    posterImageStream,
-                    posterFileName!,
-                    PosterFolder,
-                    cancellationToken);
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                return (false, PosterUploadFailedMessage, null);
-            }
-        }
+        var posterValidationError = ValidatePosterMetadata(posterUrl, posterPublicId);
+        if (posterValidationError is not null)
+            return (false, posterValidationError, null);
 
         var now = DateTime.UtcNow;
         var movie = new MovieEntity
@@ -138,32 +112,19 @@ public sealed class MovieService : IMovieService
             DurationMin = durationMinutes,
             ShowingFrom = showingFromDate,
             ShowingTo = showingToDate,
-            PosterURL = uploadedPoster?.SecureUrl ?? NormalizeNullable(posterUrl),
-            PosterPublicId = uploadedPoster?.PublicId,
+            PosterURL = NormalizeNullable(posterUrl),
+            PosterPublicId = NormalizeNullable(posterPublicId),
             TrailerURL = NormalizeNullable(trailerUrl),
             Status = validation.Status!,
             CreatedAt = now,
             UpdatedAt = now
         };
 
-        try
-        {
-            var createdMovie = await _movieRepository.AddMovieAsync(
-                movie,
-                NormalizeGenres(genres),
-                cancellationToken);
-
-            return (true, null, createdMovie);
-        }
-        catch
-        {
-            if (uploadedPoster is not null)
-            {
-                await _imageStorageService.DeleteImageAsync(uploadedPoster.PublicId, cancellationToken);
-            }
-
-            throw;
-        }
+        var createdMovie = await _movieRepository.AddMovieAsync(
+            movie,
+            NormalizeGenres(genres),
+            cancellationToken);
+        return (true, null, createdMovie);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, MovieEntity? Movie)> UpdateMovieAsync(
@@ -178,13 +139,10 @@ public sealed class MovieService : IMovieService
         DateOnly? showingFromDate,
         DateOnly? showingToDate,
         string? posterUrl,
+        string? posterPublicId,
         string? trailerUrl,
         string? status,
-        CancellationToken cancellationToken = default,
-        Stream? posterImageStream = null,
-        string? posterFileName = null,
-        string? posterContentType = null,
-        long? posterFileSize = null)
+        CancellationToken cancellationToken = default)
     {
         var existingMovie = await _movieRepository.GetByIdAsync(movieId, cancellationToken);
         if (existingMovie is null)
@@ -207,90 +165,129 @@ public sealed class MovieService : IMovieService
             return (false, validation.ErrorMessage, null);
         }
 
+        var posterValidationError = ValidatePosterMetadata(posterUrl, posterPublicId);
+        if (posterValidationError is not null)
+            return (false, posterValidationError, null);
+
         var normalizedPosterUrl = NormalizeNullable(posterUrl);
+        var normalizedPosterPublicId = NormalizeNullable(posterPublicId);
         var previousPosterPublicId = existingMovie.PosterPublicId;
         var shouldDeletePreviousPosterAfterUpdate =
             !string.IsNullOrWhiteSpace(previousPosterPublicId)
-            && (posterImageStream is not null
-                || !string.Equals(
-                    existingMovie.PosterURL,
-                    normalizedPosterUrl,
-                    StringComparison.Ordinal));
-        StoredImageResult? uploadedPoster = null;
-        if (posterImageStream is not null)
+            && !string.Equals(previousPosterPublicId, normalizedPosterPublicId, StringComparison.Ordinal);
+
+        if (shouldDeletePreviousPosterAfterUpdate)
         {
-            var posterValidationError = ImageFileValidator.Validate(
-                posterFileName ?? string.Empty,
-                posterContentType,
-                posterFileSize ?? 0);
-
-            if (posterValidationError is not null)
-            {
-                return (false, posterValidationError, null);
-            }
-
             try
             {
-                uploadedPoster = await _imageStorageService.UploadImageAsync(
-                    posterImageStream,
-                    posterFileName!,
-                    PosterFolder,
-                    cancellationToken);
+                await _imageStorageService.DeleteImageAsync(previousPosterPublicId!, cancellationToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                return (false, PosterUploadFailedMessage, null);
+                return (false, PosterDeleteFailedMessage, null);
             }
         }
 
-        MovieEntity? updatedMovie;
+        var updatedMovie = await _movieRepository.UpdateMovieAsync(
+            movieId,
+            title.Trim(),
+            genres is null ? null : NormalizeGenres(genres),
+            ageRating!.Trim().ToUpperInvariant(),
+            director.Trim(),
+            NormalizeNullable(cast),
+            NormalizeNullable(synopsis),
+            durationMinutes,
+            showingFromDate,
+            showingToDate,
+            normalizedPosterUrl,
+            normalizedPosterPublicId,
+            NormalizeNullable(trailerUrl),
+            validation.Status!,
+            DateTime.UtcNow,
+            cancellationToken);
+
+        if (updatedMovie is null)
+        {
+            return (false, "Movie not found", null);
+        }
+
+        return (true, null, updatedMovie);
+    }
+
+    public async Task<(bool Succeeded, string? ErrorMessage, MovieEntity? Movie)> UpdatePosterAsync(
+        int movieId,
+        Stream imageStream,
+        string fileName,
+        string? contentType,
+        long fileSize,
+        CancellationToken cancellationToken = default)
+    {
+        var existingMovie = await _movieRepository.GetByIdAsync(movieId, cancellationToken);
+        if (existingMovie is null)
+            return (false, "Movie not found", null);
+
+        var validationError = ImageFileValidator.Validate(fileName, contentType, fileSize);
+        if (validationError is not null)
+            return (false, validationError, null);
+
+        StoredImageResult newPoster;
+        try
+        {
+            newPoster = await _imageStorageService.UploadImageAsync(
+                imageStream, fileName, PosterFolder, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return (false, PosterUploadFailedMessage, null);
+        }
+
+        if (!string.IsNullOrWhiteSpace(existingMovie.PosterPublicId))
+        {
+            try
+            {
+                await _imageStorageService.DeleteImageAsync(
+                    existingMovie.PosterPublicId, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                try
+                {
+                    await _imageStorageService.DeleteImageAsync(
+                        newPoster.PublicId, CancellationToken.None);
+                }
+                catch (Exception cleanupException) when (cleanupException is not OperationCanceledException)
+                {
+                }
+
+                return (false, PosterDeleteFailedMessage, null);
+            }
+        }
 
         try
         {
-            updatedMovie = await _movieRepository.UpdateMovieAsync(
+            var updatedMovie = await _movieRepository.UpdatePosterAsync(
                 movieId,
-                title.Trim(),
-                genres is null ? null : NormalizeGenres(genres),
-                ageRating!.Trim().ToUpperInvariant(),
-                director.Trim(),
-                NormalizeNullable(cast),
-                NormalizeNullable(synopsis),
-                durationMinutes,
-                showingFromDate,
-                showingToDate,
-                uploadedPoster?.SecureUrl ?? normalizedPosterUrl,
-                uploadedPoster?.PublicId,
-                NormalizeNullable(trailerUrl),
-                validation.Status!,
+                newPoster.SecureUrl,
+                newPoster.PublicId,
                 DateTime.UtcNow,
                 cancellationToken);
+            return updatedMovie is null
+                ? (false, "Movie not found", null)
+                : (true, null, updatedMovie);
         }
         catch
         {
-            if (uploadedPoster is not null)
+            try
             {
-                await _imageStorageService.DeleteImageAsync(uploadedPoster.PublicId, CancellationToken.None);
+                await _imageStorageService.DeleteImageAsync(
+                    newPoster.PublicId, CancellationToken.None);
+            }
+            catch (Exception cleanupException) when (cleanupException is not OperationCanceledException)
+            {
             }
 
             throw;
         }
-
-        if (updatedMovie is null)
-        {
-            if (uploadedPoster is not null)
-            {
-                await _imageStorageService.DeleteImageAsync(uploadedPoster.PublicId, cancellationToken);
-            }
-
-            return (false, "Movie not found", null);
-        }
-
-        if (shouldDeletePreviousPosterAfterUpdate)
-        {
-            await _imageStorageService.DeleteImageAsync(previousPosterPublicId!, cancellationToken);
-        }
-
-        return (true, null, updatedMovie);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> DeleteMovieAsync(
@@ -418,6 +415,15 @@ public sealed class MovieService : IMovieService
     private static string? NormalizeNullable(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string? ValidatePosterMetadata(string? posterUrl, string? posterPublicId)
+    {
+        var hasUrl = !string.IsNullOrWhiteSpace(posterUrl);
+        var hasPublicId = !string.IsNullOrWhiteSpace(posterPublicId);
+        return hasUrl == hasPublicId
+            ? null
+            : "PosterUrl and PosterPublicId must be provided together";
     }
 
     private static IReadOnlyCollection<string> NormalizeGenres(List<string>? genres)

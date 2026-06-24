@@ -58,7 +58,7 @@ public sealed class ShowtimeServiceTests
 
         Assert.False(result.Succeeded);
         Assert.Equal(
-            "Invalid showtime status. Available statuses: scheduled, ongoing, completed, cancelled",
+            "Invalid showtime status. (scheduled, ongoing, completed, cancelled)",
             result.ErrorMessage);
     }
 

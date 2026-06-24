@@ -1,4 +1,5 @@
 using MovieEntity = CinemaBooking.Domain.Entities.Movie;
+using CinemaBooking.Application.Common.Interfaces;
 
 namespace CinemaBooking.Application.Movie;
 
@@ -27,13 +28,10 @@ public interface IMovieService
         DateOnly? showingFromDate,
         DateOnly? showingToDate,
         string? posterUrl,
+        string? posterPublicId,
         string? trailerUrl,
         string? status,
-        CancellationToken cancellationToken = default,
-        Stream? posterImageStream = null,
-        string? posterFileName = null,
-        string? posterContentType = null,
-        long? posterFileSize = null);
+        CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, MovieEntity? Movie)> UpdateMovieAsync(
         int movieId,
@@ -47,13 +45,18 @@ public interface IMovieService
         DateOnly? showingFromDate,
         DateOnly? showingToDate,
         string? posterUrl,
+        string? posterPublicId,
         string? trailerUrl,
         string? status,
-        CancellationToken cancellationToken = default,
-        Stream? posterImageStream = null,
-        string? posterFileName = null,
-        string? posterContentType = null,
-        long? posterFileSize = null);
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage, MovieEntity? Movie)> UpdatePosterAsync(
+        int movieId,
+        Stream imageStream,
+        string fileName,
+        string? contentType,
+        long fileSize,
+        CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage)> DeleteMovieAsync(
         int movieId,

@@ -68,10 +68,9 @@ public sealed class MovieController : ControllerBase
     [HttpPost]
     [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> CreateMovie(
-        [FromForm] MovieRequest request,
+        [FromBody] MovieRequest request,
         CancellationToken cancellationToken)
     {
-        using var posterStream = request.PosterFile?.OpenReadStream();
         var result = await _movieService.CreateMovieAsync(
             request.Title,
             request.Genres,
@@ -83,13 +82,10 @@ public sealed class MovieController : ControllerBase
             request.ShowingFromDate,
             request.ShowingToDate,
             request.PosterUrl,
+            request.PosterPublicId,
             request.TrailerUrl,
             request.Status,
-            cancellationToken,
-            posterStream,
-            request.PosterFile?.FileName,
-            request.PosterFile?.ContentType,
-            request.PosterFile?.Length);
+            cancellationToken);
 
         if (!result.Succeeded)
         {
@@ -108,10 +104,9 @@ public sealed class MovieController : ControllerBase
     [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> UpdateMovie(
         int id,
-        [FromForm] MovieRequest request,
+        [FromBody] MovieRequest request,
         CancellationToken cancellationToken)
     {
-        using var posterStream = request.PosterFile?.OpenReadStream();
         var result = await _movieService.UpdateMovieAsync(
             id,
             request.Title,
@@ -124,13 +119,10 @@ public sealed class MovieController : ControllerBase
             request.ShowingFromDate,
             request.ShowingToDate,
             request.PosterUrl,
+            request.PosterPublicId,
             request.TrailerUrl,
             request.Status,
-            cancellationToken,
-            posterStream,
-            request.PosterFile?.FileName,
-            request.PosterFile?.ContentType,
-            request.PosterFile?.Length);
+            cancellationToken);
 
         if (!result.Succeeded)
         {
@@ -141,6 +133,33 @@ public sealed class MovieController : ControllerBase
 
             return BadRequest(new { message = result.ErrorMessage });
         }
+
+        return Ok(ToDetailResponse(result.Movie!));
+    }
+
+    [HttpPut("{id:int}/poster")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> UpdatePoster(
+        int id,
+        [FromForm] CinemaBooking.API.Contracts.Images.ImageUploadRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.File is null)
+            return BadRequest(new { message = "Poster file is required" });
+
+        await using var stream = request.File.OpenReadStream();
+        var result = await _movieService.UpdatePosterAsync(
+            id,
+            stream,
+            request.File.FileName,
+            request.File.ContentType,
+            request.File.Length,
+            cancellationToken);
+
+        if (!result.Succeeded)
+            return result.ErrorMessage == "Movie not found"
+                ? NotFound(new { message = result.ErrorMessage })
+                : BadRequest(new { message = result.ErrorMessage });
 
         return Ok(ToDetailResponse(result.Movie!));
     }
@@ -192,6 +211,7 @@ public sealed class MovieController : ControllerBase
             movie.ShowingFrom,
             movie.ShowingTo,
             movie.PosterURL,
+            movie.PosterPublicId,
             movie.TrailerURL,
             movie.Status);
     }
