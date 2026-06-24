@@ -60,4 +60,9 @@ public interface IBookingRepository
     Task IncrementVoucherUsageAsync(
         int voucherId,
         CancellationToken cancellationToken = default);
+
+    Task UpdateBookingStatusAsync(
+        int bookingId,
+        string status,
+        CancellationToken cancellationToken = default);
 }

@@ -13,10 +13,14 @@ public sealed class BookingService : IBookingService
     private const int HoldDurationMinutes = 10;
 
     private readonly IBookingRepository _bookingRepository;
+    private readonly IUserRepository _userRepository;
 
-    public BookingService(IBookingRepository bookingRepository)
+    public BookingService(
+        IBookingRepository bookingRepository,
+        IUserRepository userRepository)
     {
         _bookingRepository = bookingRepository;
+        _userRepository = userRepository;
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, List<int>? HoldIds, DateTime? ExpiresAt)> HoldSeatsAsync(
@@ -134,7 +138,15 @@ public sealed class BookingService : IBookingService
         }
 
         var totalBeforeDiscount = seatsSubTotal + fnbSubTotal;
-        var discountAmount = 0m;
+
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        var membershipDiscount = 0m;
+        if (user?.LoyaltyTier is not null)
+        {
+            membershipDiscount = Math.Round(totalBeforeDiscount * user.LoyaltyTier.DiscountRate, 0);
+        }
+
+        var discountAmount = membershipDiscount;
         BookingVoucher? bookingVoucher = null;
 
         if (!string.IsNullOrWhiteSpace(voucherCode))
@@ -147,7 +159,7 @@ public sealed class BookingService : IBookingService
             if (!voucher.IsActive)
                 return (false, "Mã giảm giá không còn khả dụng", null);
 
-            var now = DateTime.UtcNow;
+            var now = DateTime.Now;
             if (now < voucher.ValidFrom)
                 return (false, "Mã giảm giá chưa có hiệu lực", null);
 
@@ -160,9 +172,11 @@ public sealed class BookingService : IBookingService
             if (voucher.MinOrderValue.HasValue && totalBeforeDiscount < voucher.MinOrderValue.Value)
                 return (false, $"Đơn hàng tối thiểu {voucher.MinOrderValue.Value:N0}đ để sử dụng mã này", null);
 
-            discountAmount = voucher.DiscountType == "percentage"
+            var voucherDiscount = voucher.DiscountType == "percentage"
                 ? Math.Round(totalBeforeDiscount * voucher.DiscountValue / 100, 0)
                 : voucher.DiscountValue;
+
+            discountAmount += voucherDiscount;
 
             if (discountAmount > totalBeforeDiscount)
                 discountAmount = totalBeforeDiscount;
@@ -170,7 +184,7 @@ public sealed class BookingService : IBookingService
             bookingVoucher = new BookingVoucher
             {
                 VoucherID = voucher.VoucherID,
-                DiscountApplied = discountAmount,
+                DiscountApplied = voucherDiscount,
                 UsedAt = DateTime.Now
             };
         }
