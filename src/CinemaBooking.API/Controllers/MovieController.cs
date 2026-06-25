@@ -1,5 +1,6 @@
-using CinemaBooking.API.Contracts.Images;
+using CinemaBooking.API.Contracts.Movies;
 using CinemaBooking.Application.Movie;
+using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,7 +10,6 @@ namespace CinemaBooking.API.Controllers;
 
 [ApiController]
 [Route("api/movie")]
-[Authorize(Roles = Roles.Admin + "," + Roles.Manager + "," + Roles.Staff)]
 public sealed class MovieController : ControllerBase
 {
     private readonly IMovieService _movieService;
@@ -19,24 +19,110 @@ public sealed class MovieController : ControllerBase
         _movieService = movieService;
     }
 
-    [HttpPut("{id:int}/poster")]
-    public async Task<IActionResult> UploadPoster(
-        int id,
-        [FromForm] ImageUploadRequest model,
-        CancellationToken cancellationToken)
+    [HttpGet]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetMovies(
+        [FromQuery] string? status = null,
+        CancellationToken cancellationToken = default)
     {
-        if (model.File is null)
+        var movies = await _movieService.GetMoviesAsync(status, cancellationToken);
+
+        var response = movies.Select(ToListResponse);
+
+        return Ok(response);
+    }
+
+    [HttpGet("{id:int}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetMovieById(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var movie = await _movieService.GetMovieByIdAsync(id, cancellationToken);
+
+        if (movie is null)
         {
-            return BadRequest(new { message = "Image file is required" });
+            return NotFound(new { message = "Không tìm thấy phim" });
         }
 
-        await using var stream = model.File.OpenReadStream();
-        var result = await _movieService.UploadPosterAsync(
+        return Ok(ToDetailResponse(movie));
+    }
+
+    [HttpGet("search")]
+    [AllowAnonymous]
+    public async Task<IActionResult> SearchMovies(
+        [FromQuery] string keyword,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            return BadRequest(new { message = "Vui lòng nhập từ khoá tìm kiếm" });
+        }
+
+        var movies = await _movieService.SearchMoviesAsync(keyword, cancellationToken);
+
+        var response = movies.Select(ToListResponse);
+
+        return Ok(response);
+    }
+
+    [HttpPost]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> CreateMovie(
+        [FromBody] MovieRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _movieService.CreateMovieAsync(
+            request.Title,
+            request.Genres,
+            request.AgeRating,
+            request.Director,
+            request.Cast,
+            request.Synopsis,
+            request.DurationMinutes,
+            request.ShowingFromDate,
+            request.ShowingToDate,
+            request.PosterUrl,
+            request.PosterPublicId,
+            request.TrailerUrl,
+            request.Status,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { message = result.ErrorMessage });
+        }
+
+        var response = ToDetailResponse(result.Movie!);
+
+        return CreatedAtAction(
+            nameof(GetMovieById),
+            new { id = response.MovieId },
+            response);
+    }
+
+    [HttpPut("{id:int}")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> UpdateMovie(
+        int id,
+        [FromBody] MovieRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _movieService.UpdateMovieAsync(
             id,
-            stream,
-            model.File.FileName,
-            model.File.ContentType,
-            model.File.Length,
+            request.Title,
+            request.Genres,
+            request.AgeRating,
+            request.Director,
+            request.Cast,
+            request.Synopsis,
+            request.DurationMinutes,
+            request.ShowingFromDate,
+            request.ShowingToDate,
+            request.PosterUrl,
+            request.PosterPublicId,
+            request.TrailerUrl,
+            request.Status,
             cancellationToken);
 
         if (!result.Succeeded)
@@ -49,20 +135,43 @@ public sealed class MovieController : ControllerBase
             return BadRequest(new { message = result.ErrorMessage });
         }
 
-        return Ok(new
-        {
-            secureUrl = result.Movie!.PosterURL,
-            publicId = result.Movie.PosterPublicId,
-            movie = ToPosterResponse(result.Movie)
-        });
+        return Ok(ToDetailResponse(result.Movie!));
     }
 
-    [HttpDelete("{id:int}/poster")]
-    public async Task<IActionResult> DeletePoster(
+    [HttpPut("{id:int}/poster")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> UpdatePoster(
+        int id,
+        [FromForm] CinemaBooking.API.Contracts.Images.ImageUploadRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.File is null)
+            return BadRequest(new { message = "Poster file is required" });
+
+        await using var stream = request.File.OpenReadStream();
+        var result = await _movieService.UpdatePosterAsync(
+            id,
+            stream,
+            request.File.FileName,
+            request.File.ContentType,
+            request.File.Length,
+            cancellationToken);
+
+        if (!result.Succeeded)
+            return result.ErrorMessage == "Movie not found"
+                ? NotFound(new { message = result.ErrorMessage })
+                : BadRequest(new { message = result.ErrorMessage });
+
+        return Ok(ToDetailResponse(result.Movie!));
+    }
+
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> DeleteMovie(
         int id,
         CancellationToken cancellationToken)
     {
-        var result = await _movieService.DeletePosterAsync(id, cancellationToken);
+        var result = await _movieService.DeleteMovieAsync(id, cancellationToken);
 
         if (!result.Succeeded)
         {
@@ -71,21 +180,40 @@ public sealed class MovieController : ControllerBase
                 return NotFound(new { message = result.ErrorMessage });
             }
 
-            return BadRequest(new { message = result.ErrorMessage });
+            return Conflict(new { message = result.ErrorMessage });
         }
 
-        return Ok(ToPosterResponse(result.Movie!));
+        return NoContent();
     }
 
-    private static object ToPosterResponse(MovieEntity movie)
+    private static MovieListResponse ToListResponse(MovieEntity movie)
     {
-        return new
-        {
+        return new MovieListResponse(
             movie.MovieID,
             movie.Title,
+            movie.MovieGenres.Select(mg => mg.Genre.GenreName).ToList(),
+            EnumValueMapper.ToApiValue(movie.AgeRating),
+            movie.PosterURL,
+            movie.DurationMin,
+            EnumValueMapper.ToApiValue(movie.Status));
+    }
+
+    private static MovieDetailResponse ToDetailResponse(MovieEntity movie)
+    {
+        return new MovieDetailResponse(
+            movie.MovieID,
+            movie.Title,
+            movie.MovieGenres.Select(mg => mg.Genre.GenreName).ToList(),
+            EnumValueMapper.ToApiValue(movie.AgeRating),
+            movie.Director,
+            movie.Cast,
+            movie.Description,
+            movie.DurationMin,
+            movie.ShowingFrom,
+            movie.ShowingTo,
             movie.PosterURL,
             movie.PosterPublicId,
-            movie.UpdatedAt
-        };
+            movie.TrailerURL,
+            EnumValueMapper.ToApiValue(movie.Status));
     }
 }

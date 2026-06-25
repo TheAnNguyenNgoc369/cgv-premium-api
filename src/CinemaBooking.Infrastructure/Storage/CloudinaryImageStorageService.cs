@@ -57,12 +57,22 @@ public sealed class CloudinaryImageStorageService : IImageStorageService
         }
 
         var cloudinary = CreateClient();
-        var deletionParams = new DeletionParams(publicId);
+        var deletionParams = new DeletionParams(publicId)
+        {
+            Invalidate = true
+        };
         var result = await cloudinary.DestroyAsync(deletionParams);
 
         if (result.Error is not null)
         {
             throw new InvalidOperationException(result.Error.Message);
+        }
+
+        if (!string.Equals(result.Result, "ok", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(result.Result, "not found", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Cloudinary returned an unexpected deletion result: {result.Result ?? "unknown"}.");
         }
     }
 

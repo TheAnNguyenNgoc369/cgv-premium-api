@@ -13,6 +13,7 @@ public class User
     public string Role { get; set; } = null!;
     public int? CinemaID { get; set; }
     public string Status { get; set; } = "unverified";
+    public int TokenVersion { get; set; }
     public int? LoyaltyTierID { get; set; }
     public int TotalPoints { get; set; }
     public DateTime CreatedAt { get; set; }

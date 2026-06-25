@@ -1,0 +1,39 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using CinemaBooking.Domain.Entities;
+
+namespace CinemaBooking.Application.Showtimes;
+
+public interface IShowtimeService
+{
+    Task<(bool Succeeded, string? ErrorMessage, ShowtimePageResult? Page)> GetShowtimesAsync(
+        string? movieName, string? roomName, DateOnly? date, string? status,
+        int page, int pageSize, string? sortBy, string? sortDir,
+        CancellationToken cancellationToken = default);
+    Task<(bool Succeeded, string? ErrorMessage, Showtime? Showtime)> CreateShowtimeAsync(
+        int movieId, int roomId, DateTime startTime, decimal basePrice, string status,
+        CancellationToken cancellationToken = default);
+    Task<(bool Succeeded, string? ErrorMessage, Showtime? Showtime)> UpdateShowtimeAsync(
+        int id, int movieId, int roomId, DateTime startTime, decimal basePrice, string status,
+        CancellationToken cancellationToken = default);
+    Task<(bool Succeeded, string? ErrorMessage)> DeleteShowtimeAsync(
+        int id, CancellationToken cancellationToken = default);
+    Task<bool> IsSoldOutAsync(Showtime showtime, CancellationToken cancellationToken = default);
+    Task<List<Showtime>> GetShowtimesByMovieAsync(
+        int movieId,
+        DateOnly? date,
+        int? cinemaId,
+        CancellationToken cancellationToken = default);
+
+    Task<Showtime?> GetShowtimeByIdAsync(
+        int id,
+        CancellationToken cancellationToken = default);
+
+    Task<SeatMapResult?> GetSeatMapAsync(
+        int showtimeId,
+        CancellationToken cancellationToken = default);
+}
+

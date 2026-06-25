@@ -59,10 +59,10 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger"; // Đảm bảo đường dẫn là /swagger
 });
 
-
 if (!app.Environment.IsDevelopment())
 {
-    //app.UseHttpsRedirection();
+    app.UseHttpsRedirection();
+    app.UseHsts();
 }
 
 app.UseCors("AllowFrontend");

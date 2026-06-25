@@ -2,7 +2,6 @@ using CinemaBooking.API.Contracts.Images;
 using CinemaBooking.API.Contracts.Users;
 using CinemaBooking.Application.Users;
 using CinemaBooking.Domain.Entities;
-using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -72,7 +71,7 @@ public sealed class UserController : ControllerBase
         return Ok(ToProfileResponse(result.User!));
     }
 
-    [HttpPut("/api/users/profile/avatar")]
+    [HttpPut("profile/avatar")]
     public async Task<IActionResult> UploadAvatar(
         [FromForm] ImageUploadRequest model,
         CancellationToken cancellationToken)
@@ -114,7 +113,7 @@ public sealed class UserController : ControllerBase
         });
     }
 
-    [HttpDelete("/api/users/profile/avatar")]
+    [HttpDelete("profile/avatar")]
     public async Task<IActionResult> DeleteAvatar(CancellationToken cancellationToken)
     {
         if (!TryGetCurrentUserId(out var userId))
@@ -134,7 +133,7 @@ public sealed class UserController : ControllerBase
             return BadRequest(new { message = result.ErrorMessage });
         }
 
-        return Ok(ToProfileResponse(result.User!));
+        return Ok(new { message = result.Message });
     }
 
     [HttpGet("wallet")]
@@ -157,27 +156,6 @@ public sealed class UserController : ControllerBase
             wallet.WalletID,
             wallet.Balance
         });
-    }
-
-    [HttpDelete("{id:int}")]
-    [Authorize(Roles = Roles.Admin)]
-    public async Task<IActionResult> DeleteUser(
-        int id,
-        CancellationToken cancellationToken)
-    {
-        var result = await _userService.DeleteAsync(id, cancellationToken);
-
-        if (result.Succeeded)
-        {
-            return NoContent();
-        }
-
-        if (result.ErrorMessage == "User not found")
-        {
-            return NotFound(new { message = result.ErrorMessage });
-        }
-
-        return Conflict(new { message = result.ErrorMessage });
     }
 
     private bool TryGetCurrentUserId(out int userId)
