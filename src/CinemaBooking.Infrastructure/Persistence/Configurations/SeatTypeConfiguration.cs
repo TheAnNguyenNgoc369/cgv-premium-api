@@ -19,7 +19,6 @@ public class SeatTypeConfiguration : IEntityTypeConfiguration<SeatType>
 
         builder.ToTable(t =>
         {
-            t.HasCheckConstraint("CK_SeatType_TypeName", "[TypeName] IN ('standard', 'vip', 'couple')");
             t.HasCheckConstraint("CK_SeatType_ExtraPrice", "[ExtraPrice] >= 0");
         });
 

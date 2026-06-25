@@ -45,13 +45,22 @@ public sealed class BookingController : ControllerBase
     }
 
     [HttpPost("bookings")]
-    [Authorize(Roles = $"{Roles.Customer},{Roles.Staff},{Roles.Manager},{Roles.Admin}")]
+    [Authorize]
     public async Task<IActionResult> CreateBooking(
         [FromBody] CreateBookingRequest request,
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
+
+        if (!User.IsInRole(Roles.Customer) && !User.IsInRole(Roles.Staff))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                success = false,
+                message = "You do not have permission to create a booking."
+            });
+        }
 
         var userId = GetCurrentUserId();
 
@@ -76,7 +85,7 @@ public sealed class BookingController : ControllerBase
         var booking = await _bookingService.GetBookingByIdAsync(id, cancellationToken);
 
         if (booking is null)
-            return NotFound(new { success = false, message = "Không tìm thấy booking" });
+            return NotFound(new { success = false, message = "Booking not found." });
 
         var currentUserId = GetCurrentUserId();
         if (booking.UserID != currentUserId && !User.IsInRole(Roles.Admin) && !User.IsInRole(Roles.Staff))

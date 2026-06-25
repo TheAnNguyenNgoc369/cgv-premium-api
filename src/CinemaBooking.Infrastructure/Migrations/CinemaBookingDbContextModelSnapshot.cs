@@ -1202,7 +1202,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_SeatType_ExtraPrice", "[ExtraPrice] >= 0");
 
-                            t.HasCheckConstraint("CK_SeatType_TypeName", "[TypeName] IN ('standard', 'vip', 'couple')");
                         });
 
                     b.HasData(
