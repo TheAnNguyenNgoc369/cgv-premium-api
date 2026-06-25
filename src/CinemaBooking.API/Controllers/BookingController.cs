@@ -36,16 +36,16 @@ public sealed class BookingController : ControllerBase
         if (!result.Succeeded)
         {
             if (result.ErrorMessage == "One or more seats are already booked or being held")
-                return Conflict(new { message = result.ErrorMessage });
+                return Conflict(new { success = false, message = result.ErrorMessage });
 
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         return Ok(new HoldSeatsResponse(result.HoldIds!, result.ExpiresAt!.Value));
     }
 
     [HttpPost("bookings")]
-    [Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
+    [Authorize(Roles = $"{Roles.Customer},{Roles.Staff},{Roles.Manager},{Roles.Admin}")]
     public async Task<IActionResult> CreateBooking(
         [FromBody] CreateBookingRequest request,
         CancellationToken cancellationToken)
@@ -63,7 +63,7 @@ public sealed class BookingController : ControllerBase
             userId, request.ShowtimeId, request.SeatIds, fnbItems, request.VoucherCode, cancellationToken);
 
         if (!result.Succeeded)
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
 
         return Ok(MapToResponse(result.Booking!));
     }
@@ -76,7 +76,7 @@ public sealed class BookingController : ControllerBase
         var booking = await _bookingService.GetBookingByIdAsync(id, cancellationToken);
 
         if (booking is null)
-            return NotFound(new { message = "Không tìm thấy booking" });
+            return NotFound(new { success = false, message = "Không tìm thấy booking" });
 
         var currentUserId = GetCurrentUserId();
         if (booking.UserID != currentUserId && !User.IsInRole(Roles.Admin) && !User.IsInRole(Roles.Staff))

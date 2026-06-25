@@ -42,7 +42,7 @@ public sealed class MovieController : ControllerBase
 
         if (movie is null)
         {
-            return NotFound(new { message = "Không tìm thấy phim" });
+            return NotFound(new { success = false, message = "Không tìm thấy phim" });
         }
 
         return Ok(ToDetailResponse(movie));
@@ -56,7 +56,7 @@ public sealed class MovieController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(keyword))
         {
-            return BadRequest(new { message = "Vui lòng nhập từ khoá tìm kiếm" });
+            return BadRequest(new { success = false, message = "Vui lòng nhập từ khoá tìm kiếm" });
         }
 
         var movies = await _movieService.SearchMoviesAsync(keyword, cancellationToken);
@@ -90,7 +90,7 @@ public sealed class MovieController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         var response = ToDetailResponse(result.Movie!);
@@ -129,10 +129,10 @@ public sealed class MovieController : ControllerBase
         {
             if (result.ErrorMessage == "Movie not found")
             {
-                return NotFound(new { message = result.ErrorMessage });
+                return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         return Ok(ToDetailResponse(result.Movie!));
@@ -146,7 +146,7 @@ public sealed class MovieController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (request.File is null)
-            return BadRequest(new { message = "Poster file is required" });
+            return BadRequest(new { success = false, message = "Poster file is required" });
 
         await using var stream = request.File.OpenReadStream();
         var result = await _movieService.UpdatePosterAsync(
@@ -159,8 +159,8 @@ public sealed class MovieController : ControllerBase
 
         if (!result.Succeeded)
             return result.ErrorMessage == "Movie not found"
-                ? NotFound(new { message = result.ErrorMessage })
-                : BadRequest(new { message = result.ErrorMessage });
+                ? NotFound(new { success = false, message = result.ErrorMessage })
+                : BadRequest(new { success = false, message = result.ErrorMessage });
 
         return Ok(ToDetailResponse(result.Movie!));
     }
@@ -177,10 +177,10 @@ public sealed class MovieController : ControllerBase
         {
             if (result.ErrorMessage == "Movie not found")
             {
-                return NotFound(new { message = result.ErrorMessage });
+                return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return Conflict(new { message = result.ErrorMessage });
+            return Conflict(new { success = false, message = result.ErrorMessage });
         }
 
         return NoContent();

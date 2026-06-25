@@ -48,11 +48,12 @@ public sealed class AuthController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         return Ok(new
         {
+            success = true,
             message = "Đăng ký thành công",
             userId = result.UserId,
             verificationEmailSent = result.VerificationEmailSent
@@ -174,6 +175,7 @@ public sealed class AuthController : ControllerBase
 
         return Ok(new
         {
+            success = true,
             message = "Đăng nhập thành công",
             token,
             user = new
@@ -194,7 +196,7 @@ public sealed class AuthController : ControllerBase
     {
         if (!TryGetBearerToken(out var token))
         {
-            return BadRequest(new { message = "Bearer token is required" });
+            return BadRequest(new { success = false, message = "Bearer token is required" });
         }
 
         try
@@ -207,10 +209,10 @@ public sealed class AuthController : ControllerBase
         }
         catch (ArgumentException)
         {
-            return BadRequest(new { message = "Bearer token is invalid" });
+            return BadRequest(new { success = false, message = "Bearer token is invalid" });
         }
 
-        return Ok(new { message = "Logout successful" });
+        return Ok(new { success = true, message = "Logout successful" });
     }
 
     [HttpPost("verify-email")]
@@ -228,10 +230,10 @@ public sealed class AuthController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
-        return Ok(new { message = "Email verified successfully" });
+        return Ok(new { success = true, message = "Email verified successfully" });
     }
 
     private bool TryGetBearerToken(out string token)

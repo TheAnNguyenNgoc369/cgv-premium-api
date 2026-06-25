@@ -37,7 +37,7 @@ public sealed class RoomController : ControllerBase
 
         if (room is null)
         {
-            return NotFound(new { message = "Room not found" });
+            return NotFound(new { success = false, message = "Room not found" });
         }
 
         return Ok(ToResponse(room));
@@ -59,7 +59,7 @@ public sealed class RoomController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         var response = ToResponse(result.Room!);
@@ -90,10 +90,10 @@ public sealed class RoomController : ControllerBase
         {
             if (result.ErrorMessage == "Room not found")
             {
-                return NotFound(new { message = result.ErrorMessage });
+                return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         return Ok(ToResponse(result.Room!));
@@ -110,10 +110,10 @@ public sealed class RoomController : ControllerBase
         {
             if (result.ErrorMessage == "Room not found")
             {
-                return NotFound(new { message = result.ErrorMessage });
+                return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return Conflict(new { message = result.ErrorMessage });
+            return Conflict(new { success = false, message = result.ErrorMessage });
         }
 
         return NoContent();

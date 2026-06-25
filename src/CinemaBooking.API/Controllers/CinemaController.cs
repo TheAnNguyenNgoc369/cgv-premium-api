@@ -39,7 +39,7 @@ public sealed class CinemaController : ControllerBase
 
         if (cinema is null)
         {
-            return NotFound(new { message = "Cinema not found" });
+            return NotFound(new { success = false, message = "Cinema not found" });
         }
 
         return Ok(ToResponse(cinema));
@@ -58,7 +58,7 @@ public sealed class CinemaController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         var response = ToResponse(result.Cinema!);
@@ -86,10 +86,10 @@ public sealed class CinemaController : ControllerBase
         {
             if (result.ErrorMessage == "Cinema not found")
             {
-                return NotFound(new { message = result.ErrorMessage });
+                return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         return Ok(ToResponse(result.Cinema!));
@@ -106,10 +106,10 @@ public sealed class CinemaController : ControllerBase
         {
             if (result.ErrorMessage == "Cinema not found")
             {
-                return NotFound(new { message = result.ErrorMessage });
+                return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return Conflict(new { message = result.ErrorMessage });
+            return Conflict(new { success = false, message = result.ErrorMessage });
         }
 
         return NoContent();

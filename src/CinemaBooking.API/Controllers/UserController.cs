@@ -62,10 +62,10 @@ public sealed class UserController : ControllerBase
         {
             if (result.ErrorMessage == "User not found")
             {
-                return NotFound(new { message = result.ErrorMessage });
+                return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         return Ok(ToProfileResponse(result.User!));
@@ -83,7 +83,7 @@ public sealed class UserController : ControllerBase
 
         if (model.File is null)
         {
-            return BadRequest(new { message = "Image file is required" });
+            return BadRequest(new { success = false, message = "Image file is required" });
         }
 
         await using var stream = model.File.OpenReadStream();
@@ -99,10 +99,10 @@ public sealed class UserController : ControllerBase
         {
             if (result.ErrorMessage == "User not found")
             {
-                return NotFound(new { message = result.ErrorMessage });
+                return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         return Ok(new
@@ -127,13 +127,13 @@ public sealed class UserController : ControllerBase
         {
             if (result.ErrorMessage == "User not found")
             {
-                return NotFound(new { message = result.ErrorMessage });
+                return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
-        return Ok(new { message = result.Message });
+        return Ok(new { success = true, message = result.Message });
     }
 
     [HttpGet("wallet")]
