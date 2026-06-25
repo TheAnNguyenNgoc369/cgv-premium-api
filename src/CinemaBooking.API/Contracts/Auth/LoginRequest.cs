@@ -10,6 +10,7 @@ public sealed class LoginRequest
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Please enter password")]
+    [MinLength(6, ErrorMessage = "Password atleast 6 characters")]
     [DataType(DataType.Password)]
     public string Password { get; set; } = string.Empty;
 

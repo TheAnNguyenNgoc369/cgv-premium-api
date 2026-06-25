@@ -1,6 +1,7 @@
 using CinemaBooking.API;
 using CinemaBooking.Infrastructure;
 using CinemaBooking.Infrastructure.Persistence;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,13 +25,20 @@ builder.Logging.AddDebug();
 
 builder.Services.AddApiServices(builder.Configuration, builder.Environment);
 builder.Services.AddInfrastructureServices(builder.Configuration);
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor
+        | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
         policy
-            .WithOrigins("http://localhost:5173", "http://localhost:5174", "https://cgv-premium-fe.vercel.app")
+            .WithOrigins("http://localhost:5173", "http://localhost:5174", "https://cgv-premium-fe.vercel.app", "https://intent-legible-manatee.ngrok-free.app")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -43,6 +51,8 @@ builder.Services.AddDbContext<CinemaBookingDbContext>(options =>
     ));
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 //Seed initial data
 using (var scope = app.Services.CreateScope())
@@ -60,7 +70,6 @@ if (app.Environment.IsDevelopment())
 
 if (!app.Environment.IsDevelopment())
 {
-    app.UseHttpsRedirection();
     app.UseHsts();
 }
 

@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using CinemaBooking.API.Configuration;
+using CinemaBooking.API.OpenApi;
 using CinemaBooking.API.Services;
 using CinemaBooking.Application;
 using CinemaBooking.Application.Payments.VNPay;
@@ -27,6 +28,8 @@ public static class DependencyInjection
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen(options =>
         {
+            options.SchemaFilter<AuthRequestSchemaFilter>();
+
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Name = "Authorization",

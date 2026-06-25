@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Net;
+using System.Text.RegularExpressions;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
@@ -21,7 +22,11 @@ public sealed class AuthService : IAuthService
     private const int VerificationEmailResendCooldownSeconds = 60;
     private const int PasswordResetTokenExpirationMinutes = 15;
     private const int ForgotPasswordCooldownSeconds = 60;
-    private const string EnumerationSafeEmailMessage = "If the email is eligible, an email has been sent.";
+    private const string VerificationEmailSentMessage = "Verification email has been sent.";
+    private const string PasswordResetEmailSentMessage = "Password reset email has been sent.";
+    private const string EmailNotFoundMessage = "Email doesn't exist.";
+    private const string EmailAlreadyVerifiedMessage = "Email has been verified.";
+    private const string EmailSendFailedMessage = "Email could not be sent. Please try again later.";
 
     private readonly IUserRepository _userRepository;
     private readonly IEmailSender _emailSender;
@@ -44,6 +49,11 @@ public sealed class AuthService : IAuthService
         var normalizedFullName = fullName.Trim();
         var normalizedEmail = email.Trim();
         var normalizedPhone = phone.Trim();
+
+        if (!IsStrongPassword(password))
+        {
+            return (false, "Password must contain at least 1 uppercase letter, 1 number, and 1 special character", null, false);
+        }
 
         if (await _userRepository.EmailExistsAsync(normalizedEmail, cancellationToken))
         {
@@ -139,21 +149,26 @@ public sealed class AuthService : IAuthService
         return (true, null, user);
     }
 
-    public async Task<(bool Succeeded, string? ErrorMessage, bool VerificationEmailSent)> ResendVerificationEmailAsync(
+    public async Task<(bool Succeeded, string? Message, bool VerificationEmailSent, int? RetryAfterSeconds)> ResendVerificationEmailAsync(
         string email,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(email))
         {
-            return (true, EnumerationSafeEmailMessage, false);
+            return (false, EmailNotFoundMessage, false, null);
         }
 
         var normalizedEmail = email.Trim();
         var user = await _userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
 
-        if (user is null || user.EmailVerifiedAt.HasValue)
+        if (user is null)
         {
-            return (true, EnumerationSafeEmailMessage, false);
+            return (false, EmailNotFoundMessage, false, null);
+        }
+
+        if (user.EmailVerifiedAt.HasValue)
+        {
+            return (false, EmailAlreadyVerifiedMessage, false, null);
         }
 
         var now = DateTime.UtcNow;
@@ -165,7 +180,12 @@ public sealed class AuthService : IAuthService
         if (lastToken is not null
             && lastToken.CreatedAt > now.AddSeconds(-VerificationEmailResendCooldownSeconds))
         {
-            return (true, EnumerationSafeEmailMessage, false);
+            var retryAfterSeconds = GetRetryAfterSeconds(
+                lastToken.CreatedAt,
+                VerificationEmailResendCooldownSeconds,
+                now);
+
+            return (false, $"Please wait {retryAfterSeconds} seconds before requesting another verification email.", false, retryAfterSeconds);
         }
 
         var verificationToken = new EmailVerificationToken
@@ -193,27 +213,32 @@ public sealed class AuthService : IAuthService
                 verificationToken.Token,
                 cancellationToken);
 
-            return (true, EnumerationSafeEmailMessage, false);
+            return (false, EmailSendFailedMessage, false, null);
         }
 
-        return (true, EnumerationSafeEmailMessage, false);
+        return (true, VerificationEmailSentMessage, true, VerificationEmailResendCooldownSeconds);
     }
 
-    public async Task<(bool Succeeded, string? ErrorMessage)> ForgotPasswordAsync(
+    public async Task<(bool Succeeded, string? Message, bool EmailSent, int? RetryAfterSeconds)> ForgotPasswordAsync(
         string email,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(email))
         {
-            return (true, EnumerationSafeEmailMessage);
+            return (false, EmailNotFoundMessage, false, null);
         }
 
         var normalizedEmail = email.Trim();
         var user = await _userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
 
-        if (user is null || !user.EmailVerifiedAt.HasValue)
+        if (user is null)
         {
-            return (true, EnumerationSafeEmailMessage);
+            return (false, EmailNotFoundMessage, false, null);
+        }
+
+        if (!user.EmailVerifiedAt.HasValue)
+        {
+            return (false, "Email has not been verified.", false, null);
         }
 
         var now = DateTime.UtcNow;
@@ -225,7 +250,12 @@ public sealed class AuthService : IAuthService
         if (lastToken is not null
             && lastToken.CreatedAt > now.AddSeconds(-ForgotPasswordCooldownSeconds))
         {
-            return (true, EnumerationSafeEmailMessage);
+            var retryAfterSeconds = GetRetryAfterSeconds(
+                lastToken.CreatedAt,
+                ForgotPasswordCooldownSeconds,
+                now);
+
+            return (false, $"Please wait {retryAfterSeconds} seconds before requesting another password reset email.", false, retryAfterSeconds);
         }
 
         var resetToken = new PasswordResetToken
@@ -252,9 +282,11 @@ public sealed class AuthService : IAuthService
             await _userRepository.DeletePasswordResetTokenAsync(
                 resetToken.Token,
                 cancellationToken);
+
+            return (false, EmailSendFailedMessage, false, null);
         }
 
-        return (true, EnumerationSafeEmailMessage);
+        return (true, PasswordResetEmailSentMessage, true, ForgotPasswordCooldownSeconds);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> ResetPasswordAsync(
@@ -278,6 +310,11 @@ public sealed class AuthService : IAuthService
             return (false, "Mật khẩu mới phải có ít nhất 6 ký tự");
         }
 
+        if (!IsStrongPassword(newPassword))
+        {
+            return (false, "Password must contain at least 1 uppercase letter, 1 number, and 1 special character");
+        }
+
         if (!string.Equals(newPassword, confirmPassword, StringComparison.Ordinal))
         {
             return (false, "Mật khẩu xác nhận không khớp");
@@ -299,21 +336,21 @@ public sealed class AuthService : IAuthService
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> VerifyEmailAsync(
-        string token,
+        string code,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(token))
+        if (string.IsNullOrWhiteSpace(code))
         {
-            return (false, "Token is required");
+            return (false, "Code is required");
         }
 
         var verificationToken = await _userRepository.GetEmailVerificationTokenAsync(
-            token.Trim(),
+            code.Trim(),
             cancellationToken);
 
         if (verificationToken is null)
         {
-            return (false, "Token không hợp lệ");
+            return (false, "Code không hợp lệ");
         }
 
         if (verificationToken.VerifiedAt.HasValue)
@@ -325,12 +362,12 @@ public sealed class AuthService : IAuthService
 
         if (verificationToken.ExpiresAt <= now)
         {
-            return (false, "Token đã hết hạn");
+            return (false, "Code đã hết hạn");
         }
 
         if (verificationToken.User is null)
         {
-            return (false, "Token is invalid");
+            return (false, "Code is invalid");
         }
 
         if (verificationToken.User.EmailVerifiedAt.HasValue)
@@ -344,6 +381,23 @@ public sealed class AuthService : IAuthService
         await _userRepository.SaveChangesAsync(cancellationToken);
 
         return (true, null);
+    }
+
+    private static bool IsStrongPassword(string password)
+    {
+        return password.Length >= 6
+            && Regex.IsMatch(password, "[A-Z]")
+            && Regex.IsMatch(password, @"\d")
+            && Regex.IsMatch(password, "[^A-Za-z0-9]");
+    }
+
+    private static int GetRetryAfterSeconds(
+        DateTime requestedAt,
+        int cooldownSeconds,
+        DateTime now)
+    {
+        var availableAt = requestedAt.AddSeconds(cooldownSeconds);
+        return Math.Max(1, (int)Math.Ceiling((availableAt - now).TotalSeconds));
     }
 
     private static string HashPassword(string password)
@@ -499,7 +553,7 @@ public sealed class AuthService : IAuthService
     private static string BuildResetPasswordEmailBody(string fullName, string token)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var resetUrl = $"https://cgv-premium-fe.vercel.app/resetPassword?token={Uri.EscapeDataString(token)}";
+        var resetUrl = $"https://intent-legible-manatee.ngrok-free.app/resetPassword?token={Uri.EscapeDataString(token)}";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">

@@ -19,6 +19,9 @@ public sealed class RegisterRequest
 
     [Required(ErrorMessage = "Please enter password")]
     [MinLength(6, ErrorMessage = "Password atleast 6 characters")]
+    [RegularExpression(
+        @"^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{6,}$",
+        ErrorMessage = "Password must contain at least 1 uppercase letter, 1 number, and 1 special character")]
     [DataType(DataType.Password)]
     public string Password { get; set; } = string.Empty;
 

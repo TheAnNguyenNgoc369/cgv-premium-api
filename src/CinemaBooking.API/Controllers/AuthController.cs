@@ -12,7 +12,6 @@ namespace CinemaBooking.API.Controllers;
 [Route("api/auth")]
 public sealed class AuthController : ControllerBase
 {
-    private const string EnumerationSafeEmailMessage = "If the email is eligible, an email has been sent.";
     private static readonly TimeSpan EnumerationSafeMinimumResponseDuration = TimeSpan.FromMilliseconds(500);
 
     private readonly IAuthService _authService;
@@ -73,7 +72,7 @@ public sealed class AuthController : ControllerBase
 
         var startedAt = Stopwatch.GetTimestamp();
 
-        await _authService.ResendVerificationEmailAsync(
+        var result = await _authService.ResendVerificationEmailAsync(
             model.Email,
             cancellationToken);
 
@@ -81,8 +80,10 @@ public sealed class AuthController : ControllerBase
 
         return Ok(new
         {
-            success = true,
-            message = EnumerationSafeEmailMessage
+            success = result.Succeeded,
+            message = result.Message,
+            verificationEmailSent = result.VerificationEmailSent,
+            retryAfterSeconds = result.RetryAfterSeconds
         });
     }
 
@@ -99,7 +100,7 @@ public sealed class AuthController : ControllerBase
 
         var startedAt = Stopwatch.GetTimestamp();
 
-        await _authService.ForgotPasswordAsync(
+        var result = await _authService.ForgotPasswordAsync(
             model.Email,
             cancellationToken);
 
@@ -107,8 +108,10 @@ public sealed class AuthController : ControllerBase
 
         return Ok(new
         {
-            success = true,
-            message = EnumerationSafeEmailMessage
+            success = result.Succeeded,
+            message = result.Message,
+            emailSent = result.EmailSent,
+            retryAfterSeconds = result.RetryAfterSeconds
         });
     }
 
@@ -210,13 +213,18 @@ public sealed class AuthController : ControllerBase
         return Ok(new { message = "Logout successful" });
     }
 
-    [HttpGet("verify-email")]
+    [HttpPost("verify-email")]
     [AllowAnonymous]
     public async Task<IActionResult> VerifyEmail(
-        [FromQuery] string token,
+        [FromBody] VerifyEmailRequest model,
         CancellationToken cancellationToken)
     {
-        var result = await _authService.VerifyEmailAsync(token, cancellationToken);
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var result = await _authService.VerifyEmailAsync(model.Code, cancellationToken);
 
         if (!result.Succeeded)
         {
