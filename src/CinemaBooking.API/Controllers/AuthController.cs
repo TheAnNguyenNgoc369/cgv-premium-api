@@ -54,7 +54,7 @@ public sealed class AuthController : ControllerBase
         return Ok(new
         {
             success = true,
-            message = "Đăng ký thành công",
+            message = "Registration successful.",
             userId = result.UserId,
             verificationEmailSent = result.VerificationEmailSent
         });
@@ -176,7 +176,7 @@ public sealed class AuthController : ControllerBase
         return Ok(new
         {
             success = true,
-            message = "Đăng nhập thành công",
+            message = "Login successful.",
             token,
             user = new
             {

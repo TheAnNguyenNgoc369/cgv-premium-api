@@ -57,7 +57,7 @@ public sealed class AuthService : IAuthService
 
         if (await _userRepository.EmailExistsAsync(normalizedEmail, cancellationToken))
         {
-            return (false, "Email này đã được đăng ký", null, false);
+            return (false, "Email is already registered.", null, false);
         }
 
         var now = DateTime.UtcNow;
@@ -111,7 +111,7 @@ public sealed class AuthService : IAuthService
 
         if (user is null || !VerifyPassword(password, user.PasswordHash, out var requiresRehash))
         {
-            return (false, "Email hoặc mật khẩu không đúng", null);
+            return (false, "Email or password is incorrect.", null);
         }
 
         if (requiresRehash)
@@ -125,7 +125,7 @@ public sealed class AuthService : IAuthService
 
             if (!passwordHashUpdated)
             {
-                return (false, "Email hoặc mật khẩu không đúng", null);
+                return (false, "Email or password is incorrect.", null);
             }
 
             user.PasswordHash = upgradedPasswordHash;
@@ -133,12 +133,12 @@ public sealed class AuthService : IAuthService
 
         if (string.Equals(user.Status, LockedStatus, StringComparison.OrdinalIgnoreCase))
         {
-            return (false, "Tài khoản đã bị khoá. Vui lòng liên hệ hỗ trợ", null);
+            return (false, "Account is locked. Please contact support.", null);
         }
 
         if (string.Equals(user.Status, InactiveStatus, StringComparison.OrdinalIgnoreCase))
         {
-            return (false, "Tài khoản chưa được kích hoạt", null);
+            return (false, "Account is inactive.", null);
         }
 
         if (!user.EmailVerifiedAt.HasValue)
@@ -302,12 +302,12 @@ public sealed class AuthService : IAuthService
 
         if (string.IsNullOrWhiteSpace(newPassword))
         {
-            return (false, "Vui lòng nhập mật khẩu mới");
+            return (false, "Please enter a new password.");
         }
 
         if (newPassword.Length < 6)
         {
-            return (false, "Mật khẩu mới phải có ít nhất 6 ký tự");
+            return (false, "New password must contain at least 6 characters.");
         }
 
         if (!IsStrongPassword(newPassword))
@@ -317,7 +317,7 @@ public sealed class AuthService : IAuthService
 
         if (!string.Equals(newPassword, confirmPassword, StringComparison.Ordinal))
         {
-            return (false, "Mật khẩu xác nhận không khớp");
+            return (false, "Confirm password does not match.");
         }
 
         var now = DateTime.UtcNow;
@@ -350,19 +350,19 @@ public sealed class AuthService : IAuthService
 
         if (verificationToken is null)
         {
-            return (false, "Code không hợp lệ");
+            return (false, "Code is invalid.");
         }
 
         if (verificationToken.VerifiedAt.HasValue)
         {
-            return (false, "Email đã được xác thực trước đó");
+            return (false, "Email has already been verified.");
         }
 
         var now = DateTime.UtcNow;
 
         if (verificationToken.ExpiresAt <= now)
         {
-            return (false, "Code đã hết hạn");
+            return (false, "Code has expired.");
         }
 
         if (verificationToken.User is null)
@@ -511,6 +511,7 @@ public sealed class AuthService : IAuthService
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
         var encodedToken = WebUtility.HtmlEncode(token);
+        var verificationUrl = $"https://intent-legible-manatee.ngrok-free.app/verifyEmail?token={Uri.EscapeDataString(token)}";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
@@ -530,6 +531,9 @@ public sealed class AuthService : IAuthService
                         <div role="textbox" aria-label="Verification code" title="Select and copy this verification code" style="display: block; background: #f5f5f5; border: 2px dashed #c62828; border-radius: 6px; padding: 16px; color: #222222; font-family: Consolas, 'Courier New', monospace; font-size: 18px; font-weight: 700; letter-spacing: 1px; overflow-wrap: anywhere; cursor: text; user-select: all; -webkit-user-select: all;">
                             {encodedToken}
                         </div>
+                        <a href="{verificationUrl}" style="display: inline-block; margin-top: 16px; background: #c62828; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 40px; border-radius: 6px;">
+                            Verify Email
+                        </a>
                         <p style="margin: 12px 0 0; font-size: 12px; color: #777777;">Select the code, copy it, and paste it into the verification form.</p>
                         <p style="margin: 6px 0 0; font-size: 12px; color: #999999;">This code expires in {VerificationTokenExpirationMinutes} minutes.</p>
                     </div>

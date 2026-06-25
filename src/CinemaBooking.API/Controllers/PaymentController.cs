@@ -49,7 +49,7 @@ public sealed class PaymentController : ControllerBase
         var result = await _paymentService.ConfirmCashPaymentAsync(request, cancellationToken);
 
         if (result is null)
-            return NotFound(new { success = false, message = "Không tìm thấy thanh toán" });
+            return NotFound(new { success = false, message = "Payment not found." });
 
         return Ok(result);
     }
@@ -75,7 +75,7 @@ public sealed class PaymentController : ControllerBase
         var payment = await _paymentService.GetPaymentByIdAsync(id, cancellationToken);
 
         if (payment is null)
-            return NotFound(new { success = false, message = "Không tìm thấy thanh toán" });
+            return NotFound(new { success = false, message = "Payment not found." });
 
         return Ok(payment);
     }
@@ -88,7 +88,7 @@ public sealed class PaymentController : ControllerBase
         var payment = await _paymentService.GetPaymentByBookingIdAsync(bookingId, cancellationToken);
 
         if (payment is null)
-            return NotFound(new { success = false, message = "Không tìm thấy thanh toán cho booking này" });
+            return NotFound(new { success = false, message = "Payment for this booking was not found." });
 
         return Ok(payment);
     }

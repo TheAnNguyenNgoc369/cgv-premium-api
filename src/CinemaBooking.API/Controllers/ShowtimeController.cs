@@ -105,7 +105,7 @@ public sealed class ShowtimeController : ControllerBase
         var showtime = await _showtimeService.GetShowtimeByIdAsync(id, cancellationToken);
 
         if (showtime is null)
-            return NotFound(new { success = false, message = "Không tìm thấy suất chiếu" });
+            return NotFound(new { success = false, message = "Showtime not found." });
 
         return Ok(await ToManagementResponseAsync(showtime, cancellationToken));
     }
@@ -138,7 +138,7 @@ public sealed class ShowtimeController : ControllerBase
         var seatMap = await _showtimeService.GetSeatMapAsync(id, cancellationToken);
 
         if (seatMap is null)
-            return NotFound(new { success = false, message = "Không tìm thấy suất chiếu" });
+            return NotFound(new { success = false, message = "Showtime not found." });
 
         var response = new SeatMapResponse(
             seatMap.ShowtimeID,

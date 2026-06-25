@@ -24,7 +24,7 @@ public sealed class InvoiceController : ControllerBase
         var invoice = await _invoiceService.GetInvoiceByIdAsync(id, cancellationToken);
 
         if (invoice is null)
-            return NotFound(new { success = false, message = "Không tìm thấy hóa đơn" });
+            return NotFound(new { success = false, message = "Invoice not found." });
 
         return Ok(invoice);
     }
@@ -37,7 +37,7 @@ public sealed class InvoiceController : ControllerBase
         var invoice = await _invoiceService.GetInvoiceByBookingIdAsync(bookingId, cancellationToken);
 
         if (invoice is null)
-            return NotFound(new { success = false, message = "Không tìm thấy hóa đơn cho booking này" });
+            return NotFound(new { success = false, message = "Invoice for this booking was not found." });
 
         return Ok(invoice);
     }
@@ -50,7 +50,7 @@ public sealed class InvoiceController : ControllerBase
         var invoice = await _invoiceService.GetInvoiceByCodeAsync(code, cancellationToken);
 
         if (invoice is null)
-            return NotFound(new { success = false, message = "Không tìm thấy hóa đơn với mã này" });
+            return NotFound(new { success = false, message = "Invoice with this code was not found." });
 
         return Ok(invoice);
     }

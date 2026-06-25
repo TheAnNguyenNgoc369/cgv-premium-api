@@ -42,7 +42,7 @@ public sealed class MovieController : ControllerBase
 
         if (movie is null)
         {
-            return NotFound(new { success = false, message = "Không tìm thấy phim" });
+            return NotFound(new { success = false, message = "Movie not found." });
         }
 
         return Ok(ToDetailResponse(movie));
@@ -56,7 +56,7 @@ public sealed class MovieController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(keyword))
         {
-            return BadRequest(new { success = false, message = "Vui lòng nhập từ khoá tìm kiếm" });
+            return BadRequest(new { success = false, message = "Please enter a search keyword." });
         }
 
         var movies = await _movieService.SearchMoviesAsync(keyword, cancellationToken);

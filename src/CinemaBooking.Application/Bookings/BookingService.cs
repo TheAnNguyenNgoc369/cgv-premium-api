@@ -30,20 +30,20 @@ public sealed class BookingService : IBookingService
         CancellationToken cancellationToken = default)
     {
         if (seatIds.Count == 0)
-            return (false, "Vui lòng chọn ít nhất 1 ghế", null, null);
+            return (false, "Please select at least one seat.", null, null);
 
         var showtime = await _bookingRepository.GetShowtimeAsync(showtimeId, cancellationToken);
         if (showtime is null)
-            return (false, "Không tìm thấy suất chiếu", null, null);
+            return (false, "Showtime not found.", null, null);
 
         if (showtime.Room.Cinema.Status != "active")
-            return (false, "Rạp không hoạt động", null, null);
+            return (false, "Cinema is not active.", null, null);
 
         var unavailableSeatIds = await _bookingRepository.GetUnavailableSeatIdsAsync(
             showtimeId, seatIds, userId, cancellationToken);
 
         if (unavailableSeatIds.Count > 0)
-            return (false, $"Ghế ID {string.Join(", ", unavailableSeatIds)} đã được đặt hoặc đang được giữ bởi người khác", null, null);
+            return (false, $"Seats with IDs {string.Join(", ", unavailableSeatIds)} are booked or held by another user.", null, null);
 
         var now = DateTime.UtcNow;
         var expiresAt = now.AddMinutes(HoldDurationMinutes);
@@ -73,20 +73,20 @@ public sealed class BookingService : IBookingService
         CancellationToken cancellationToken = default)
     {
         if (seatIds.Count == 0)
-            return (false, "Vui lòng chọn ít nhất 1 ghế", null);
+            return (false, "Please select at least one seat.", null);
 
         var showtime = await _bookingRepository.GetShowtimeAsync(showtimeId, cancellationToken);
         if (showtime is null)
-            return (false, "Không tìm thấy suất chiếu", null);
+            return (false, "Showtime not found.", null);
 
         if (showtime.Room.Cinema.Status != "active")
-            return (false, "Rạp không hoạt động", null);
+            return (false, "Cinema is not active.", null);
 
         var myHolds = await _bookingRepository.GetMyActiveHoldsAsync(
             userId, showtimeId, seatIds, cancellationToken);
 
         if (myHolds.Count != seatIds.Count)
-            return (false, "Một số ghế chưa được giữ hoặc đã hết hạn, vui lòng chọn lại", null);
+            return (false, "Some seats are not held or the holds have expired. Please select them again.", null);
 
         var seats = await _bookingRepository.GetSeatsByIdsAsync(seatIds, cancellationToken);
 
@@ -109,7 +109,7 @@ public sealed class BookingService : IBookingService
             if (products.Count != productIds.Count)
             {
                 var missingIds = productIds.Except(products.Select(p => p.ItemID)).ToList();
-                return (false, $"Không tìm thấy sản phẩm ID: {string.Join(", ", missingIds)}", null);
+                return (false, $"Products with IDs {string.Join(", ", missingIds)} were not found.", null);
             }
 
             foreach (var fnbItem in fnbItems)
@@ -117,13 +117,13 @@ public sealed class BookingService : IBookingService
                 var product = products.First(p => p.ItemID == fnbItem.ItemId);
 
                 if (!product.IsOnMenu)
-                    return (false, $"Sản phẩm '{product.ItemName}' không còn phục vụ", null);
+                    return (false, $"Product '{product.ItemName}' is no longer available.", null);
 
                 if (product.Status != "in_stock")
-                    return (false, $"Sản phẩm '{product.ItemName}' tạm hết hàng", null);
+                    return (false, $"Product '{product.ItemName}' is out of stock.", null);
 
                 if (product.StockQuantity < fnbItem.Quantity)
-                    return (false, $"Sản phẩm '{product.ItemName}' chỉ còn {product.StockQuantity} sản phẩm", null);
+                    return (false, $"Only {product.StockQuantity} units of '{product.ItemName}' are available.", null);
 
                 var itemSubTotal = product.Price * fnbItem.Quantity;
                 fnbSubTotal += itemSubTotal;
@@ -155,23 +155,23 @@ public sealed class BookingService : IBookingService
             var voucher = await _bookingRepository.GetVoucherByCodeAsync(voucherCode.Trim(), cancellationToken);
 
             if (voucher is null)
-                return (false, "Mã giảm giá không tồn tại", null);
+                return (false, "Voucher code does not exist.", null);
 
             if (!voucher.IsActive)
-                return (false, "Mã giảm giá không còn khả dụng", null);
+                return (false, "Voucher is not available.", null);
 
             var now = DateTime.Now;
             if (now < voucher.ValidFrom)
-                return (false, "Mã giảm giá chưa có hiệu lực", null);
+                return (false, "Voucher is not active yet.", null);
 
             if (now > voucher.ValidUntil)
-                return (false, "Mã giảm giá đã hết hạn", null);
+                return (false, "Voucher has expired.", null);
 
             if (voucher.MaxUses.HasValue && voucher.UsedCount >= voucher.MaxUses.Value)
-                return (false, "Mã giảm giá đã hết lượt sử dụng", null);
+                return (false, "Voucher usage limit has been reached.", null);
 
             if (voucher.MinOrderValue.HasValue && totalBeforeDiscount < voucher.MinOrderValue.Value)
-                return (false, $"Đơn hàng tối thiểu {voucher.MinOrderValue.Value:N0}đ để sử dụng mã này", null);
+                return (false, $"A minimum order value of {voucher.MinOrderValue.Value:N0} VND is required to use this voucher.", null);
 
             var voucherDiscount = voucher.DiscountType == "percent"
                 ? Math.Round(totalBeforeDiscount * voucher.DiscountValue / 100, 0)
