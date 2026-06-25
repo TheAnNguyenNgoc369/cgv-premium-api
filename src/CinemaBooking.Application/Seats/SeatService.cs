@@ -91,7 +91,7 @@ public sealed class SeatService : ISeatService
         var normalizedType = NormalizeSeatType(type);
         if (normalizedType is null)
         {
-            return (false, "Type must be STANDARD, VIP, or COUPLE", null);
+            return (false, "Type is required.", null);
         }
 
         var seatType = await _seatRepository.GetSeatTypeByNameAsync(normalizedType, cancellationToken);
@@ -185,7 +185,7 @@ public sealed class SeatService : ISeatService
         var normalizedType = NormalizeSeatType(seatType);
         if (normalizedType is null)
         {
-            return (false, "SeatType must be STANDARD, VIP, or COUPLE", []);
+            return (false, "SeatType is required.", []);
         }
 
         var type = await _seatRepository.GetSeatTypeByNameAsync(normalizedType, cancellationToken);
@@ -263,7 +263,7 @@ public sealed class SeatService : ISeatService
         var normalizedType = NormalizeSeatType(type);
         if (normalizedType is null)
         {
-            return (false, "Type must be STANDARD, VIP, or COUPLE", null, null, null, null);
+            return (false, "Type is required.", null, null, null, null);
         }
 
         var seatType = await _seatRepository.GetSeatTypeByNameAsync(normalizedType, cancellationToken);
@@ -295,7 +295,7 @@ public sealed class SeatService : ISeatService
     {
         return string.IsNullOrWhiteSpace(type)
             ? null
-            : EnumValueMapper.Validate(type, "Type", DatabaseEnumMappings.SeatTypes).DatabaseValue;
+            : type.Trim().ToLowerInvariant();
     }
 
     private static string? NormalizeSeatStatus(string status)

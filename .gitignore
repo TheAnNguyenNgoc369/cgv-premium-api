@@ -232,6 +232,10 @@ ecf/
 rcf/
 /agent/
 /tests/
+!/tests/
+!/tests/CinemaBooking.API.Tests/
+!/tests/CinemaBooking.API.Tests/*.cs
+!/tests/CinemaBooking.API.Tests/*.csproj
 
 # Windows Store app package directories and files
 AppPackages/

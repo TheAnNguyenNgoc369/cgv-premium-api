@@ -24,8 +24,6 @@ public static class DatabaseEnumMappings
             ["ACTIVE"] = "active", ["INACTIVE"] = "inactive",
             ["DISABLED"] = "inactive", ["MAINTENANCE"] = "inactive"
         };
-    public static readonly IReadOnlyDictionary<string, string> SeatTypes =
-        EnumValueMapper.CreateMappings("standard", "vip", "couple");
     public static readonly IReadOnlyDictionary<string, string> PaymentMethods =
         EnumValueMapper.CreateMappings("vnpay", "momo", "credit_card", "banking", "cash", "wallet");
     public static readonly IReadOnlyDictionary<string, string> BookingStatuses =

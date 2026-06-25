@@ -36,7 +36,7 @@ public sealed class GenreController : ControllerBase
 
         if (genre is null)
         {
-            return NotFound(new { message = "Genre not found" });
+            return NotFound(new { success = false, message = "Genre not found" });
         }
 
         return Ok(ToResponse(genre));
@@ -53,7 +53,7 @@ public sealed class GenreController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         var response = ToResponse(result.Genre!);
@@ -79,10 +79,10 @@ public sealed class GenreController : ControllerBase
         {
             if (result.ErrorMessage == "Genre not found")
             {
-                return NotFound(new { message = result.ErrorMessage });
+                return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         return Ok(ToResponse(result.Genre!));
@@ -99,10 +99,10 @@ public sealed class GenreController : ControllerBase
         {
             if (result.ErrorMessage == "Genre not found")
             {
-                return NotFound(new { message = result.ErrorMessage });
+                return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return Conflict(new { message = result.ErrorMessage });
+            return Conflict(new { success = false, message = result.ErrorMessage });
         }
 
         return NoContent();

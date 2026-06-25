@@ -31,7 +31,7 @@ public sealed class VNPayService : IVNPayService
             ["vnp_CurrCode"] = _settings.CurrCode,
             ["vnp_IpAddr"] = ipAddress,
             ["vnp_Locale"] = _settings.Locale,
-            ["vnp_OrderInfo"] = $"Thanh toan ve xem phim - {booking.BookingCode}",
+            ["vnp_OrderInfo"] = $"Cinema ticket payment - {booking.BookingCode}",
             ["vnp_OrderType"] = "other",
             ["vnp_ReturnUrl"] = _settings.ReturnUrl,
             ["vnp_TxnRef"] = $"{booking.BookingCode}_{payment.PaymentID}_{DateTime.Now.Ticks}"

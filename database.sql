@@ -190,7 +190,6 @@ CREATE TABLE SeatType (
     ExtraPrice DECIMAL(18,2) NOT NULL CONSTRAINT DF_SeatType_ExtraPrice DEFAULT 0,
     CONSTRAINT PK_SeatType PRIMARY KEY (SeatTypeID),
     CONSTRAINT UQ_SeatType_TypeName UNIQUE (TypeName),
-    CONSTRAINT CK_SeatType_TypeName CHECK (TypeName IN ('standard', 'vip', 'couple')),
     CONSTRAINT CK_SeatType_ExtraPrice CHECK (ExtraPrice >= 0)
 );
 GO

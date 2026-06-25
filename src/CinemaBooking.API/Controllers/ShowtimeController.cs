@@ -30,7 +30,7 @@ public sealed class ShowtimeController : ControllerBase
     {
         var result = await _showtimeService.GetShowtimesAsync(
             movieName, roomName, date, status, page, pageSize, sortBy, sortDir, cancellationToken);
-        if (!result.Succeeded) return BadRequest(new { message = result.ErrorMessage });
+        if (!result.Succeeded) return BadRequest(new { success = false, message = result.ErrorMessage });
         var data = result.Page!;
         var items = new List<ShowtimeManagementResponse>();
         foreach (var showtime in data.Items)
@@ -105,7 +105,7 @@ public sealed class ShowtimeController : ControllerBase
         var showtime = await _showtimeService.GetShowtimeByIdAsync(id, cancellationToken);
 
         if (showtime is null)
-            return NotFound(new { message = "Không tìm thấy suất chiếu" });
+            return NotFound(new { success = false, message = "Showtime not found." });
 
         return Ok(await ToManagementResponseAsync(showtime, cancellationToken));
     }
@@ -123,11 +123,11 @@ public sealed class ShowtimeController : ControllerBase
     private IActionResult MapWriteError(string? message) => message switch
     {
         "Showtime not found" or "Movie not found" or "Room not found" =>
-            NotFound(new { message }),
+            NotFound(new { success = false, message }),
         "Showtime conflicts with another showtime in the same room"
             or "Showtime has active bookings or seat holds" =>
-            Conflict(new { message }),
-        _ => BadRequest(new { message })
+            Conflict(new { success = false, message }),
+        _ => BadRequest(new { success = false, message })
     };
 
     [HttpGet("showtimes/{id}/seats")]
@@ -138,7 +138,7 @@ public sealed class ShowtimeController : ControllerBase
         var seatMap = await _showtimeService.GetSeatMapAsync(id, cancellationToken);
 
         if (seatMap is null)
-            return NotFound(new { message = "Không tìm thấy suất chiếu" });
+            return NotFound(new { success = false, message = "Showtime not found." });
 
         var response = new SeatMapResponse(
             seatMap.ShowtimeID,

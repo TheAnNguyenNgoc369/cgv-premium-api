@@ -16,15 +16,15 @@ public interface IAuthService
         string password,
         CancellationToken cancellationToken = default);
 
-    Task<(bool Succeeded, string? ErrorMessage, bool VerificationEmailSent)> ResendVerificationEmailAsync(
+    Task<(bool Succeeded, string? Message, bool VerificationEmailSent, int? RetryAfterSeconds)> ResendVerificationEmailAsync(
         string email,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage)> VerifyEmailAsync(
-        string token,
+        string code,
         CancellationToken cancellationToken = default);
 
-    Task<(bool Succeeded, string? ErrorMessage)> ForgotPasswordAsync(
+    Task<(bool Succeeded, string? Message, bool EmailSent, int? RetryAfterSeconds)> ForgotPasswordAsync(
         string email,
         CancellationToken cancellationToken = default);
 

@@ -28,7 +28,7 @@ public sealed class SeatController : ControllerBase
         var seats = await _seatService.GetSeatsByRoomAsync(roomId, cancellationToken);
         if (seats is null)
         {
-            return NotFound(new { message = "Room not found" });
+            return NotFound(new { success = false, message = "Room not found" });
         }
 
         return Ok(seats.Select(ToResponse));
@@ -126,16 +126,16 @@ public sealed class SeatController : ControllerBase
     {
         if (errorMessage is "Room not found" or "Seat not found")
         {
-            return NotFound(new { message = errorMessage });
+            return NotFound(new { success = false, message = errorMessage });
         }
 
         if (errorMessage is "Room has active or upcoming schedules"
             or "Seat has related booking or hold records")
         {
-            return Conflict(new { message = errorMessage });
+            return Conflict(new { success = false, message = errorMessage });
         }
 
-        return BadRequest(new { message = errorMessage });
+        return BadRequest(new { success = false, message = errorMessage });
     }
 
     private static SeatResponse ToResponse(Seat seat)

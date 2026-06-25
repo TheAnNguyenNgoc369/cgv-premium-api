@@ -12,7 +12,6 @@ namespace CinemaBooking.API.Controllers;
 [Route("api/auth")]
 public sealed class AuthController : ControllerBase
 {
-    private const string EnumerationSafeEmailMessage = "If the email is eligible, an email has been sent.";
     private static readonly TimeSpan EnumerationSafeMinimumResponseDuration = TimeSpan.FromMilliseconds(500);
 
     private readonly IAuthService _authService;
@@ -49,12 +48,13 @@ public sealed class AuthController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         return Ok(new
         {
-            message = "Đăng ký thành công",
+            success = true,
+            message = "Registration successful.",
             userId = result.UserId,
             verificationEmailSent = result.VerificationEmailSent
         });
@@ -73,7 +73,7 @@ public sealed class AuthController : ControllerBase
 
         var startedAt = Stopwatch.GetTimestamp();
 
-        await _authService.ResendVerificationEmailAsync(
+        var result = await _authService.ResendVerificationEmailAsync(
             model.Email,
             cancellationToken);
 
@@ -81,8 +81,10 @@ public sealed class AuthController : ControllerBase
 
         return Ok(new
         {
-            success = true,
-            message = EnumerationSafeEmailMessage
+            success = result.Succeeded,
+            message = result.Message,
+            verificationEmailSent = result.VerificationEmailSent,
+            retryAfterSeconds = result.RetryAfterSeconds
         });
     }
 
@@ -99,7 +101,7 @@ public sealed class AuthController : ControllerBase
 
         var startedAt = Stopwatch.GetTimestamp();
 
-        await _authService.ForgotPasswordAsync(
+        var result = await _authService.ForgotPasswordAsync(
             model.Email,
             cancellationToken);
 
@@ -107,8 +109,10 @@ public sealed class AuthController : ControllerBase
 
         return Ok(new
         {
-            success = true,
-            message = EnumerationSafeEmailMessage
+            success = result.Succeeded,
+            message = result.Message,
+            emailSent = result.EmailSent,
+            retryAfterSeconds = result.RetryAfterSeconds
         });
     }
 
@@ -171,7 +175,8 @@ public sealed class AuthController : ControllerBase
 
         return Ok(new
         {
-            message = "Đăng nhập thành công",
+            success = true,
+            message = "Login successful.",
             token,
             user = new
             {
@@ -191,7 +196,7 @@ public sealed class AuthController : ControllerBase
     {
         if (!TryGetBearerToken(out var token))
         {
-            return BadRequest(new { message = "Bearer token is required" });
+            return BadRequest(new { success = false, message = "Bearer token is required" });
         }
 
         try
@@ -204,26 +209,31 @@ public sealed class AuthController : ControllerBase
         }
         catch (ArgumentException)
         {
-            return BadRequest(new { message = "Bearer token is invalid" });
+            return BadRequest(new { success = false, message = "Bearer token is invalid" });
         }
 
-        return Ok(new { message = "Logout successful" });
+        return Ok(new { success = true, message = "Logout successful" });
     }
 
-    [HttpGet("verify-email")]
+    [HttpPost("verify-email")]
     [AllowAnonymous]
     public async Task<IActionResult> VerifyEmail(
-        [FromQuery] string token,
+        [FromBody] VerifyEmailRequest model,
         CancellationToken cancellationToken)
     {
-        var result = await _authService.VerifyEmailAsync(token, cancellationToken);
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var result = await _authService.VerifyEmailAsync(model.Code, cancellationToken);
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
-        return Ok(new { message = "Email verified successfully" });
+        return Ok(new { success = true, message = "Email verified successfully" });
     }
 
     private bool TryGetBearerToken(out string token)
