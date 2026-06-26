@@ -49,6 +49,15 @@ public sealed class SeatRepository : ISeatRepository
                 cancellationToken);
     }
 
+    public Task<Seat?> GetSeatByIdAsync(
+        int seatId,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Seats
+            .AsNoTracking()
+            .FirstOrDefaultAsync(seat => seat.SeatID == seatId, cancellationToken);
+    }
+
     public Task<SeatType?> GetSeatTypeByNameAsync(
         string typeName,
         CancellationToken cancellationToken = default)
@@ -155,14 +164,11 @@ public sealed class SeatRepository : ISeatRepository
     }
 
     public async Task<bool> DeleteAsync(
-        int roomId,
         int seatId,
         CancellationToken cancellationToken = default)
     {
         var seat = await _dbContext.Seats
-            .FirstOrDefaultAsync(
-                s => s.RoomID == roomId && s.SeatID == seatId,
-                cancellationToken);
+            .FirstOrDefaultAsync(s => s.SeatID == seatId, cancellationToken);
 
         if (seat is null)
         {

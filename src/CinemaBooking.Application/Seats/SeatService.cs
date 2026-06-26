@@ -119,21 +119,16 @@ public sealed class SeatService : ISeatService
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> DeleteSeatAsync(
-        int roomId,
         int seatId,
         CancellationToken cancellationToken = default)
     {
-        if (await _seatRepository.GetRoomByIdAsync(roomId, cancellationToken) is null)
-        {
-            return (false, "Room not found");
-        }
-
-        if (await _seatRepository.GetSeatByIdAsync(roomId, seatId, cancellationToken) is null)
+        var seat = await _seatRepository.GetSeatByIdAsync(seatId, cancellationToken);
+        if (seat is null)
         {
             return (false, "Seat not found");
         }
 
-        if (await _seatRepository.HasActiveOrUpcomingShowtimesAsync(roomId, cancellationToken))
+        if (await _seatRepository.HasActiveOrUpcomingShowtimesAsync(seat.RoomID, cancellationToken))
         {
             return (false, "Room has active or upcoming schedules");
         }
@@ -143,7 +138,7 @@ public sealed class SeatService : ISeatService
             return (false, "Seat has related booking or hold records");
         }
 
-        return await _seatRepository.DeleteAsync(roomId, seatId, cancellationToken)
+        return await _seatRepository.DeleteAsync(seatId, cancellationToken)
             ? (true, null)
             : (false, "Seat not found");
     }

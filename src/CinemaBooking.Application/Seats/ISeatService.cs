@@ -25,7 +25,6 @@ public interface ISeatService
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage)> DeleteSeatAsync(
-        int roomId,
         int seatId,
         CancellationToken cancellationToken = default);
 

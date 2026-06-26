@@ -84,13 +84,12 @@ public sealed class SeatController : ControllerBase
         return Ok(ToResponse(result.Seat!));
     }
 
-    [HttpDelete("seats/{seatId:int}")]
+    [HttpDelete("~/api/seats/{seatId:int}")]
     public async Task<IActionResult> DeleteSeat(
-        int roomId,
         int seatId,
         CancellationToken cancellationToken)
     {
-        var result = await _seatService.DeleteSeatAsync(roomId, seatId, cancellationToken);
+        var result = await _seatService.DeleteSeatAsync(seatId, cancellationToken);
 
         if (!result.Succeeded)
         {
