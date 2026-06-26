@@ -52,7 +52,6 @@ public sealed class RoomController : ControllerBase
             request.CinemaId,
             request.Name,
             request.Type,
-            request.Capacity,
             request.Status,
             request.Description,
             cancellationToken);
@@ -81,7 +80,6 @@ public sealed class RoomController : ControllerBase
             request.CinemaId,
             request.Name,
             request.Type,
-            request.Capacity,
             request.Status,
             request.Description,
             cancellationToken);

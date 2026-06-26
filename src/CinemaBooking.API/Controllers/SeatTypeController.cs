@@ -50,6 +50,7 @@ public sealed class SeatTypeController : ControllerBase
 
         var result = await _seatTypeService.CreateSeatTypeAsync(
             request.TypeName,
+            request.Capacity,
             request.ExtraPrice,
             cancellationToken);
 
@@ -79,6 +80,7 @@ public sealed class SeatTypeController : ControllerBase
         var result = await _seatTypeService.UpdateSeatTypeAsync(
             id,
             request.TypeName,
+            request.Capacity,
             request.ExtraPrice,
             cancellationToken);
 
@@ -114,6 +116,7 @@ public sealed class SeatTypeController : ControllerBase
         return new SeatTypeResponse(
             seatType.SeatTypeID,
             seatType.TypeName,
+            seatType.Capacity,
             seatType.ExtraPrice);
     }
 }

@@ -12,7 +12,6 @@ public interface IRoomService
         int cinemaId,
         string name,
         string type,
-        int capacity,
         string status,
         string? description,
         CancellationToken cancellationToken = default);
@@ -22,7 +21,6 @@ public interface IRoomService
         int cinemaId,
         string name,
         string type,
-        int capacity,
         string status,
         string? description,
         CancellationToken cancellationToken = default);

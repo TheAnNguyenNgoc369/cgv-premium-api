@@ -14,6 +14,7 @@ public class RoomConfiguration : IEntityTypeConfiguration<Room>
 
         builder.Property(r => r.RoomName).HasMaxLength(50).IsRequired();
         builder.Property(r => r.RoomType).HasMaxLength(20).IsRequired();
+        builder.Property(r => r.Capacity).HasDefaultValue(0);
         builder.Property(r => r.Description).HasMaxLength(500);
         builder.Property(r => r.Status).HasMaxLength(20).IsRequired().HasDefaultValue("active");
         builder.Property(r => r.CreatedAt).HasDefaultValueSql("GETDATE()");
@@ -31,7 +32,7 @@ public class RoomConfiguration : IEntityTypeConfiguration<Room>
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_Room_RoomType", "[RoomType] IN ('Standard', 'VIP', 'IMAX', '3D')");
-            t.HasCheckConstraint("CK_Room_Capacity", "[Capacity] > 0");
+            t.HasCheckConstraint("CK_Room_Capacity", "[Capacity] >= 0");
             t.HasCheckConstraint("CK_Room_Status", "[Status] IN ('active', 'maintenance', 'inactive')");
         });
     }

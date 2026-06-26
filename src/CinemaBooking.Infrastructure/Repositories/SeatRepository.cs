@@ -55,6 +55,7 @@ public sealed class SeatRepository : ISeatRepository
     {
         return _dbContext.Seats
             .AsNoTracking()
+            .Include(seat => seat.SeatType)
             .FirstOrDefaultAsync(seat => seat.SeatID == seatId, cancellationToken);
     }
 
@@ -65,6 +66,15 @@ public sealed class SeatRepository : ISeatRepository
         return _dbContext.SeatTypes
             .AsNoTracking()
             .FirstOrDefaultAsync(type => type.TypeName == typeName, cancellationToken);
+    }
+
+    public Task<SeatType?> GetSeatTypeByIdAsync(
+        int seatTypeId,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.SeatTypes
+            .AsNoTracking()
+            .FirstOrDefaultAsync(type => type.SeatTypeID == seatTypeId, cancellationToken);
     }
 
     public Task<int> CountSeatsByRoomAsync(
@@ -114,6 +124,9 @@ public sealed class SeatRepository : ISeatRepository
         return await _dbContext.BookingSeats
             .AsNoTracking()
             .AnyAsync(bookingSeat => bookingSeat.SeatID == seatId, cancellationToken)
+            || await _dbContext.Tickets
+                .AsNoTracking()
+                .AnyAsync(ticket => ticket.BookingSeat.SeatID == seatId, cancellationToken)
             || await _dbContext.SeatHolds
                 .AsNoTracking()
                 .AnyAsync(hold => hold.SeatID == seatId, cancellationToken);
@@ -124,6 +137,9 @@ public sealed class SeatRepository : ISeatRepository
         CancellationToken cancellationToken = default)
     {
         _dbContext.Seats.Add(seat);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await RecalculateRoomCapacityAsync(seat.RoomID, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _dbContext.Entry(seat)
@@ -156,6 +172,9 @@ public sealed class SeatRepository : ISeatRepository
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        await RecalculateRoomCapacityAsync(roomId, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
         await _dbContext.Entry(seat)
             .Reference(s => s.SeatType)
             .LoadAsync(cancellationToken);
@@ -175,7 +194,11 @@ public sealed class SeatRepository : ISeatRepository
             return false;
         }
 
+        var roomId = seat.RoomID;
         _dbContext.Seats.Remove(seat);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await RecalculateRoomCapacityAsync(roomId, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return true;
@@ -216,6 +239,9 @@ public sealed class SeatRepository : ISeatRepository
         _dbContext.Seats.AddRange(requestedSeats.Values);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        await RecalculateRoomCapacityAsync(roomId, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
         return await GetSeatsByRoomAsync(roomId, cancellationToken);
     }
 
@@ -238,5 +264,27 @@ public sealed class SeatRepository : ISeatRepository
         return bookingSeatIds
             .Concat(holdSeatIds)
             .ToHashSet();
+    }
+
+    private async Task RecalculateRoomCapacityAsync(
+        int roomId,
+        CancellationToken cancellationToken)
+    {
+        var capacity = await _dbContext.Seats
+            .Where(seat => seat.RoomID == roomId)
+            .Join(
+                _dbContext.SeatTypes,
+                seat => seat.SeatTypeID,
+                seatType => seatType.SeatTypeID,
+                (_, seatType) => seatType.Capacity)
+            .SumAsync(cancellationToken);
+
+        var room = await _dbContext.Rooms
+            .FirstOrDefaultAsync(item => item.RoomID == roomId, cancellationToken);
+
+        if (room is not null)
+        {
+            room.Capacity = capacity;
+        }
     }
 }

@@ -25,12 +25,44 @@ public sealed class SeatService : ISeatService
         return await _seatRepository.GetSeatsByRoomAsync(roomId, cancellationToken);
     }
 
+    public async Task<Seat?> GetSeatByIdAsync(
+        int roomId,
+        int seatId,
+        CancellationToken cancellationToken = default)
+    {
+        if (await _seatRepository.GetRoomByIdAsync(roomId, cancellationToken) is null)
+        {
+            return null;
+        }
+
+        return await _seatRepository.GetSeatByIdAsync(roomId, seatId, cancellationToken);
+    }
+
+    public async Task<SeatLayoutResult?> GetLayoutAsync(
+        int roomId,
+        CancellationToken cancellationToken = default)
+    {
+        if (await _seatRepository.GetRoomByIdAsync(roomId, cancellationToken) is null)
+        {
+            return null;
+        }
+
+        var seats = await _seatRepository.GetSeatsByRoomAsync(roomId, cancellationToken);
+        var totalRows = seats.Count == 0
+            ? 0
+            : seats.Max(seat => ToRowNumber(seat.SeatRow));
+        var totalCols = seats.Count == 0
+            ? 0
+            : seats.Max(seat => seat.SeatCol);
+
+        return new SeatLayoutResult(totalRows, totalCols, seats);
+    }
+
     public async Task<(bool Succeeded, string? ErrorMessage, Seat? Seat)> CreateSeatAsync(
         int roomId,
         string rowLabel,
         int seatNumber,
-        string? seatCode,
-        string type,
+        int seatTypeId,
         string status,
         CancellationToken cancellationToken = default)
     {
@@ -38,8 +70,7 @@ public sealed class SeatService : ISeatService
             roomId,
             rowLabel,
             seatNumber,
-            seatCode,
-            type,
+            seatTypeId,
             status,
             excludingSeatId: null,
             cancellationToken);
@@ -47,11 +78,6 @@ public sealed class SeatService : ISeatService
         if (!validation.Succeeded)
         {
             return (false, validation.ErrorMessage, null);
-        }
-
-        if (await _seatRepository.CountSeatsByRoomAsync(roomId, cancellationToken) >= validation.Room!.Capacity)
-        {
-            return (false, GetCapacityExceededMessage(validation.Room.Capacity), null);
         }
 
         var seat = new Seat
@@ -69,7 +95,7 @@ public sealed class SeatService : ISeatService
     public async Task<(bool Succeeded, string? ErrorMessage, Seat? Seat)> UpdateSeatAsync(
         int roomId,
         int seatId,
-        string type,
+        int seatTypeId,
         string status,
         CancellationToken cancellationToken = default)
     {
@@ -88,13 +114,12 @@ public sealed class SeatService : ISeatService
             return (false, "Room has active or upcoming schedules", null);
         }
 
-        var normalizedType = NormalizeSeatType(type);
-        if (normalizedType is null)
+        if (seatTypeId <= 0)
         {
-            return (false, "Type is required.", null);
+            return (false, "SeatTypeId is required.", null);
         }
 
-        var seatType = await _seatRepository.GetSeatTypeByNameAsync(normalizedType, cancellationToken);
+        var seatType = await _seatRepository.GetSeatTypeByIdAsync(seatTypeId, cancellationToken);
         if (seatType is null)
         {
             return (false, "Seat type not found", null);
@@ -119,10 +144,11 @@ public sealed class SeatService : ISeatService
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> DeleteSeatAsync(
+        int roomId,
         int seatId,
         CancellationToken cancellationToken = default)
     {
-        var seat = await _seatRepository.GetSeatByIdAsync(seatId, cancellationToken);
+        var seat = await _seatRepository.GetSeatByIdAsync(roomId, seatId, cancellationToken);
         if (seat is null)
         {
             return (false, "Seat not found");
@@ -146,9 +172,8 @@ public sealed class SeatService : ISeatService
     public async Task<(bool Succeeded, string? ErrorMessage, List<Seat> Seats)> ReplaceLayoutAsync(
         int roomId,
         int totalRows,
-        int seatsPerRow,
-        string seatType,
-        string seatStatus,
+        int totalCols,
+        IReadOnlyCollection<SeatLayoutSeatItem> seats,
         CancellationToken cancellationToken = default)
     {
         var room = await _seatRepository.GetRoomByIdAsync(roomId, cancellationToken);
@@ -167,52 +192,31 @@ public sealed class SeatService : ISeatService
             return (false, "TotalRows must be greater than 0", []);
         }
 
-        if (seatsPerRow <= 0)
+        if (totalCols <= 0)
         {
-            return (false, "SeatsPerRow must be greater than 0", []);
+            return (false, "TotalCols must be greater than 0", []);
         }
 
-        if (totalRows * seatsPerRow > room.Capacity)
+        if (seats is null)
         {
-            return (false, GetCapacityExceededMessage(room.Capacity), []);
+            return (false, "Seats are required", []);
         }
 
-        var normalizedType = NormalizeSeatType(seatType);
-        if (normalizedType is null)
+        var validation = await BuildLayoutSeatsAsync(
+            roomId,
+            totalRows,
+            totalCols,
+            seats,
+            cancellationToken);
+        if (!validation.Succeeded)
         {
-            return (false, "SeatType is required.", []);
+            return (false, validation.ErrorMessage, []);
         }
 
-        var type = await _seatRepository.GetSeatTypeByNameAsync(normalizedType, cancellationToken);
-        if (type is null)
-        {
-            return (false, "Seat type not found", []);
-        }
-
-        var normalizedStatus = NormalizeSeatStatus(seatStatus);
-        if (normalizedStatus is null)
-        {
-            return (false, "SeatStatus must be ACTIVE, DISABLED, MAINTENANCE, or INACTIVE", []);
-        }
-
-        var seats = new List<Seat>(totalRows * seatsPerRow);
-        for (var row = 1; row <= totalRows; row++)
-        {
-            var rowLabel = ToRowLabel(row);
-            for (var seatNumber = 1; seatNumber <= seatsPerRow; seatNumber++)
-            {
-                seats.Add(new Seat
-                {
-                    RoomID = roomId,
-                    SeatRow = rowLabel,
-                    SeatCol = seatNumber,
-                    SeatTypeID = type.SeatTypeID,
-                    Status = normalizedStatus
-                });
-            }
-        }
-
-        var updatedSeats = await _seatRepository.ReplaceLayoutAsync(roomId, seats, cancellationToken);
+        var updatedSeats = await _seatRepository.ReplaceLayoutAsync(
+            roomId,
+            validation.Seats,
+            cancellationToken);
 
         return (true, null, updatedSeats);
     }
@@ -221,8 +225,7 @@ public sealed class SeatService : ISeatService
         int roomId,
         string rowLabel,
         int seatNumber,
-        string? seatCode,
-        string type,
+        int seatTypeId,
         string status,
         int? excludingSeatId,
         CancellationToken cancellationToken)
@@ -249,19 +252,12 @@ public sealed class SeatService : ISeatService
             return (false, "SeatNumber must be greater than 0", null, null, null, null);
         }
 
-        if (!string.IsNullOrWhiteSpace(seatCode)
-            && !string.Equals(seatCode.Trim(), GetSeatCode(normalizedRowLabel, seatNumber), StringComparison.OrdinalIgnoreCase))
+        if (seatTypeId <= 0)
         {
-            return (false, "SeatCode must match RowLabel + SeatNumber", null, null, null, null);
+            return (false, "SeatTypeId is required.", null, null, null, null);
         }
 
-        var normalizedType = NormalizeSeatType(type);
-        if (normalizedType is null)
-        {
-            return (false, "Type is required.", null, null, null, null);
-        }
-
-        var seatType = await _seatRepository.GetSeatTypeByNameAsync(normalizedType, cancellationToken);
+        var seatType = await _seatRepository.GetSeatTypeByIdAsync(seatTypeId, cancellationToken);
         if (seatType is null)
         {
             return (false, "Seat type not found", null, null, null, null);
@@ -286,14 +282,93 @@ public sealed class SeatService : ISeatService
         return (true, null, room, seatType, normalizedRowLabel, normalizedStatus);
     }
 
-    private static string? NormalizeSeatType(string type)
+    private async Task<(bool Succeeded, string? ErrorMessage, List<Seat> Seats)> BuildLayoutSeatsAsync(
+        int roomId,
+        int totalRows,
+        int totalCols,
+        IReadOnlyCollection<SeatLayoutSeatItem> items,
+        CancellationToken cancellationToken)
     {
-        return string.IsNullOrWhiteSpace(type)
-            ? null
-            : type.Trim().ToLowerInvariant();
+        var layoutSeats = new List<Seat>();
+        var positions = new HashSet<(string RowLabel, int ColIndex)>();
+        var seatTypes = new Dictionary<int, SeatType>();
+
+        foreach (var item in items)
+        {
+            if (item.IsWalkway)
+            {
+                continue;
+            }
+
+            var rowLabel = NormalizeRowLabel(item.RowLabel ?? string.Empty);
+            if (rowLabel is null)
+            {
+                return (false, "RowLabel is required", []);
+            }
+
+            var rowIndex = ToRowNumber(rowLabel);
+            if (rowIndex <= 0 || rowIndex > totalRows)
+            {
+                return (false, "RowLabel must be within TotalRows", []);
+            }
+
+            if (item.ColIndex <= 0 || item.ColIndex > totalCols)
+            {
+                return (false, "ColIndex must be within TotalCols", []);
+            }
+
+            if (!string.IsNullOrWhiteSpace(item.SeatName)
+                && !string.Equals(
+                    item.SeatName.Trim(),
+                    GetSeatCode(rowLabel, item.ColIndex),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return (false, "SeatName must match RowLabel + ColIndex", []);
+            }
+
+            if (item.SeatTypeId is null or <= 0)
+            {
+                return (false, "SeatTypeId is required.", []);
+            }
+
+            if (!seatTypes.TryGetValue(item.SeatTypeId.Value, out var seatType))
+            {
+                seatType = await _seatRepository.GetSeatTypeByIdAsync(
+                    item.SeatTypeId.Value,
+                    cancellationToken);
+                if (seatType is null)
+                {
+                    return (false, "Seat type not found", []);
+                }
+
+                seatTypes[item.SeatTypeId.Value] = seatType;
+            }
+
+            var status = NormalizeSeatStatus(item.Status);
+            if (status is null)
+            {
+                return (false, "Status must be ACTIVE, DISABLED, MAINTENANCE, or INACTIVE", []);
+            }
+
+            if (!positions.Add((rowLabel, item.ColIndex)))
+            {
+                return (false, "Seat position is duplicated in the layout", []);
+            }
+
+            layoutSeats.Add(new Seat
+            {
+                RoomID = roomId,
+                SeatRow = rowLabel,
+                SeatCol = item.ColIndex,
+                SeatTypeID = seatType.SeatTypeID,
+                Status = status
+            });
+        }
+
+        return (true, null, layoutSeats);
     }
 
-    private static string? NormalizeSeatStatus(string status)
+    private static string? NormalizeSeatStatus(string? status)
     {
         return string.IsNullOrWhiteSpace(status)
             ? null
@@ -312,21 +387,19 @@ public sealed class SeatService : ISeatService
         return $"{rowLabel}{seatNumber}";
     }
 
-    private static string GetCapacityExceededMessage(int capacity)
+    private static int ToRowNumber(string rowLabel)
     {
-        return $"Room capacity exceeded. Room capacity is {capacity} seats.";
-    }
-
-    private static string ToRowLabel(int rowNumber)
-    {
-        var label = string.Empty;
-        while (rowNumber > 0)
+        var rowNumber = 0;
+        foreach (var character in rowLabel)
         {
-            rowNumber--;
-            label = (char)('A' + rowNumber % 26) + label;
-            rowNumber /= 26;
+            if (character is < 'A' or > 'Z')
+            {
+                return 0;
+            }
+
+            rowNumber = rowNumber * 26 + character - 'A' + 1;
         }
 
-        return label;
+        return rowNumber;
     }
 }

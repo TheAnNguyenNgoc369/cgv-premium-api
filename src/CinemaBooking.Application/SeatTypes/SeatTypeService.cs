@@ -27,11 +27,12 @@ public sealed class SeatTypeService : ISeatTypeService
 
     public async Task<(bool Succeeded, string? ErrorMessage, SeatType? SeatType)> CreateSeatTypeAsync(
         string typeName,
+        int capacity,
         decimal extraPrice,
         CancellationToken cancellationToken = default)
     {
         var normalizedName = NormalizeName(typeName);
-        var validationError = Validate(normalizedName, extraPrice);
+        var validationError = Validate(normalizedName, capacity, extraPrice);
         if (validationError is not null)
         {
             return (false, validationError, null);
@@ -45,6 +46,7 @@ public sealed class SeatTypeService : ISeatTypeService
         var seatType = new SeatType
         {
             TypeName = normalizedName!,
+            Capacity = capacity,
             ExtraPrice = extraPrice
         };
 
@@ -54,6 +56,7 @@ public sealed class SeatTypeService : ISeatTypeService
     public async Task<(bool Succeeded, string? ErrorMessage, SeatType? SeatType)> UpdateSeatTypeAsync(
         int seatTypeId,
         string typeName,
+        int capacity,
         decimal extraPrice,
         CancellationToken cancellationToken = default)
     {
@@ -63,7 +66,7 @@ public sealed class SeatTypeService : ISeatTypeService
         }
 
         var normalizedName = NormalizeName(typeName);
-        var validationError = Validate(normalizedName, extraPrice);
+        var validationError = Validate(normalizedName, capacity, extraPrice);
         if (validationError is not null)
         {
             return (false, validationError, null);
@@ -80,6 +83,7 @@ public sealed class SeatTypeService : ISeatTypeService
         var updatedSeatType = await _seatTypeRepository.UpdateAsync(
             seatTypeId,
             normalizedName!,
+            capacity,
             extraPrice,
             cancellationToken);
 
@@ -114,7 +118,7 @@ public sealed class SeatTypeService : ISeatTypeService
             : typeName.Trim().ToLowerInvariant();
     }
 
-    private static string? Validate(string? typeName, decimal extraPrice)
+    private static string? Validate(string? typeName, int capacity, decimal extraPrice)
     {
         if (typeName is null)
         {
@@ -124,6 +128,11 @@ public sealed class SeatTypeService : ISeatTypeService
         if (typeName.Length > 20)
         {
             return "Seat type name must not exceed 20 characters.";
+        }
+
+        if (capacity <= 0)
+        {
+            return "Capacity must be greater than 0.";
         }
 
         return extraPrice < 0

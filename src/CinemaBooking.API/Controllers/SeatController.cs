@@ -1,5 +1,6 @@
 using CinemaBooking.API.Contracts.Seats;
 using CinemaBooking.Application.Seats;
+using CinemaBooking.Application.SeatTypes;
 using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
@@ -14,10 +15,14 @@ namespace CinemaBooking.API.Controllers;
 public sealed class SeatController : ControllerBase
 {
     private readonly ISeatService _seatService;
+    private readonly ISeatTypeService _seatTypeService;
 
-    public SeatController(ISeatService seatService)
+    public SeatController(
+        ISeatService seatService,
+        ISeatTypeService seatTypeService)
     {
         _seatService = seatService;
+        _seatTypeService = seatTypeService;
     }
 
     [HttpGet("seats")]
@@ -34,6 +39,19 @@ public sealed class SeatController : ControllerBase
         return Ok(seats.Select(ToResponse));
     }
 
+    [HttpGet("seats/{seatId:int}")]
+    public async Task<IActionResult> GetSeat(
+        int roomId,
+        int seatId,
+        CancellationToken cancellationToken)
+    {
+        var seat = await _seatService.GetSeatByIdAsync(roomId, seatId, cancellationToken);
+
+        return seat is null
+            ? NotFound(new { success = false, message = "Seat not found" })
+            : Ok(ToResponse(seat));
+    }
+
     [HttpPost("seats")]
     public async Task<IActionResult> CreateSeat(
         int roomId,
@@ -44,25 +62,24 @@ public sealed class SeatController : ControllerBase
             roomId,
             request.RowLabel,
             request.SeatNumber,
-            request.SeatCode,
-            request.Type,
+            request.SeatTypeId,
             request.Status,
             cancellationToken);
 
         if (!result.Succeeded)
         {
-            return ToErrorResponse(result.ErrorMessage);
+            return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
         }
 
         var response = ToResponse(result.Seat!);
 
         return CreatedAtAction(
-            nameof(GetSeats),
-            new { roomId },
+            nameof(GetSeat),
+            new { roomId, seatId = response.SeatId },
             response);
     }
 
-    [HttpPut("seats/{seatId:int}")]
+    [HttpPatch("seats/{seatId:int}")]
     public async Task<IActionResult> UpdateSeat(
         int roomId,
         int seatId,
@@ -72,34 +89,49 @@ public sealed class SeatController : ControllerBase
         var result = await _seatService.UpdateSeatAsync(
             roomId,
             seatId,
-            request.Type,
+            request.SeatTypeId,
             request.Status,
             cancellationToken);
 
         if (!result.Succeeded)
         {
-            return ToErrorResponse(result.ErrorMessage);
+            return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
         }
 
         return Ok(ToResponse(result.Seat!));
     }
 
-    [HttpDelete("~/api/seats/{seatId:int}")]
+    [HttpDelete("seats/{seatId:int}")]
     public async Task<IActionResult> DeleteSeat(
+        int roomId,
         int seatId,
         CancellationToken cancellationToken)
     {
-        var result = await _seatService.DeleteSeatAsync(seatId, cancellationToken);
+        var result = await _seatService.DeleteSeatAsync(roomId, seatId, cancellationToken);
 
         if (!result.Succeeded)
         {
-            return ToErrorResponse(result.ErrorMessage);
+            return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
         }
 
         return NoContent();
     }
 
-    [HttpPut("seat-layout")]
+    [HttpGet("layout")]
+    public async Task<IActionResult> GetSeatLayout(
+        int roomId,
+        CancellationToken cancellationToken)
+    {
+        var layout = await _seatService.GetLayoutAsync(roomId, cancellationToken);
+        if (layout is null)
+        {
+            return NotFound(new { success = false, message = "Room not found" });
+        }
+
+        return Ok(ToLayoutResponse(roomId, layout));
+    }
+
+    [HttpPut("layout")]
     public async Task<IActionResult> ReplaceSeatLayout(
         int roomId,
         [FromBody] SeatLayoutRequest request,
@@ -108,21 +140,38 @@ public sealed class SeatController : ControllerBase
         var result = await _seatService.ReplaceLayoutAsync(
             roomId,
             request.TotalRows,
-            request.SeatsPerRow,
-            request.SeatType,
-            request.SeatStatus,
+            request.TotalCols,
+            request.Seats?.Select(ToSeatLayoutSeatItem).ToList() ?? [],
             cancellationToken);
 
         if (!result.Succeeded)
         {
-            return ToErrorResponse(result.ErrorMessage);
+            return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
         }
 
-        return Ok(result.Seats.Select(ToResponse));
+        return Ok(ToLayoutResponse(
+            roomId,
+            new SeatLayoutResult(
+                request.TotalRows,
+                request.TotalCols,
+                result.Seats)));
     }
 
-    private IActionResult ToErrorResponse(string? errorMessage)
+    private async Task<IActionResult> ToErrorResponseAsync(
+        string? errorMessage,
+        CancellationToken cancellationToken)
     {
+        if (errorMessage == "Seat type not found")
+        {
+            var seatTypes = await _seatTypeService.GetSeatTypesAsync(cancellationToken);
+            return BadRequest(new
+            {
+                success = false,
+                message = errorMessage,
+                availableSeatTypes = seatTypes.Select(ToSeatTypeResponse)
+            });
+        }
+
         if (errorMessage is "Room not found" or "Seat not found")
         {
             return NotFound(new { success = false, message = errorMessage });
@@ -145,7 +194,41 @@ public sealed class SeatController : ControllerBase
             seat.SeatRow,
             seat.SeatCol,
             $"{seat.SeatRow}{seat.SeatCol}",
+            seat.SeatTypeID,
             EnumValueMapper.ToApiValue(seat.SeatType.TypeName),
             EnumValueMapper.ToApiValue(seat.Status));
+    }
+
+    private static SeatLayoutResponse ToLayoutResponse(
+        int roomId,
+        SeatLayoutResult layout)
+    {
+        return new SeatLayoutResponse(
+            roomId,
+            layout.TotalRows,
+            layout.TotalCols,
+            layout.Seats.Select(ToResponse).ToList());
+    }
+
+    private static SeatLayoutSeatItem ToSeatLayoutSeatItem(SeatLayoutSeatRequest request)
+    {
+        return new SeatLayoutSeatItem(
+            request.RowLabel,
+            request.ColIndex,
+            request.SeatName,
+            request.SeatTypeId,
+            request.Status,
+            request.IsWalkway);
+    }
+
+    private static object ToSeatTypeResponse(SeatType seatType)
+    {
+        return new
+        {
+            seatTypeId = seatType.SeatTypeID,
+            typeName = seatType.TypeName,
+            capacity = seatType.Capacity,
+            extraPrice = seatType.ExtraPrice
+        };
     }
 }
