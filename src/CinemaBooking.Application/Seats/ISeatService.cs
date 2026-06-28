@@ -8,19 +8,27 @@ public interface ISeatService
         int roomId,
         CancellationToken cancellationToken = default);
 
+    Task<Seat?> GetSeatByIdAsync(
+        int roomId,
+        int seatId,
+        CancellationToken cancellationToken = default);
+
+    Task<SeatLayoutResult?> GetLayoutAsync(
+        int roomId,
+        CancellationToken cancellationToken = default);
+
     Task<(bool Succeeded, string? ErrorMessage, Seat? Seat)> CreateSeatAsync(
         int roomId,
         string rowLabel,
         int seatNumber,
-        string? seatCode,
-        string type,
+        int seatTypeId,
         string status,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, Seat? Seat)> UpdateSeatAsync(
         int roomId,
         int seatId,
-        string type,
+        int seatTypeId,
         string status,
         CancellationToken cancellationToken = default);
 
@@ -32,8 +40,7 @@ public interface ISeatService
     Task<(bool Succeeded, string? ErrorMessage, List<Seat> Seats)> ReplaceLayoutAsync(
         int roomId,
         int totalRows,
-        int seatsPerRow,
-        string seatType,
-        string seatStatus,
+        int totalCols,
+        IReadOnlyCollection<SeatLayoutSeatItem> seats,
         CancellationToken cancellationToken = default);
 }

@@ -17,8 +17,16 @@ public interface ISeatRepository
         int seatId,
         CancellationToken cancellationToken = default);
 
+    Task<Seat?> GetSeatByIdAsync(
+        int seatId,
+        CancellationToken cancellationToken = default);
+
     Task<SeatType?> GetSeatTypeByNameAsync(
         string typeName,
+        CancellationToken cancellationToken = default);
+
+    Task<SeatType?> GetSeatTypeByIdAsync(
+        int seatTypeId,
         CancellationToken cancellationToken = default);
 
     Task<int> CountSeatsByRoomAsync(
@@ -52,7 +60,6 @@ public interface ISeatRepository
         CancellationToken cancellationToken = default);
 
     Task<bool> DeleteAsync(
-        int roomId,
         int seatId,
         CancellationToken cancellationToken = default);
 

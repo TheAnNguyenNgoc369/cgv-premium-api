@@ -12,10 +12,11 @@ public sealed class SeatTypeServiceTests
         var repository = new StubSeatTypeRepository();
         var service = new SeatTypeService(repository);
 
-        var result = await service.CreateSeatTypeAsync(" Premium ", 30000);
+        var result = await service.CreateSeatTypeAsync(" Premium ", 2, 30000);
 
         Assert.True(result.Succeeded);
         Assert.Equal("premium", result.SeatType?.TypeName);
+        Assert.Equal(2, result.SeatType?.Capacity);
         Assert.Equal(30000, result.SeatType?.ExtraPrice);
     }
 
@@ -73,6 +74,7 @@ public sealed class SeatTypeServiceTests
         public Task<SeatType?> UpdateAsync(
             int seatTypeId,
             string typeName,
+            int capacity,
             decimal extraPrice,
             CancellationToken cancellationToken = default)
         {

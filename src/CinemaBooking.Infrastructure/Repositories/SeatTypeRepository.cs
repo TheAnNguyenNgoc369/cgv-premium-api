@@ -62,6 +62,7 @@ public sealed class SeatTypeRepository : ISeatTypeRepository
     public async Task<SeatType?> UpdateAsync(
         int seatTypeId,
         string typeName,
+        int capacity,
         decimal extraPrice,
         CancellationToken cancellationToken = default)
     {
@@ -76,8 +77,13 @@ public sealed class SeatTypeRepository : ISeatTypeRepository
         }
 
         seatType.TypeName = typeName;
+        seatType.Capacity = capacity;
         seatType.ExtraPrice = extraPrice;
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await RecalculateRoomCapacitiesForSeatTypeAsync(seatTypeId, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
         return seatType;
     }
 
@@ -107,5 +113,37 @@ public sealed class SeatTypeRepository : ISeatTypeRepository
         _dbContext.SeatTypes.Remove(seatType);
         await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    private async Task RecalculateRoomCapacitiesForSeatTypeAsync(
+        int seatTypeId,
+        CancellationToken cancellationToken)
+    {
+        var roomIds = await _dbContext.Seats
+            .AsNoTracking()
+            .Where(seat => seat.SeatTypeID == seatTypeId)
+            .Select(seat => seat.RoomID)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        foreach (var roomId in roomIds)
+        {
+            var capacity = await _dbContext.Seats
+                .Where(seat => seat.RoomID == roomId)
+                .Join(
+                    _dbContext.SeatTypes,
+                    seat => seat.SeatTypeID,
+                    seatType => seatType.SeatTypeID,
+                    (_, seatType) => seatType.Capacity)
+                .SumAsync(cancellationToken);
+
+            var room = await _dbContext.Rooms
+                .FirstOrDefaultAsync(item => item.RoomID == roomId, cancellationToken);
+
+            if (room is not null)
+            {
+                room.Capacity = capacity;
+            }
+        }
     }
 }

@@ -27,7 +27,6 @@ public interface IRoomRepository
         int cinemaId,
         string roomName,
         string roomType,
-        int capacity,
         string status,
         string? description,
         CancellationToken cancellationToken = default);

@@ -1,6 +1,6 @@
 # Cinema Booking API
 
-ASP.NET Core 9 backend for a cinema booking platform. The API currently provides authentication, email verification, password recovery, user profiles and wallets, avatar management, and movie poster management.
+ASP.NET Core 9 backend for a cinema booking platform. The API provides authentication, email verification, password recovery, user profiles and wallets, avatar and movie poster management, cinema rooms, seat types, room seat layouts, showtimes, bookings, payments, invoices, and memberships.
 
 ## Technology
 
@@ -23,6 +23,8 @@ src/
 |-- CinemaBooking.Domain          Entities and domain models
 |-- CinemaBooking.Infrastructure  EF Core, repositories, SMTP, Cloudinary
 `-- CinemaBooking.Shared          Shared constants
+tests/
+`-- CinemaBooking.API.Tests       API and application service tests
 ```
 
 Dependencies point inward: API and Infrastructure depend on Application, while Application depends on Domain.
@@ -63,6 +65,12 @@ The remaining development defaults are defined in `src/CinemaBooking.API/appsett
 
 ## Run Locally
 
+Apply pending EF Core migrations before starting the API:
+
+```powershell
+dotnet ef database update --project src/CinemaBooking.Infrastructure --startup-project src/CinemaBooking.API
+```
+
 ```powershell
 dotnet run --project src/CinemaBooking.API --launch-profile http
 ```
@@ -72,15 +80,16 @@ Development URLs:
 - API: `http://localhost:5053`
 - Swagger UI: `http://localhost:5053/swagger`
 
-The application seeds its configured development data during startup, so the database must exist and be reachable before starting the API.
+The application seeds its configured development data during startup, so the database must exist, be migrated, and be reachable before starting the API.
 
 ## Build
 
 ```powershell
 dotnet build CinemaBooking.sln
+dotnet test tests/CinemaBooking.API.Tests/CinemaBooking.API.Tests.csproj
 ```
 
-The repository currently has no persistent automated test project.
+The test project uses xUnit and currently covers selected API authorization and seat management service behavior.
 
 ## Security Notes
 

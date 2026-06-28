@@ -22,6 +22,7 @@ public interface ISeatTypeRepository
     Task<SeatType?> UpdateAsync(
         int seatTypeId,
         string typeName,
+        int capacity,
         decimal extraPrice,
         CancellationToken cancellationToken = default);
 

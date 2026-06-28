@@ -29,7 +29,6 @@ public sealed class RoomService : IRoomService
         int cinemaId,
         string name,
         string type,
-        int capacity,
         string status,
         string? description,
         CancellationToken cancellationToken = default)
@@ -38,7 +37,6 @@ public sealed class RoomService : IRoomService
             cinemaId,
             name,
             type,
-            capacity,
             status,
             excludingRoomId: null,
             cancellationToken);
@@ -53,7 +51,7 @@ public sealed class RoomService : IRoomService
             CinemaID = cinemaId,
             RoomName = name.Trim(),
             RoomType = validation.RoomType!,
-            Capacity = capacity,
+            Capacity = 0,
             Status = validation.Status!,
             Description = NormalizeNullable(description),
             CreatedAt = DateTime.UtcNow
@@ -69,7 +67,6 @@ public sealed class RoomService : IRoomService
         int cinemaId,
         string name,
         string type,
-        int capacity,
         string status,
         string? description,
         CancellationToken cancellationToken = default)
@@ -84,7 +81,6 @@ public sealed class RoomService : IRoomService
             cinemaId,
             name,
             type,
-            capacity,
             status,
             roomId,
             cancellationToken);
@@ -94,20 +90,11 @@ public sealed class RoomService : IRoomService
             return (false, validation.ErrorMessage, null);
         }
 
-        var seatCount = await _roomRepository.CountSeatsAsync(roomId, cancellationToken);
-        if (capacity < seatCount)
-        {
-            return (false,
-                $"Capacity cannot be less than the current seat count ({seatCount})",
-                null);
-        }
-
         var updatedRoom = await _roomRepository.UpdateAsync(
             roomId,
             cinemaId,
             name.Trim(),
             validation.RoomType!,
-            capacity,
             validation.Status!,
             NormalizeNullable(description),
             cancellationToken);
@@ -143,7 +130,6 @@ public sealed class RoomService : IRoomService
         int cinemaId,
         string name,
         string type,
-        int capacity,
         string status,
         int? excludingRoomId,
         CancellationToken cancellationToken)
@@ -161,11 +147,6 @@ public sealed class RoomService : IRoomService
         if (string.IsNullOrWhiteSpace(name))
         {
             return (false, "Name is required", null, null);
-        }
-
-        if (capacity <= 0)
-        {
-            return (false, "Capacity must be greater than 0", null, null);
         }
 
         var normalizedType = NormalizeRoomType(type);

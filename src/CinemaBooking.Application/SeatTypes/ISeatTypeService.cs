@@ -13,12 +13,14 @@ public interface ISeatTypeService
 
     Task<(bool Succeeded, string? ErrorMessage, SeatType? SeatType)> CreateSeatTypeAsync(
         string typeName,
+        int capacity,
         decimal extraPrice,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, SeatType? SeatType)> UpdateSeatTypeAsync(
         int seatTypeId,
         string typeName,
+        int capacity,
         decimal extraPrice,
         CancellationToken cancellationToken = default);
 

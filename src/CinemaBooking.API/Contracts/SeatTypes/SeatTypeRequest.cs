@@ -8,6 +8,9 @@ public sealed class SeatTypeRequest
     [MaxLength(20, ErrorMessage = "Seat type name must not exceed 20 characters")]
     public string TypeName { get; set; } = string.Empty;
 
+    [Range(1, int.MaxValue, ErrorMessage = "Capacity must be greater than 0")]
+    public int Capacity { get; set; } = 1;
+
     [Range(typeof(decimal), "0", "79228162514264337593543950335",
         ErrorMessage = "Extra price must be greater than or equal to 0")]
     public decimal ExtraPrice { get; set; }
