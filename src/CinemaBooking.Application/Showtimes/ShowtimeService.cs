@@ -149,7 +149,7 @@ public sealed class ShowtimeService : IShowtimeService
         var showtime = await _showtimeRepository.GetShowtimeByIdAsync(showtimeId, cancellationToken);
         if (showtime is null
             || showtime.Status != "scheduled"
-            || showtime.StartTime <= DateTime.UtcNow
+            
             || showtime.Room.Status != "active"
             || showtime.Room.Cinema.Status != "active")
             return null;
