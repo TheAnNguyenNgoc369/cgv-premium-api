@@ -26,7 +26,12 @@ public sealed class ShowtimeRepository : IShowtimeRepository
         int page, int pageSize, string sortBy, bool descending,
         CancellationToken cancellationToken = default)
     {
-        var query = _db.Showtimes.AsNoTracking().Include(s => s.Movie).Include(s => s.Room).AsQueryable();
+        var query = _db.Showtimes
+            .AsNoTracking()
+            .Include(showtime => showtime.Movie)
+            .Include(showtime => showtime.Room)
+                .ThenInclude(room => room.Cinema)
+            .AsQueryable();
         if (movieId.HasValue)
             query = query.Where(s => s.MovieID == movieId.Value);
         if (cinemaId.HasValue)

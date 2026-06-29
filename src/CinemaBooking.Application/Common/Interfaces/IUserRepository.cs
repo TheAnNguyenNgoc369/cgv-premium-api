@@ -4,6 +4,10 @@ namespace CinemaBooking.Application.Common.Interfaces;
 
 public interface IUserRepository
 {
+    Task<User?> GetProfileByIdAsync(
+        int userId,
+        CancellationToken cancellationToken = default);
+
     Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default);
 
     Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);

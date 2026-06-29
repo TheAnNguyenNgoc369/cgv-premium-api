@@ -27,7 +27,7 @@ public sealed class UserService : IUserService
 
     public Task<User?> GetProfileAsync(int userId, CancellationToken cancellationToken = default)
     {
-        return _userRepository.GetByIdAsync(userId, cancellationToken);
+        return _userRepository.GetProfileByIdAsync(userId, cancellationToken);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, User? User)> UpdateProfileAsync(
