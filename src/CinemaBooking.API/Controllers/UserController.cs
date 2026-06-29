@@ -1,7 +1,10 @@
 using CinemaBooking.API.Contracts.Images;
 using CinemaBooking.API.Contracts.Users;
+using CinemaBooking.API.Contracts.Cinemas;
+using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Application.Users;
 using CinemaBooking.Domain.Entities;
+using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -34,7 +37,7 @@ public sealed class UserController : ControllerBase
             return NotFound();
         }
 
-        return Ok(ToProfileResponse(user));
+        return Ok(ToProfileResponseWithCinema(user));
     }
 
     [HttpPut("profile")]
@@ -177,6 +180,29 @@ public sealed class UserController : ControllerBase
             user.AvatarURL,
             user.TotalPoints,
             user.CreatedAt
+        };
+    }
+
+    private static object ToProfileResponseWithCinema(User user)
+    {
+        return new
+        {
+            user.UserID,
+            user.FullName,
+            user.Email,
+            user.Phone,
+            user.Role,
+            user.Status,
+            user.AvatarURL,
+            user.TotalPoints,
+            user.CreatedAt,
+            cinema = user.Role is Roles.Manager or Roles.Staff && user.Cinema is not null
+                ? new CinemaSummaryResponse(
+                    user.Cinema.CinemaID,
+                    user.Cinema.CinemaName,
+                    user.Cinema.Address,
+                    EnumValueMapper.ToApiValue(user.Cinema.Status))
+                : null
         };
     }
 }

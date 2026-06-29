@@ -26,7 +26,12 @@ public sealed class ShowtimeRepository : IShowtimeRepository
         int page, int pageSize, string sortBy, bool descending,
         CancellationToken cancellationToken = default)
     {
-        var query = _db.Showtimes.AsNoTracking().Include(s => s.Movie).Include(s => s.Room).AsQueryable();
+        var query = _db.Showtimes
+            .AsNoTracking()
+            .Include(showtime => showtime.Movie)
+            .Include(showtime => showtime.Room)
+                .ThenInclude(room => room.Cinema)
+            .AsQueryable();
         if (movieId.HasValue)
             query = query.Where(s => s.MovieID == movieId.Value);
         if (cinemaId.HasValue)
@@ -100,37 +105,6 @@ public sealed class ShowtimeRepository : IShowtimeRepository
         var showtime = await _db.Showtimes.FindAsync([showtimeId], cancellationToken);
         if (showtime is null) return false;
         _db.Showtimes.Remove(showtime); await _db.SaveChangesAsync(cancellationToken); return true;
-    }
-
-    public Task<bool> CinemaExistsAsync(
-        int cinemaId,
-        CancellationToken cancellationToken = default) =>
-        _db.Cinemas.AsNoTracking()
-            .AnyAsync(cinema => cinema.CinemaID == cinemaId, cancellationToken);
-
-    public async Task<List<Showtime>> GetCustomerShowtimesAsync(
-        int movieId,
-        int? cinemaId,
-        CancellationToken cancellationToken = default)
-    {
-        var query = _db.Showtimes
-            .AsNoTracking()
-            .Include(showtime => showtime.Movie)
-            .Include(showtime => showtime.Room)
-                .ThenInclude(room => room.Cinema)
-            .Where(showtime => showtime.MovieID == movieId
-                && showtime.Movie.Status == "now_showing"
-                && showtime.Status == "scheduled"
-                && showtime.StartTime > DateTime.UtcNow
-                && showtime.Room.Status == "active"
-                && showtime.Room.Cinema.Status == "active");
-
-        if (cinemaId.HasValue)
-            query = query.Where(showtime => showtime.Room.CinemaID == cinemaId.Value);
-
-        return await query
-            .OrderBy(showtime => showtime.StartTime)
-            .ToListAsync(cancellationToken);
     }
 
     public async Task<Showtime?> GetShowtimeByIdAsync(

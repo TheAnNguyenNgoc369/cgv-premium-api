@@ -23,11 +23,6 @@ public interface IShowtimeService
     Task<(bool Succeeded, string? ErrorMessage)> DeleteShowtimeAsync(
         int id, CancellationToken cancellationToken = default);
     Task<bool> IsSoldOutAsync(Showtime showtime, CancellationToken cancellationToken = default);
-    Task<(bool Succeeded, string? ErrorMessage, IReadOnlyList<Showtime> Showtimes)>
-        GetCustomerShowtimesAsync(
-        int movieId,
-        int? cinemaId,
-        CancellationToken cancellationToken = default);
 
     Task<Showtime?> GetShowtimeByIdAsync(
         int id,

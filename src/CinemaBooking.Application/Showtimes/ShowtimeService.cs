@@ -114,27 +114,6 @@ public sealed class ShowtimeService : IShowtimeService
         return saved is null ? (false, "Showtime not found", null) : (true, null, saved);
     }
 
-    public async Task<(bool Succeeded, string? ErrorMessage, IReadOnlyList<Showtime> Showtimes)>
-        GetCustomerShowtimesAsync(
-        int movieId,
-        int? cinemaId,
-        CancellationToken cancellationToken = default)
-    {
-        if (movieId <= 0)
-            return (false, "MovieId must be greater than 0", []);
-        if (cinemaId is <= 0)
-            return (false, "CinemaId must be greater than 0", []);
-        if (await _showtimeRepository.GetMovieAsync(movieId, cancellationToken) is null)
-            return (false, "Movie not found", []);
-        if (cinemaId.HasValue
-            && !await _showtimeRepository.CinemaExistsAsync(cinemaId.Value, cancellationToken))
-            return (false, "Cinema not found", []);
-
-        var showtimes = await _showtimeRepository.GetCustomerShowtimesAsync(
-            movieId, cinemaId, cancellationToken);
-        return (true, null, showtimes);
-    }
-
     public async Task<Showtime?> GetShowtimeByIdAsync(
         int id,
         CancellationToken cancellationToken = default)
