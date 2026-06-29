@@ -14,6 +14,7 @@ public class AdminActionLogConfiguration : IEntityTypeConfiguration<AdminActionL
 
         builder.Property(a => a.TargetTable).HasMaxLength(50);
         builder.Property(a => a.ActionType).HasMaxLength(50).IsRequired();
+        builder.Property(a => a.Description).HasMaxLength(1000);
         builder.Property(a => a.IPAddress).HasMaxLength(45);
         builder.Property(a => a.CreatedAt).HasDefaultValueSql("GETDATE()");
 
@@ -29,6 +30,8 @@ public class AdminActionLogConfiguration : IEntityTypeConfiguration<AdminActionL
             .HasForeignKey(a => a.TargetUserID)
             .HasConstraintName("FK_AdminActionLog_TargetUser");
 
-        builder.ToTable(t => t.HasCheckConstraint("CK_AdminActionLog_ActionType", "[ActionType] IN ('lock_user','unlock_user','change_role','cancel_booking','refund_processed','payment_viewed','booking_created','account_status_changed')"));
+        builder.ToTable(t => t.HasCheckConstraint(
+            "CK_AdminActionLog_ActionType",
+            "[ActionType] IN ('lock_user','unlock_user','change_role','cancel_booking','refund_processed','payment_viewed','booking_created','account_status_changed','create_user','update_user','delete_user','deactivate_user')"));
     }
 }

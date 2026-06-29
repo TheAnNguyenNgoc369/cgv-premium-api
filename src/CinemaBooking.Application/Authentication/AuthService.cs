@@ -3,6 +3,7 @@ using System.Text;
 using System.Net;
 using System.Text.RegularExpressions;
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Common.Security;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 
@@ -10,11 +11,6 @@ namespace CinemaBooking.Application.Authentication;
 
 public sealed class AuthService : IAuthService
 {
-    private const string PasswordHashAlgorithm = "pbkdf2-sha256";
-    private const string PasswordHashVersion = "v1";
-    private const int PasswordHashIterations = 700_000;
-    private const int PasswordSaltSize = 16;
-    private const int PasswordHashSize = 32;
     private const string ActiveStatus = "active";
     private const string LockedStatus = "locked";
     private const string InactiveStatus = "inactive";
@@ -66,7 +62,7 @@ public sealed class AuthService : IAuthService
             FullName = normalizedFullName,
             Email = normalizedEmail,
             Phone = normalizedPhone,
-            PasswordHash = HashPassword(password),
+            PasswordHash = PasswordHasher.Hash(password),
             Role = Roles.Customer,
             Status = ActiveStatus,
             EmailVerifiedAt = null,
@@ -109,14 +105,14 @@ public sealed class AuthService : IAuthService
     {
         var user = await _userRepository.GetByEmailAsync(email.Trim(), cancellationToken);
 
-        if (user is null || !VerifyPassword(password, user.PasswordHash, out var requiresRehash))
+        if (user is null || !PasswordHasher.Verify(password, user.PasswordHash, out var requiresRehash))
         {
             return (false, "Email or password is incorrect.", null);
         }
 
         if (requiresRehash)
         {
-            var upgradedPasswordHash = HashPassword(password);
+            var upgradedPasswordHash = PasswordHasher.Hash(password);
             var passwordHashUpdated = await _userRepository.TryUpdatePasswordHashAsync(
                 user.UserID,
                 user.PasswordHash,
@@ -141,9 +137,15 @@ public sealed class AuthService : IAuthService
             return (false, "Account is inactive.", null);
         }
 
-        if (!user.EmailVerifiedAt.HasValue)
+        if (string.Equals(user.Status, UserStatuses.Unverified, StringComparison.OrdinalIgnoreCase)
+            || !user.EmailVerifiedAt.HasValue)
         {
             return (false, "Please verify your email before logging in.", null);
+        }
+
+        if (!string.Equals(user.Status, ActiveStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            return (false, "Account is not active.", null);
         }
 
         return (true, null, user);
@@ -323,7 +325,7 @@ public sealed class AuthService : IAuthService
         var now = DateTime.UtcNow;
         var passwordReset = await _userRepository.TryResetPasswordAsync(
             token.Trim(),
-            HashPassword(newPassword),
+            PasswordHasher.Hash(newPassword),
             now,
             cancellationToken);
 
@@ -400,93 +402,6 @@ public sealed class AuthService : IAuthService
         return Math.Max(1, (int)Math.Ceiling((availableAt - now).TotalSeconds));
     }
 
-    private static string HashPassword(string password)
-    {
-        var salt = RandomNumberGenerator.GetBytes(PasswordSaltSize);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(
-            Encoding.UTF8.GetBytes(password),
-            salt,
-            PasswordHashIterations,
-            HashAlgorithmName.SHA256,
-            PasswordHashSize);
-
-        return $"${PasswordHashAlgorithm}${PasswordHashVersion}${PasswordHashIterations}${Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
-    }
-
-    private static bool VerifyPassword(
-        string password,
-        string encodedHash,
-        out bool requiresRehash)
-    {
-        requiresRehash = false;
-        var parts = encodedHash.Split('$');
-
-        if (parts.Length == 6
-            && parts[0].Length == 0
-            && parts[1] == PasswordHashAlgorithm
-            && parts[2] == PasswordHashVersion
-            && int.TryParse(parts[3], out var iterations)
-            && iterations == PasswordHashIterations)
-        {
-            return VerifyPbkdf2Password(password, parts, iterations);
-        }
-
-        return VerifyLegacySha256Password(password, encodedHash, out requiresRehash);
-    }
-
-    private static bool VerifyPbkdf2Password(string password, string[] parts, int iterations)
-    {
-        try
-        {
-            var salt = Convert.FromBase64String(parts[4]);
-            var expectedHash = Convert.FromBase64String(parts[5]);
-
-            if (salt.Length != PasswordSaltSize || expectedHash.Length != PasswordHashSize)
-            {
-                return false;
-            }
-
-            var actualHash = Rfc2898DeriveBytes.Pbkdf2(
-                Encoding.UTF8.GetBytes(password),
-                salt,
-                iterations,
-                HashAlgorithmName.SHA256,
-                PasswordHashSize);
-
-            return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-    }
-
-    private static bool VerifyLegacySha256Password(
-        string password,
-        string encodedHash,
-        out bool requiresRehash)
-    {
-        requiresRehash = false;
-
-        if (encodedHash.Length != 64)
-        {
-            return false;
-        }
-
-        try
-        {
-            var expectedHash = Convert.FromHexString(encodedHash);
-            var actualHash = SHA256.HashData(Encoding.UTF8.GetBytes(password));
-            var verified = CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
-            requiresRehash = verified;
-            return verified;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-    }
-
     private static string GenerateEmailVerificationToken()
     {
         var bytes = RandomNumberGenerator.GetBytes(32);
@@ -511,7 +426,7 @@ public sealed class AuthService : IAuthService
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
         var encodedToken = WebUtility.HtmlEncode(token);
-        var verificationUrl = $"https://intent-legible-manatee.ngrok-free.app/verifyEmail?token={Uri.EscapeDataString(token)}";
+        var verificationUrl = $"https://intent-legible-manatee.ngrok-free.app/registerEmail";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">

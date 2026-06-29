@@ -26,6 +26,7 @@ public sealed class SeatController : ControllerBase
     }
 
     [HttpGet("seats")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetSeats(
         int roomId,
         CancellationToken cancellationToken)
@@ -40,6 +41,7 @@ public sealed class SeatController : ControllerBase
     }
 
     [HttpGet("seats/{seatId:int}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetSeat(
         int roomId,
         int seatId,
@@ -118,6 +120,7 @@ public sealed class SeatController : ControllerBase
     }
 
     [HttpGet("layout")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetSeatLayout(
         int roomId,
         CancellationToken cancellationToken)

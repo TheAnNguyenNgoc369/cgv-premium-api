@@ -43,6 +43,10 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasColumnType("datetime2")
                         .HasDefaultValueSql("GETDATE()");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<string>("IPAddress")
                         .HasMaxLength(45)
                         .HasColumnType("nvarchar(45)");
@@ -66,7 +70,7 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.ToTable("AdminActionLog", null, t =>
                         {
-                            t.HasCheckConstraint("CK_AdminActionLog_ActionType", "[ActionType] IN ('lock_user','unlock_user','change_role','cancel_booking','refund_processed','payment_viewed','booking_created','account_status_changed')");
+                            t.HasCheckConstraint("CK_AdminActionLog_ActionType", "[ActionType] IN ('lock_user','unlock_user','change_role','cancel_booking','refund_processed','payment_viewed','booking_created','account_status_changed','create_user','update_user','delete_user','deactivate_user')");
                         });
                 });
 
