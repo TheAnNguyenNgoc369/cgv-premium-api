@@ -87,6 +87,20 @@ public sealed class ShowtimeController : ControllerBase
         return Ok(await ToManagementResponseAsync(showtime, cancellationToken));
     }
 
+    [HttpGet("showtimes/{showtimeId:int}/seats")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetShowtimeSeats(
+        int showtimeId,
+        CancellationToken cancellationToken)
+    {
+        var seatMap = await _showtimeService.GetSeatMapAsync(showtimeId, cancellationToken);
+
+        if (seatMap is null)
+            return NotFound(new { success = false, message = "Showtime not found or not available for booking." });
+
+        return Ok(seatMap);
+    }
+
     private async Task<ShowtimeManagementResponse> ToManagementResponseAsync(
         Showtime showtime, CancellationToken cancellationToken) =>
         new(showtime.ShowtimeID,
