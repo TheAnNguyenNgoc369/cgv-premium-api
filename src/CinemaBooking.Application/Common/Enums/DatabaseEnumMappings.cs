@@ -68,5 +68,6 @@ public static class DatabaseEnumMappings
         EnumValueMapper.CreateMappings("sent", "failed", "retrying");
     public static readonly IReadOnlyDictionary<string, string> AdminActionTypes =
         EnumValueMapper.CreateMappings("lock_user", "unlock_user", "change_role", "cancel_booking",
-            "refund_processed", "payment_viewed", "booking_created", "account_status_changed");
+            "refund_processed", "payment_viewed", "booking_created", "account_status_changed",
+            "create_user", "update_user", "delete_user", "deactivate_user");
 }
