@@ -10,7 +10,7 @@ namespace CinemaBooking.API.Controllers;
 
 [ApiController]
 [Route("api/cinemas")]
-[Authorize(Roles = Roles.Manager + "," + Roles.Admin)]
+[Authorize(Roles = Roles.Manager + "," + Roles.Admin + "," + Roles.Staff + "," + Roles.Customer)]
 public sealed class CinemaController : ControllerBase
 {
     private readonly ICinemaService _cinemaService;

@@ -44,7 +44,8 @@ public sealed class AdminUserService : IAdminUserService
         page = page < 1 ? 1 : page;
         pageSize = pageSize < 1 ? 10 : pageSize;
         var result = await _repository.GetPageAsync(
-            search?.Trim(), roleResult.Value, statusResult.Value, page, pageSize, cancellationToken);
+            search?.Trim(), roleResult.Value, statusResult.Value,
+            page, pageSize, cancellationToken);
         return AdminUserResult<AdminUserPageResult>.Success(
             new AdminUserPageResult(result.Items, page, pageSize, result.TotalItems));
     }
@@ -335,7 +336,9 @@ public sealed class AdminUserService : IAdminUserService
 
     private static (bool Succeeded, string? Value, string? Error) NormalizeOptional(
         string? value, IReadOnlyDictionary<string, string> mappings, string error) =>
-        string.IsNullOrWhiteSpace(value) ? (true, null, null) : NormalizeRequired(value, mappings, error);
+        string.IsNullOrWhiteSpace(value)
+            ? (true, null, null)
+            : NormalizeRequired(value, mappings, error);
 
     private static AdminUserResult<T> Validation<T>(string message) =>
         AdminUserResult<T>.Failure(AdminUserErrorType.Validation, message);

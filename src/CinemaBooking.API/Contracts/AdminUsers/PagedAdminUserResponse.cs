@@ -1,7 +1,7 @@
 namespace CinemaBooking.API.Contracts.AdminUsers;
 
 public sealed record PagedAdminUserResponse(
-    IReadOnlyList<AdminUserResponse> Items,
+    IReadOnlyList<AdminUserListResponse> Items,
     int Page,
     int PageSize,
     int TotalItems,

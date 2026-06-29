@@ -22,6 +22,7 @@ public sealed class ShowtimeController : ControllerBase
     [HttpGet("showtimes")]
     [AllowAnonymous]
     public async Task<IActionResult> GetShowtimes(
+        [FromQuery] int? movieId, [FromQuery] int? cinemaId,
         [FromQuery] string? movieName, [FromQuery] string? roomName,
         [FromQuery] DateOnly? date, [FromQuery] string? status,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 10,
@@ -29,7 +30,8 @@ public sealed class ShowtimeController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var result = await _showtimeService.GetShowtimesAsync(
-            movieName, roomName, date, status, page, pageSize, sortBy, sortDir, cancellationToken);
+            movieId, cinemaId, movieName, roomName, date, status,
+            page, pageSize, sortBy, sortDir, cancellationToken);
         if (!result.Succeeded) return BadRequest(new { success = false, message = result.ErrorMessage });
         var data = result.Page!;
         var items = new List<ShowtimeManagementResponse>();
@@ -71,31 +73,6 @@ public sealed class ShowtimeController : ControllerBase
         return NoContent();
     }
 
-    [HttpGet("movies/{movieId}/showtimes")]
-    public async Task<IActionResult> GetShowtimesByMovie(
-        int movieId,
-        [FromQuery] DateOnly? date,
-        [FromQuery] int? cinemaId,
-        CancellationToken cancellationToken)
-    {
-        var showtimes = await _showtimeService.GetShowtimesByMovieAsync(
-            movieId, date, cinemaId, cancellationToken);
-
-        var response = showtimes.Select(s => new ShowtimeListResponse(
-            s.ShowtimeID,
-            s.StartTime,
-            s.EndTime,
-            s.BasePrice,
-            s.RoomID,
-            s.Room.RoomName,
-            s.Room.RoomType,
-            s.Room.CinemaID,
-            s.Room.Cinema.CinemaName
-        ));
-
-        return Ok(response);
-    }
-
     [HttpGet("showtimes/{id}")]
     [AllowAnonymous]
     public async Task<IActionResult> GetShowtimeById(
@@ -130,25 +107,4 @@ public sealed class ShowtimeController : ControllerBase
         _ => BadRequest(new { success = false, message })
     };
 
-    [HttpGet("showtimes/{id}/seats")]
-    public async Task<IActionResult> GetSeatMap(
-        int id,
-        CancellationToken cancellationToken)
-    {
-        var seatMap = await _showtimeService.GetSeatMapAsync(id, cancellationToken);
-
-        if (seatMap is null)
-            return NotFound(new { success = false, message = "Showtime not found." });
-
-        var response = new SeatMapResponse(
-            seatMap.ShowtimeID,
-            seatMap.RoomName,
-            seatMap.RoomType,
-            seatMap.Seats.Select(s => new SeatResponse(
-                s.SeatID, s.SeatRow, s.SeatCol, s.SeatType, s.ExtraPrice, s.Price, s.Status
-            )).ToList()
-        );
-
-        return Ok(response);
-    }
 }

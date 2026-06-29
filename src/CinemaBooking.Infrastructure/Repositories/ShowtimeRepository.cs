@@ -21,11 +21,16 @@ public sealed class ShowtimeRepository : IShowtimeRepository
     }
 
     public async Task<(List<Showtime> Items, int TotalItems)> GetShowtimesAsync(
-        string? movieName, string? roomName, DateOnly? date, string? status,
+        int? movieId, int? cinemaId, string? movieName, string? roomName,
+        DateOnly? date, string? status,
         int page, int pageSize, string sortBy, bool descending,
         CancellationToken cancellationToken = default)
     {
         var query = _db.Showtimes.AsNoTracking().Include(s => s.Movie).Include(s => s.Room).AsQueryable();
+        if (movieId.HasValue)
+            query = query.Where(s => s.MovieID == movieId.Value);
+        if (cinemaId.HasValue)
+            query = query.Where(s => s.Room.CinemaID == cinemaId.Value);
         if (!string.IsNullOrWhiteSpace(movieName))
             query = query.Where(s => EF.Functions.Like(s.Movie.Title, $"%{movieName}%"));
         if (!string.IsNullOrWhiteSpace(roomName))
@@ -97,31 +102,34 @@ public sealed class ShowtimeRepository : IShowtimeRepository
         _db.Showtimes.Remove(showtime); await _db.SaveChangesAsync(cancellationToken); return true;
     }
 
-    public async Task<List<Showtime>> GetShowtimesByMovieAsync(
+    public Task<bool> CinemaExistsAsync(
+        int cinemaId,
+        CancellationToken cancellationToken = default) =>
+        _db.Cinemas.AsNoTracking()
+            .AnyAsync(cinema => cinema.CinemaID == cinemaId, cancellationToken);
+
+    public async Task<List<Showtime>> GetCustomerShowtimesAsync(
         int movieId,
-        DateOnly? date,
         int? cinemaId,
         CancellationToken cancellationToken = default)
     {
         var query = _db.Showtimes
-            .Include(s => s.Room)
-                .ThenInclude(r => r.Cinema)
-            .Where(s => s.MovieID == movieId
-                && s.Status == "scheduled"
-                && s.Room.Cinema.Status == "active");
-
-        if (date.HasValue)
-        {
-            var from = date.Value.ToDateTime(TimeOnly.MinValue);
-            var to = from.AddDays(1);
-            query = query.Where(s => s.StartTime >= from && s.StartTime < to);
-        }
+            .AsNoTracking()
+            .Include(showtime => showtime.Movie)
+            .Include(showtime => showtime.Room)
+                .ThenInclude(room => room.Cinema)
+            .Where(showtime => showtime.MovieID == movieId
+                && showtime.Movie.Status == "now_showing"
+                && showtime.Status == "scheduled"
+                && showtime.StartTime > DateTime.UtcNow
+                && showtime.Room.Status == "active"
+                && showtime.Room.Cinema.Status == "active");
 
         if (cinemaId.HasValue)
-            query = query.Where(s => s.Room.CinemaID == cinemaId.Value);
+            query = query.Where(showtime => showtime.Room.CinemaID == cinemaId.Value);
 
         return await query
-            .OrderBy(s => s.StartTime)
+            .OrderBy(showtime => showtime.StartTime)
             .ToListAsync(cancellationToken);
     }
 

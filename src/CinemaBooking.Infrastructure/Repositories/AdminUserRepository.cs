@@ -19,7 +19,10 @@ public sealed class AdminUserRepository : IAdminUserRepository
         string? search, string? role, string? status, int page, int pageSize,
         CancellationToken cancellationToken = default)
     {
-        var query = _dbContext.Users.AsNoTracking().AsQueryable();
+        var query = _dbContext.Users
+            .Include(user => user.LoyaltyTier)
+            .AsNoTracking()
+            .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
         {

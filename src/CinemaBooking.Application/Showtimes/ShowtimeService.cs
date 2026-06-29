@@ -23,7 +23,8 @@ public sealed class ShowtimeService : IShowtimeService
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, ShowtimePageResult? Page)> GetShowtimesAsync(
-        string? movieName, string? roomName, DateOnly? date, string? status,
+        int? movieId, int? cinemaId, string? movieName, string? roomName,
+        DateOnly? date, string? status,
         int page, int pageSize, string? sortBy, string? sortDir,
         CancellationToken cancellationToken = default)
     {
@@ -42,7 +43,7 @@ public sealed class ShowtimeService : IShowtimeService
         normalizedSort = normalizedSort is "endtime" or "baseprice" or "status" ? normalizedSort : "starttime";
         var descending = string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase);
         var result = await _showtimeRepository.GetShowtimesAsync(
-            movieName?.Trim(), roomName?.Trim(), date, normalizedStatus,
+            movieId, cinemaId, movieName?.Trim(), roomName?.Trim(), date, normalizedStatus,
             page, pageSize, normalizedSort, descending, cancellationToken);
         return (true, null, new ShowtimePageResult(result.Items, page, pageSize, result.TotalItems));
     }
@@ -113,14 +114,25 @@ public sealed class ShowtimeService : IShowtimeService
         return saved is null ? (false, "Showtime not found", null) : (true, null, saved);
     }
 
-    public async Task<List<Showtime>> GetShowtimesByMovieAsync(
+    public async Task<(bool Succeeded, string? ErrorMessage, IReadOnlyList<Showtime> Showtimes)>
+        GetCustomerShowtimesAsync(
         int movieId,
-        DateOnly? date,
         int? cinemaId,
         CancellationToken cancellationToken = default)
     {
-        return await _showtimeRepository.GetShowtimesByMovieAsync(
-            movieId, date, cinemaId, cancellationToken);
+        if (movieId <= 0)
+            return (false, "MovieId must be greater than 0", []);
+        if (cinemaId is <= 0)
+            return (false, "CinemaId must be greater than 0", []);
+        if (await _showtimeRepository.GetMovieAsync(movieId, cancellationToken) is null)
+            return (false, "Movie not found", []);
+        if (cinemaId.HasValue
+            && !await _showtimeRepository.CinemaExistsAsync(cinemaId.Value, cancellationToken))
+            return (false, "Cinema not found", []);
+
+        var showtimes = await _showtimeRepository.GetCustomerShowtimesAsync(
+            movieId, cinemaId, cancellationToken);
+        return (true, null, showtimes);
     }
 
     public async Task<Showtime?> GetShowtimeByIdAsync(
@@ -135,7 +147,11 @@ public sealed class ShowtimeService : IShowtimeService
         CancellationToken cancellationToken = default)
     {
         var showtime = await _showtimeRepository.GetShowtimeByIdAsync(showtimeId, cancellationToken);
-        if (showtime is null)
+        if (showtime is null
+            || showtime.Status != "scheduled"
+            || showtime.StartTime <= DateTime.UtcNow
+            || showtime.Room.Status != "active"
+            || showtime.Room.Cinema.Status != "active")
             return null;
 
         var seats = await _showtimeRepository.GetSeatsByRoomAsync(showtime.RoomID, cancellationToken);

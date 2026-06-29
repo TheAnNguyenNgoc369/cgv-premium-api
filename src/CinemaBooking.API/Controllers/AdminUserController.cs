@@ -34,7 +34,7 @@ public sealed class AdminUserController : ControllerBase
         if (!result.Succeeded) return MapError(result.ErrorType, result.ErrorMessage);
         var data = result.Value!;
         return Ok(new PagedAdminUserResponse(
-            data.Items.Select(ToResponse).ToList(), data.Page, data.PageSize,
+            data.Items.Select(ToListResponse).ToList(), data.Page, data.PageSize,
             data.TotalItems, (int)Math.Ceiling(data.TotalItems / (double)data.PageSize)));
     }
 
@@ -152,4 +152,9 @@ public sealed class AdminUserController : ControllerBase
     private static AdminUserResponse ToResponse(User user) => new(
         user.UserID, user.FullName, user.Email, user.Phone!, user.Role, user.Status,
         user.CinemaID, user.AvatarURL, user.TotalPoints, user.CreatedAt, user.UpdatedAt);
+
+    private static AdminUserListResponse ToListResponse(User user) => new(
+        user.UserID, user.FullName, user.Email, user.Phone!, user.Role, user.Status,
+        user.CinemaID, user.AvatarURL, user.TotalPoints, user.LoyaltyTier?.TierName,
+        user.CreatedAt, user.UpdatedAt);
 }

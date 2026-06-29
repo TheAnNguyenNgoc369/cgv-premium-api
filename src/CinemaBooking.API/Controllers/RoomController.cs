@@ -10,7 +10,6 @@ namespace CinemaBooking.API.Controllers;
 
 [ApiController]
 [Route("api/rooms")]
-[Authorize(Roles = Roles.Manager)]
 public sealed class RoomController : ControllerBase
 {
     private readonly IRoomService _roomService;
@@ -21,6 +20,7 @@ public sealed class RoomController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = Roles.Customer + "," + Roles.Staff + "," + Roles.Admin + "," + Roles.Manager)]
     public async Task<IActionResult> GetRooms(CancellationToken cancellationToken)
     {
         var rooms = await _roomService.GetRoomsAsync(cancellationToken);
@@ -29,6 +29,7 @@ public sealed class RoomController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [Authorize(Roles = Roles.Customer + "," + Roles.Staff + "," + Roles.Admin + "," + Roles.Manager)]
     public async Task<IActionResult> GetRoomById(
         int id,
         CancellationToken cancellationToken)
@@ -44,6 +45,7 @@ public sealed class RoomController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> CreateRoom(
         [FromBody] RoomRequest request,
         CancellationToken cancellationToken)
@@ -70,6 +72,7 @@ public sealed class RoomController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> UpdateRoom(
         int id,
         [FromBody] RoomRequest request,
@@ -98,6 +101,7 @@ public sealed class RoomController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> DeleteRoom(
         int id,
         CancellationToken cancellationToken)

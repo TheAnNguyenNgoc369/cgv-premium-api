@@ -10,7 +10,8 @@ namespace CinemaBooking.Application.Showtimes;
 public interface IShowtimeService
 {
     Task<(bool Succeeded, string? ErrorMessage, ShowtimePageResult? Page)> GetShowtimesAsync(
-        string? movieName, string? roomName, DateOnly? date, string? status,
+        int? movieId, int? cinemaId, string? movieName, string? roomName,
+        DateOnly? date, string? status,
         int page, int pageSize, string? sortBy, string? sortDir,
         CancellationToken cancellationToken = default);
     Task<(bool Succeeded, string? ErrorMessage, Showtime? Showtime)> CreateShowtimeAsync(
@@ -22,9 +23,9 @@ public interface IShowtimeService
     Task<(bool Succeeded, string? ErrorMessage)> DeleteShowtimeAsync(
         int id, CancellationToken cancellationToken = default);
     Task<bool> IsSoldOutAsync(Showtime showtime, CancellationToken cancellationToken = default);
-    Task<List<Showtime>> GetShowtimesByMovieAsync(
+    Task<(bool Succeeded, string? ErrorMessage, IReadOnlyList<Showtime> Showtimes)>
+        GetCustomerShowtimesAsync(
         int movieId,
-        DateOnly? date,
         int? cinemaId,
         CancellationToken cancellationToken = default);
 
