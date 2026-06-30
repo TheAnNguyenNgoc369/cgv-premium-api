@@ -2,15 +2,7 @@ namespace CinemaBooking.Shared.Constants;
 
 public static class MembershipTiers
 {
-    public const string Member = "Member";
-    public const string VIP = "VIP";
-
-    public const int VipMinPoints = 200;
-    public const decimal VipMinSpent = 2_000_000m;
-
-    public const decimal MemberDiscountRate = 0m;
-    public const decimal VipDiscountRate = 0.10m;
-
+    // Tier names, MinPoints, and DiscountRate are retrieved dynamically from LoyaltyTiers table
     public const decimal PointsPerVnd = 0.001m; // 1 point per 1,000 VND
 }
 

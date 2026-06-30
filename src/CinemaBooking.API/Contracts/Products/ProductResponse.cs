@@ -10,6 +10,10 @@ public sealed record ProductResponse(
     string ItemType,
     string? Description,
     decimal Price,
+    int StockQuantity,
     string? ImageURL,
-    bool IsLoyaltyEligible
+    bool IsOnMenu,
+    bool IsLoyaltyEligible,
+    string Status,
+    DateTime UpdatedAt
 );
