@@ -29,4 +29,11 @@ public interface IUserService
     Task<(bool Succeeded, string? ErrorMessage)> DeleteAsync(
         int userId,
         CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage)> ChangePasswordAsync(
+        int userId,
+        string oldPassword,
+        string newPassword,
+        string confirmPassword,
+        CancellationToken cancellationToken = default);
 }

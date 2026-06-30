@@ -7,6 +7,7 @@ public interface IMovieService
 {
     Task<List<MovieEntity>> GetMoviesAsync(
         string? status,
+        IReadOnlyCollection<int> genreIds,
         CancellationToken cancellationToken = default);
 
     Task<MovieEntity?> GetMovieByIdAsync(

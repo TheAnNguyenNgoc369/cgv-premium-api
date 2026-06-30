@@ -24,13 +24,14 @@ public sealed class MovieService : IMovieService
 
     public Task<List<MovieEntity>> GetMoviesAsync(
         string? status,
+        IReadOnlyCollection<int> genreIds,
         CancellationToken cancellationToken = default)
     {
         var normalizedStatus = NormalizeOptionalStatus(status);
 
         return normalizedStatus == InvalidStatus
             ? Task.FromResult(new List<MovieEntity>())
-            : _movieRepository.GetMoviesAsync(normalizedStatus, cancellationToken);
+            : _movieRepository.GetMoviesAsync(normalizedStatus, genreIds, cancellationToken);
     }
 
     public Task<MovieEntity?> GetMovieByIdAsync(

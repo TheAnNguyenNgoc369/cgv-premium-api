@@ -161,6 +161,36 @@ public sealed class UserController : ControllerBase
         });
     }
 
+    [HttpPut("password")]
+    public async Task<IActionResult> ChangePassword(
+        [FromBody] ChangePasswordRequest model,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        if (!TryGetCurrentUserId(out var userId))
+        {
+            return Unauthorized(new { success = false, message = "Invalid authenticated user." });
+        }
+
+        var result = await _userService.ChangePasswordAsync(
+            userId,
+            model.OldPassword,
+            model.NewPassword,
+            model.ConfirmPassword,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { success = false, message = result.ErrorMessage });
+        }
+
+        return Ok(new { success = true, message = "Password changed successfully." });
+    }
+
     private bool TryGetCurrentUserId(out int userId)
     {
         var userIdValue = User.FindFirst("userId")?.Value;

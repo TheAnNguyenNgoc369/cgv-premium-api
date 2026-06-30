@@ -25,6 +25,7 @@ public sealed class MovieRepository : IMovieRepository
 
     public Task<List<Movie>> GetMoviesAsync(
         string? status,
+        IReadOnlyCollection<int> genreIds,
         CancellationToken cancellationToken = default)
     {
         var query = _dbContext.Movie
@@ -36,6 +37,11 @@ public sealed class MovieRepository : IMovieRepository
         if (!string.IsNullOrWhiteSpace(status))
         {
             query = query.Where(m => m.Status == status);
+        }
+
+        if (genreIds.Count > 0)
+        {
+            query = query.Where(m => m.MovieGenres.Any(mg => genreIds.Contains(mg.GenreID)));
         }
 
         return query
