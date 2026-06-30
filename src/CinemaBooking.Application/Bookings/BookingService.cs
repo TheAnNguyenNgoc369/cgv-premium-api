@@ -36,6 +36,9 @@ public sealed class BookingService : IBookingService
         if (showtime is null)
             return (false, "Showtime not found.", null, null);
 
+        if (showtime.Status != "scheduled")
+            return (false, "Cannot hold seats for showtimes that are not scheduled.", null, null);
+
         if (showtime.StartTime <= DateTime.UtcNow.AddMinutes(15))
             return (false, "Cannot hold seats for showtimes starting within 15 minutes or that have already started.", null, null);
 
@@ -81,6 +84,9 @@ public sealed class BookingService : IBookingService
         var showtime = await _bookingRepository.GetShowtimeAsync(showtimeId, cancellationToken);
         if (showtime is null)
             return (false, "Showtime not found.", null);
+
+        if (showtime.Status != "scheduled")
+            return (false, "Cannot book seats for showtimes that are not scheduled.", null);
 
         if (showtime.StartTime <= DateTime.UtcNow)
             return (false, "Cannot book seats for showtimes that have already started.", null);
