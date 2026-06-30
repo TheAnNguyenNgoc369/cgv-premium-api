@@ -15,10 +15,10 @@ public interface IShowtimeService
         int page, int pageSize, string? sortBy, string? sortDir,
         CancellationToken cancellationToken = default);
     Task<(bool Succeeded, string? ErrorMessage, Showtime? Showtime)> CreateShowtimeAsync(
-        int movieId, int roomId, DateTime startTime, decimal basePrice, string status,
+        int movieId, int roomId, DateTime startTime, decimal basePrice,
         CancellationToken cancellationToken = default);
     Task<(bool Succeeded, string? ErrorMessage, Showtime? Showtime)> UpdateShowtimeAsync(
-        int id, int movieId, int roomId, DateTime startTime, decimal basePrice, string status,
+        int id, int movieId, int roomId, DateTime startTime, decimal basePrice, string? status,
         CancellationToken cancellationToken = default);
     Task<(bool Succeeded, string? ErrorMessage)> DeleteShowtimeAsync(
         int id, CancellationToken cancellationToken = default);

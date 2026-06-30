@@ -4,6 +4,7 @@ using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CinemaBooking.Infrastructure.Migrations
 {
     [DbContext(typeof(CinemaBookingDbContext))]
-    partial class CinemaBookingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260630032255_RemoveOngoingShowtimeStatus")]
+    partial class RemoveOngoingShowtimeStatus
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -131,7 +134,7 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasColumnType("datetime2")
                         .HasDefaultValueSql("GETDATE()");
 
-                    b.Property<int?>("UserID")
+                    b.Property<int>("UserID")
                         .HasColumnType("int");
 
                     b.HasKey("BookingID");
@@ -1134,9 +1137,6 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("HoldID"));
 
-                    b.Property<int?>("BookingID")
-                        .HasColumnType("int");
-
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("datetime2");
 
@@ -1162,8 +1162,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("HoldID");
-
-                    b.HasIndex("BookingID");
 
                     b.HasIndex("ShowtimeID");
 
@@ -1654,6 +1652,7 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .WithMany("Bookings")
                         .HasForeignKey("UserID")
                         .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
                         .HasConstraintName("FK_Booking_Users");
 
                     b.Navigation("CreatedByStaff");
@@ -1913,12 +1912,6 @@ namespace CinemaBooking.Infrastructure.Migrations
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.SeatHold", b =>
                 {
-                    b.HasOne("CinemaBooking.Domain.Entities.Booking", "Booking")
-                        .WithMany("SeatHolds")
-                        .HasForeignKey("BookingID")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .HasConstraintName("FK_SeatHold_Booking");
-
                     b.HasOne("CinemaBooking.Domain.Entities.Seat", "Seat")
                         .WithMany("SeatHolds")
                         .HasForeignKey("SeatID")
@@ -1939,8 +1932,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired()
                         .HasConstraintName("FK_SeatHold_Users");
-
-                    b.Navigation("Booking");
 
                     b.Navigation("Seat");
 
@@ -2064,8 +2055,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Navigation("Payment");
 
                     b.Navigation("Refunds");
-
-                    b.Navigation("SeatHolds");
 
                     b.Navigation("WalletTransactions");
                 });

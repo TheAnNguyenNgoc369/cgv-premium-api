@@ -45,10 +45,10 @@ public sealed class ShowtimeController : ControllerBase
     [HttpPost("showtimes")]
     [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> CreateShowtime(
-        ShowtimeRequest request, CancellationToken cancellationToken)
+        CreateShowtimeRequest request, CancellationToken cancellationToken)
     {
         var result = await _showtimeService.CreateShowtimeAsync(
-            request.MovieId, request.RoomId, request.StartTime, request.BasePrice, request.Status, cancellationToken);
+            request.MovieId, request.RoomId, request.StartTime, request.BasePrice, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
         var response = await ToManagementResponseAsync(result.Showtime!, cancellationToken);
         return CreatedAtAction(nameof(GetShowtimeById), new { id = response.ShowtimeId }, response);
@@ -57,7 +57,7 @@ public sealed class ShowtimeController : ControllerBase
     [HttpPut("showtimes/{id:int}")]
     [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> UpdateShowtime(
-        int id, ShowtimeRequest request, CancellationToken cancellationToken)
+        int id, UpdateShowtimeRequest request, CancellationToken cancellationToken)
     {
         var result = await _showtimeService.UpdateShowtimeAsync(
             id, request.MovieId, request.RoomId, request.StartTime, request.BasePrice, request.Status, cancellationToken);
@@ -86,6 +86,20 @@ public sealed class ShowtimeController : ControllerBase
             return NotFound(new { success = false, message = "Showtime not found." });
 
         return Ok(await ToManagementResponseAsync(showtime, cancellationToken));
+    }
+
+    [HttpGet("showtimes/{showtimeId:int}/seats")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetShowtimeSeats(
+        int showtimeId,
+        CancellationToken cancellationToken)
+    {
+        var seatMap = await _showtimeService.GetSeatMapAsync(showtimeId, cancellationToken);
+
+        if (seatMap is null)
+            return NotFound(new { success = false, message = "Showtime not found or not available for booking." });
+
+        return Ok(seatMap);
     }
 
     private async Task<ShowtimeManagementResponse> ToManagementResponseAsync(

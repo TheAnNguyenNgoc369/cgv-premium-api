@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -39,14 +39,21 @@ public sealed class BookingService : IBookingService
         if (showtime is null)
             return (false, "Showtime not found.", null, null);
 
+        if (showtime.Status != "scheduled")
+            return (false, "Cannot hold seats for showtimes that are not scheduled.", null, null);
+
+        if (showtime.StartTime <= DateTime.UtcNow.AddMinutes(15))
+            return (false, "Cannot hold seats for showtimes starting within 15 minutes or that have already started.", null, null);
+
+        if (showtime.Room.Cinema.Status != "active")
+            return (false, "Cinema is not active.", null, null);
+
         seatIds = seatIds.Distinct().ToList();
+
         var selectedSeats = await _bookingRepository.GetSeatsByIdsAsync(seatIds, cancellationToken);
         if (selectedSeats.Count != seatIds.Count || selectedSeats.Any(seat =>
                 seat.RoomID != showtime.RoomID || seat.Status != "active"))
             return (false, "One or more seats do not belong to the showtime room or are inactive.", null, null);
-
-        if (showtime.Room.Cinema.Status != "active")
-            return (false, "Cinema is not active.", null, null);
 
         var unavailableSeatIds = await _bookingRepository.GetUnavailableSeatIdsAsync(
             showtimeId, seatIds, userId, cancellationToken);
@@ -90,10 +97,17 @@ public sealed class BookingService : IBookingService
         if (showtime is null)
             return (false, "Showtime not found.", null);
 
+        if (showtime.Status != "scheduled")
+            return (false, "Cannot book seats for showtimes that are not scheduled.", null);
+
+        if (showtime.StartTime <= DateTime.UtcNow)
+            return (false, "Cannot book seats for showtimes that have already started.", null);
+
         if (showtime.Room.Cinema.Status != "active")
             return (false, "Cinema is not active.", null);
 
         seatIds = seatIds.Distinct().ToList();
+
         var myHolds = await _bookingRepository.GetMyActiveHoldsAsync(
             actorUserId, showtimeId, seatIds, cancellationToken);
 
@@ -116,6 +130,7 @@ public sealed class BookingService : IBookingService
 
         var bookingFnBs = new List<BookingFnB>();
         var fnbSubTotal = 0m;
+        var productQuantities = new Dictionary<int, int>();
 
         var normalizedFnbItems = fnbItems
             .GroupBy(item => item.ItemId)
@@ -156,6 +171,8 @@ public sealed class BookingService : IBookingService
                     UnitPrice = product.Price,
                     SubTotal = itemSubTotal
                 });
+
+                productQuantities[product.ItemID] = fnbItem.Quantity;
             }
         }
 
@@ -171,6 +188,7 @@ public sealed class BookingService : IBookingService
 
         if (!isStaff && customerId != actorUserId)
             return (false, "Customers can only create bookings for their own account.", null);
+
         var membershipDiscount = 0m;
         if (user?.LoyaltyTier is not null)
         {
@@ -246,9 +264,53 @@ public sealed class BookingService : IBookingService
             booking.BookingVoucher = bookingVoucher;
         }
 
-        var productQuantities = normalizedFnbItems.ToDictionary(item => item.ItemId, item => item.Quantity);
         await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
+            if (productQuantities.Count > 0)
+            {
+                var lockedProducts = await _bookingRepository.GetProductsByIdsWithLockAsync(
+                    productQuantities.Keys.ToList(), cancellationToken);
+
+                foreach (var item in productQuantities)
+                {
+                    var product = lockedProducts.FirstOrDefault(p => p.ItemID == item.Key);
+                    if (product is null)
+                        throw new InvalidOperationException($"Product with ID {item.Key} not found.");
+
+                    if (!product.IsOnMenu)
+                        throw new InvalidOperationException($"Product '{product.ItemName}' is no longer available.");
+
+                    if (product.Status != "in_stock" && product.Status != "low_stock")
+                        throw new InvalidOperationException($"Product '{product.ItemName}' is out of stock.");
+
+                    if (product.StockQuantity < item.Value)
+                        throw new InvalidOperationException(
+                            $"Insufficient stock for '{product.ItemName}'. Available: {product.StockQuantity}, Requested: {item.Value}");
+                }
+            }
+
+            if (bookingVoucher is not null)
+            {
+                var lockedVoucher = await _bookingRepository.GetVoucherByCodeWithLockAsync(
+                    voucherCode!.Trim(), cancellationToken);
+
+                if (lockedVoucher is null)
+                    throw new InvalidOperationException("Voucher no longer exists.");
+
+                if (!lockedVoucher.IsActive)
+                    throw new InvalidOperationException("Voucher is no longer active.");
+
+                var now = DateTime.UtcNow;
+                if (now < lockedVoucher.ValidFrom)
+                    throw new InvalidOperationException("Voucher is not active yet.");
+
+                if (now > lockedVoucher.ValidUntil)
+                    throw new InvalidOperationException("Voucher has expired.");
+
+                if (lockedVoucher.MaxUses.HasValue && lockedVoucher.UsedCount >= lockedVoucher.MaxUses.Value)
+                    throw new InvalidOperationException("Voucher usage limit has been reached.");
+            }
+
             await _bookingRepository.AddBookingAsync(booking, cancellationToken);
             await _bookingRepository.MarkHoldsAsConfirmedAsync(myHolds, booking.BookingID, cancellationToken);
 

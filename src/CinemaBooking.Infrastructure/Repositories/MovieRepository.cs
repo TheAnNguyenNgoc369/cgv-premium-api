@@ -163,7 +163,7 @@ public sealed class MovieRepository : IMovieRepository
     {
         return _dbContext.Showtimes
             .AnyAsync(s => s.MovieID == movieId
-                && (s.Status == "scheduled" || s.Status == "ongoing")
+                && s.Status == "scheduled"
                 && s.EndTime >= now, cancellationToken);
     }
 

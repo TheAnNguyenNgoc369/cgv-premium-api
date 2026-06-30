@@ -34,7 +34,7 @@ public class ShowtimeConfiguration : IEntityTypeConfiguration<Showtime>
         {
             t.HasCheckConstraint("CK_Showtime_Time", "[EndTime] > [StartTime]");
             t.HasCheckConstraint("CK_Showtime_BasePrice", "[BasePrice] >= 0");
-            t.HasCheckConstraint("CK_Showtime_Status", "[Status] IN ('scheduled', 'ongoing', 'completed', 'cancelled')");
+            t.HasCheckConstraint("CK_Showtime_Status", "[Status] IN ('scheduled', 'completed', 'cancelled')");
         });
     }
 }

@@ -54,7 +54,18 @@ public interface IBookingRepository
         List<int> productIds,
         CancellationToken cancellationToken = default);
 
+    Task<List<Product>> GetAvailableProductsAsync(
+        CancellationToken cancellationToken = default);
+
+    Task<List<Product>> GetProductsByIdsWithLockAsync(
+        List<int> productIds,
+        CancellationToken cancellationToken = default);
+
     Task<Voucher?> GetVoucherByCodeAsync(
+        string voucherCode,
+        CancellationToken cancellationToken = default);
+
+    Task<Voucher?> GetVoucherByCodeWithLockAsync(
         string voucherCode,
         CancellationToken cancellationToken = default);
 
@@ -79,5 +90,16 @@ public interface IBookingRepository
     Task UpdateBookingStatusAsync(
         int bookingId,
         string status,
+        CancellationToken cancellationToken = default);
+
+    Task DeductProductStockAsync(
+        Dictionary<int, int> productQuantities,
+        CancellationToken cancellationToken = default);
+
+    Task RestoreProductStockAsync(
+        Dictionary<int, int> productQuantities,
+        CancellationToken cancellationToken = default);
+
+    Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(
         CancellationToken cancellationToken = default);
 }
