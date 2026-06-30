@@ -130,6 +130,7 @@ public sealed class BookingRepository : IBookingRepository
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
             .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
     }
 
@@ -143,6 +144,7 @@ public sealed class BookingRepository : IBookingRepository
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
             .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)
+            .AsSplitQuery()
             .Where(b => b.UserID == userId)
             .OrderByDescending(b => b.BookingDate)
             .ToListAsync(cancellationToken);

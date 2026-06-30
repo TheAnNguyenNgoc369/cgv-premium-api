@@ -61,6 +61,7 @@ public sealed class SeatHoldExpirationJob : BackgroundService
             .Include(booking => booking.BookingFnBs)
             .Include(booking => booking.BookingVoucher)
             .Include(booking => booking.Payment).ThenInclude(payment => payment!.PaymentSessions)
+            .AsSplitQuery()
             .Where(booking => expiredBookingIds.Contains(booking.BookingID)
                 && (booking.Status == BookingStatus.Pending
                     || booking.Status == BookingStatus.PaymentFailed))
