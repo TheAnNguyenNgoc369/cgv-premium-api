@@ -114,7 +114,7 @@ public sealed class SeatRepository : ISeatRepository
         return _dbContext.Showtimes
             .AsNoTracking()
             .AnyAsync(showtime => showtime.RoomID == roomId
-                && (showtime.Status == "scheduled" || showtime.Status == "ongoing"), cancellationToken);
+                && showtime.Status == "scheduled", cancellationToken);
     }
 
     public async Task<bool> HasSeatRelationsAsync(

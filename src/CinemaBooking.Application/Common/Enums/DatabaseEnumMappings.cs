@@ -9,7 +9,7 @@ public static class DatabaseEnumMappings
     public static readonly IReadOnlyDictionary<string, string> MovieAgeRatings =
         EnumValueMapper.CreateMappings("P", "C13", "C16", "C18");
     public static readonly IReadOnlyDictionary<string, string> ShowtimeStatuses =
-        EnumValueMapper.CreateMappings("scheduled", "ongoing", "completed", "cancelled");
+        EnumValueMapper.CreateMappings("scheduled", "completed", "cancelled");
     public static readonly IReadOnlyDictionary<string, string> RoomStatuses =
         EnumValueMapper.CreateMappings("active", "maintenance", "inactive");
     public static readonly IReadOnlyDictionary<string, string> RoomTypes =

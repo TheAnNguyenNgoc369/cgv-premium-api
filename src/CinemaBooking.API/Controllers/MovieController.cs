@@ -103,7 +103,7 @@ public sealed class MovieController : ControllerBase
     [HttpPost]
     [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> CreateMovie(
-        [FromBody] MovieRequest request,
+        [FromBody] CreateMovieRequest request,
         CancellationToken cancellationToken)
     {
         var result = await _movieService.CreateMovieAsync(
@@ -119,7 +119,6 @@ public sealed class MovieController : ControllerBase
             request.PosterUrl,
             request.PosterPublicId,
             request.TrailerUrl,
-            request.Status,
             cancellationToken);
 
         if (!result.Succeeded)
@@ -139,7 +138,7 @@ public sealed class MovieController : ControllerBase
     [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> UpdateMovie(
         int id,
-        [FromBody] MovieRequest request,
+        [FromBody] UpdateMovieRequest request,
         CancellationToken cancellationToken)
     {
         var result = await _movieService.UpdateMovieAsync(

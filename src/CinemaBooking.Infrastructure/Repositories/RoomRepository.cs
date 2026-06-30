@@ -109,7 +109,7 @@ public sealed class RoomRepository : IRoomRepository
         return _dbContext.Showtimes
             .AsNoTracking()
             .AnyAsync(s => s.RoomID == roomId
-                && (s.Status == "scheduled" || s.Status == "ongoing"), cancellationToken);
+                && s.Status == "scheduled", cancellationToken);
     }
 
     public async Task<bool> DeleteAsync(

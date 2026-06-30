@@ -10,7 +10,6 @@ namespace CinemaBooking.API.Controllers;
 
 [ApiController]
 [Route("api/cinemas")]
-[Authorize(Roles = Roles.Manager + "," + Roles.Admin + "," + Roles.Staff + "," + Roles.Customer)]
 public sealed class CinemaController : ControllerBase
 {
     private readonly ICinemaService _cinemaService;
@@ -21,6 +20,7 @@ public sealed class CinemaController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetCinemas(CancellationToken cancellationToken)
     {
         var cinemas = await _cinemaService.GetCinemasAsync(cancellationToken);
@@ -31,6 +31,7 @@ public sealed class CinemaController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetCinemaById(
         int id,
         CancellationToken cancellationToken)
@@ -46,6 +47,7 @@ public sealed class CinemaController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = Roles.Manager + "," + Roles.Admin)]
     public async Task<IActionResult> CreateCinema(
         [FromBody] CinemaRequest request,
         CancellationToken cancellationToken)
@@ -70,6 +72,7 @@ public sealed class CinemaController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = Roles.Manager + "," + Roles.Admin)]
     public async Task<IActionResult> UpdateCinema(
         int id,
         [FromBody] CinemaRequest request,
@@ -96,6 +99,7 @@ public sealed class CinemaController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = Roles.Manager + "," + Roles.Admin)]
     public async Task<IActionResult> DeleteCinema(
         int id,
         CancellationToken cancellationToken)

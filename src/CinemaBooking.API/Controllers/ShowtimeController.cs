@@ -45,10 +45,10 @@ public sealed class ShowtimeController : ControllerBase
     [HttpPost("showtimes")]
     [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> CreateShowtime(
-        ShowtimeRequest request, CancellationToken cancellationToken)
+        CreateShowtimeRequest request, CancellationToken cancellationToken)
     {
         var result = await _showtimeService.CreateShowtimeAsync(
-            request.MovieId, request.RoomId, request.StartTime, request.BasePrice, request.Status, cancellationToken);
+            request.MovieId, request.RoomId, request.StartTime, request.BasePrice, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
         var response = await ToManagementResponseAsync(result.Showtime!, cancellationToken);
         return CreatedAtAction(nameof(GetShowtimeById), new { id = response.ShowtimeId }, response);
@@ -57,7 +57,7 @@ public sealed class ShowtimeController : ControllerBase
     [HttpPut("showtimes/{id:int}")]
     [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> UpdateShowtime(
-        int id, ShowtimeRequest request, CancellationToken cancellationToken)
+        int id, UpdateShowtimeRequest request, CancellationToken cancellationToken)
     {
         var result = await _showtimeService.UpdateShowtimeAsync(
             id, request.MovieId, request.RoomId, request.StartTime, request.BasePrice, request.Status, cancellationToken);

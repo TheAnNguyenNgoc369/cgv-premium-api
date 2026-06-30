@@ -31,7 +31,6 @@ public interface IMovieService
         string? posterUrl,
         string? posterPublicId,
         string? trailerUrl,
-        string? status,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, MovieEntity? Movie)> UpdateMovieAsync(
