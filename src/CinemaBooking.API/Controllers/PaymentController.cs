@@ -28,13 +28,12 @@ public sealed class PaymentController : ControllerBase
             return BadRequest(ModelState);
 
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+        var userId = GetCurrentUserId();
+        var isStaff = User.IsInRole(Roles.Staff);
 
-        var result = await _paymentService.InitiatePaymentAsync(request, ipAddress, cancellationToken);
-
-        if (result is PaymentValidationErrorResponse validationError)
-            return BadRequest(validationError);
-
-        return Ok(result);
+        var result = await _paymentService.InitiatePaymentAsync(
+            request, userId, isStaff, ipAddress, cancellationToken);
+        return MapResult(result);
     }
 
     [HttpPost("cash/confirm")]
@@ -48,10 +47,7 @@ public sealed class PaymentController : ControllerBase
 
         var result = await _paymentService.ConfirmCashPaymentAsync(request, cancellationToken);
 
-        if (result is null)
-            return NotFound(new { success = false, message = "Payment not found." });
-
-        return Ok(result);
+        return MapResult(result);
     }
 
     [HttpPost("vnpay/callback")]
@@ -68,28 +64,41 @@ public sealed class PaymentController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
     public async Task<IActionResult> GetPaymentById(
         int id,
         CancellationToken cancellationToken)
     {
-        var payment = await _paymentService.GetPaymentByIdAsync(id, cancellationToken);
-
-        if (payment is null)
-            return NotFound(new { success = false, message = "Payment not found." });
-
-        return Ok(payment);
+        var result = await _paymentService.GetPaymentByIdAsync(
+            id, GetCurrentUserId(), User.IsInRole(Roles.Staff), cancellationToken);
+        return MapResult(result);
     }
 
     [HttpGet("booking/{bookingId}")]
+    [Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
     public async Task<IActionResult> GetPaymentByBookingId(
         int bookingId,
         CancellationToken cancellationToken)
     {
-        var payment = await _paymentService.GetPaymentByBookingIdAsync(bookingId, cancellationToken);
+        var result = await _paymentService.GetPaymentByBookingIdAsync(
+            bookingId, GetCurrentUserId(), User.IsInRole(Roles.Staff), cancellationToken);
+        return MapResult(result);
+    }
 
-        if (payment is null)
-            return NotFound(new { success = false, message = "Payment for this booking was not found." });
+    private int GetCurrentUserId() => int.Parse(User.FindFirst("userId")!.Value);
 
-        return Ok(payment);
+    private IActionResult MapResult(PaymentOperationResult result)
+    {
+        if (result.Succeeded)
+            return Ok(result.Value);
+
+        var body = new { success = false, message = result.ErrorMessage };
+        return result.ErrorType switch
+        {
+            PaymentErrorType.NotFound => NotFound(body),
+            PaymentErrorType.Forbidden => StatusCode(StatusCodes.Status403Forbidden, body),
+            PaymentErrorType.Conflict => Conflict(body),
+            _ => BadRequest(body)
+        };
     }
 }

@@ -11,7 +11,9 @@ public interface IBookingService
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, Booking? Booking)> CreateBookingAsync(
-        int userId,
+        int actorUserId,
+        int? customerId,
+        bool isStaff,
         int showtimeId,
         List<int> seatIds,
         List<BookingFnBItemDto> fnbItems,

@@ -63,13 +63,16 @@ public sealed class BookingController : ControllerBase
         }
 
         var userId = GetCurrentUserId();
+        var isStaff = User.IsInRole(Roles.Staff);
+        var customerId = isStaff ? request.CustomerId : userId;
 
         var fnbItems = request.FnbItems
             .Select(item => new BookingFnBItemDto(item.ItemId, item.Quantity))
             .ToList();
 
         var result = await _bookingService.CreateBookingAsync(
-            userId, request.ShowtimeId, request.SeatIds, fnbItems, request.VoucherCode, cancellationToken);
+            userId, customerId, isStaff, request.ShowtimeId, request.SeatIds, fnbItems,
+            request.VoucherCode, cancellationToken);
 
         if (!result.Succeeded)
             return BadRequest(new { success = false, message = result.ErrorMessage });

@@ -38,6 +38,12 @@ public class SeatHoldConfiguration : IEntityTypeConfiguration<SeatHold>
             .HasForeignKey(h => h.UserID)
             .HasConstraintName("FK_SeatHold_Users");
 
+        builder.HasOne(h => h.Booking)
+            .WithMany(b => b.SeatHolds)
+            .HasForeignKey(h => h.BookingID)
+            .IsRequired(false)
+            .HasConstraintName("FK_SeatHold_Booking");
+
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_SeatHold_Status", "[Status] IN ('holding', 'confirmed', 'released', 'expired')");

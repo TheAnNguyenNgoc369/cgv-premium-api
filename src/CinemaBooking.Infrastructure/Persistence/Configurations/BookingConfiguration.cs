@@ -30,6 +30,7 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.HasOne(b => b.User)
             .WithMany(u => u.Bookings)
             .HasForeignKey(b => b.UserID)
+            .IsRequired(false)
             .HasConstraintName("FK_Booking_Users");
 
         builder.HasOne(b => b.Showtime)

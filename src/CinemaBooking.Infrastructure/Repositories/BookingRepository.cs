@@ -108,11 +108,13 @@ public sealed class BookingRepository : IBookingRepository
 
     public async Task MarkHoldsAsConfirmedAsync(
         IEnumerable<SeatHold> seatHolds,
+        int bookingId,
         CancellationToken cancellationToken = default)
     {
         foreach (var hold in seatHolds)
         {
             hold.Status = "confirmed";
+            hold.BookingID = bookingId;
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -128,6 +130,7 @@ public sealed class BookingRepository : IBookingRepository
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
             .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
     }
 
@@ -141,6 +144,7 @@ public sealed class BookingRepository : IBookingRepository
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
             .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)
+            .AsSplitQuery()
             .Where(b => b.UserID == userId)
             .OrderByDescending(b => b.BookingDate)
             .ToListAsync(cancellationToken);
@@ -184,6 +188,53 @@ public sealed class BookingRepository : IBookingRepository
             await _db.SaveChangesAsync(cancellationToken);
         }
     }
+
+    public async Task DeductProductStockAsync(
+        IReadOnlyDictionary<int, int> productQuantities,
+        CancellationToken cancellationToken = default)
+    {
+        var productIds = productQuantities.Keys.ToList();
+        var products = await _db.Products
+            .Where(product => productIds.Contains(product.ItemID))
+            .ToListAsync(cancellationToken);
+
+        foreach (var product in products)
+        {
+            var quantity = productQuantities[product.ItemID];
+            if (product.StockQuantity < quantity)
+                throw new InvalidOperationException($"Insufficient stock for product {product.ItemID}");
+
+            product.StockQuantity -= quantity;
+            product.UpdatedAt = DateTime.UtcNow;
+            product.Status = product.StockQuantity == 0
+                ? "out_of_stock"
+                : product.StockQuantity <= 10 ? "low_stock" : "in_stock";
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ExtendBookingHoldsAsync(
+        int bookingId,
+        DateTime expiresAt,
+        CancellationToken cancellationToken = default)
+    {
+        await _db.SeatHolds
+            .Where(hold => hold.BookingID == bookingId && hold.Status == "confirmed")
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(hold => hold.ExpiresAt, expiresAt),
+                cancellationToken);
+    }
+
+    public Task<bool> HasActiveBookingHoldsAsync(
+        int bookingId,
+        DateTime now,
+        CancellationToken cancellationToken = default) =>
+        _db.SeatHolds.AnyAsync(
+            hold => hold.BookingID == bookingId
+                && hold.Status == "confirmed"
+                && hold.ExpiresAt > now,
+            cancellationToken);
 
     public async Task UpdateBookingStatusAsync(
         int bookingId,

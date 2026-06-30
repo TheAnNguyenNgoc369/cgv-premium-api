@@ -42,7 +42,7 @@ public sealed class InvoiceService : IInvoiceService
                 InvoiceCode = invoiceCode,
                 TotalAmount = totalAmount,
                 TaxAmount = taxAmount,
-                IssuedAt = DateTime.Now
+                IssuedAt = DateTime.UtcNow
             },
             cancellationToken);
 
@@ -92,6 +92,6 @@ public sealed class InvoiceService : IInvoiceService
 
     private static string GenerateInvoiceCode(int bookingId)
     {
-        return $"INV{bookingId:D8}{DateTime.Now:yyMMddHHmmss}";
+        return $"INV{bookingId:D8}{DateTime.UtcNow:yyMMddHHmmss}";
     }
 }

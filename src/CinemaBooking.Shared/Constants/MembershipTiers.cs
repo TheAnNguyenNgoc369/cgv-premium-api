@@ -11,7 +11,7 @@ public static class MembershipTiers
     public const decimal MemberDiscountRate = 0m;
     public const decimal VipDiscountRate = 0.10m;
 
-    public const decimal PointsPerVnd = 0.0001m; // 1 point per 10,000 VND
+    public const decimal PointsPerVnd = 0.001m; // 1 point per 1,000 VND
 }
 
 public static class LoyaltyTransactionTypes
