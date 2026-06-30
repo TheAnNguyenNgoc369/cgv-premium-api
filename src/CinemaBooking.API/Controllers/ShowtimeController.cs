@@ -1,5 +1,6 @@
 ﻿using CinemaBooking.API.Contracts.Showtimes;
 using CinemaBooking.Application.Showtimes;
+using CinemaBooking.API.Contracts.Cinemas;
 using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
@@ -34,9 +35,9 @@ public sealed class ShowtimeController : ControllerBase
             page, pageSize, sortBy, sortDir, cancellationToken);
         if (!result.Succeeded) return BadRequest(new { success = false, message = result.ErrorMessage });
         var data = result.Page!;
-        var items = new List<ShowtimeManagementResponse>();
+        var items = new List<ShowtimeListItemResponse>();
         foreach (var showtime in data.Items)
-            items.Add(await ToManagementResponseAsync(showtime, cancellationToken));
+            items.Add(await ToListResponseAsync(showtime, cancellationToken));
         return Ok(new PagedShowtimeResponse(items, data.Page, data.PageSize, data.TotalItems,
             (int)Math.Ceiling(data.TotalItems / (double)data.PageSize)));
     }
@@ -107,6 +108,21 @@ public sealed class ShowtimeController : ControllerBase
             new(showtime.MovieID, showtime.Movie.Title, showtime.Movie.AgeRating,
                 showtime.Movie.DurationMin, showtime.Movie.PosterURL),
             new(showtime.RoomID, showtime.Room.RoomName, showtime.Room.RoomType, showtime.Room.Capacity),
+            showtime.StartTime, showtime.EndTime, showtime.BasePrice,
+            EnumValueMapper.ToApiValue(showtime.Status),
+            await _showtimeService.IsSoldOutAsync(showtime, cancellationToken));
+
+    private async Task<ShowtimeListItemResponse> ToListResponseAsync(
+        Showtime showtime, CancellationToken cancellationToken) =>
+        new(showtime.ShowtimeID,
+            new(showtime.MovieID, showtime.Movie.Title, showtime.Movie.AgeRating,
+                showtime.Movie.DurationMin, showtime.Movie.PosterURL),
+            new(showtime.RoomID, showtime.Room.RoomName, showtime.Room.RoomType, showtime.Room.Capacity),
+            new CinemaSummaryResponse(
+                showtime.Room.CinemaID,
+                showtime.Room.Cinema.CinemaName,
+                showtime.Room.Cinema.Address,
+                EnumValueMapper.ToApiValue(showtime.Room.Cinema.Status)),
             showtime.StartTime, showtime.EndTime, showtime.BasePrice,
             EnumValueMapper.ToApiValue(showtime.Status),
             await _showtimeService.IsSoldOutAsync(showtime, cancellationToken));

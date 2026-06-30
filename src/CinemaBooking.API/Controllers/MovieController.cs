@@ -23,13 +23,47 @@ public sealed class MovieController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GetMovies(
         [FromQuery] string? status = null,
+        [FromQuery] string? genreId = null,
         CancellationToken cancellationToken = default)
     {
-        var movies = await _movieService.GetMoviesAsync(status, cancellationToken);
+        if (!TryParseGenreIds(genreId, out var genreIds))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "GenreId must be a comma-separated list of positive integers."
+            });
+        }
+
+        var movies = await _movieService.GetMoviesAsync(status, genreIds, cancellationToken);
 
         var response = movies.Select(ToListResponse);
 
         return Ok(response);
+    }
+
+    private static bool TryParseGenreIds(string? value, out IReadOnlyCollection<int> genreIds)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            genreIds = Array.Empty<int>();
+            return true;
+        }
+
+        var parsedIds = new HashSet<int>();
+        foreach (var part in value.Split(',', StringSplitOptions.TrimEntries))
+        {
+            if (!int.TryParse(part, out var id) || id <= 0)
+            {
+                genreIds = Array.Empty<int>();
+                return false;
+            }
+
+            parsedIds.Add(id);
+        }
+
+        genreIds = parsedIds;
+        return true;
     }
 
     [HttpGet("{id:int}")]

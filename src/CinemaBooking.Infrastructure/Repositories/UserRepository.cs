@@ -14,6 +14,17 @@ public sealed class UserRepository : IUserRepository
         _dbContext = dbContext;
     }
 
+    public Task<User?> GetProfileByIdAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Users
+            .Include(user => user.LoyaltyTier)
+            .Include(user => user.Cinema)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(user => user.UserID == userId, cancellationToken);
+    }
+
     public Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default)
     {
         return _dbContext.Users.AnyAsync(u => u.Email == email, cancellationToken);

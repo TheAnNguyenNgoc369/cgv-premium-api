@@ -27,14 +27,6 @@ public interface IShowtimeRepository
     Task<Showtime> AddAsync(Showtime showtime, CancellationToken cancellationToken = default);
     Task<Showtime?> UpdateAsync(Showtime showtime, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(int showtimeId, CancellationToken cancellationToken = default);
-    Task<bool> CinemaExistsAsync(
-        int cinemaId,
-        CancellationToken cancellationToken = default);
-
-    Task<List<Showtime>> GetCustomerShowtimesAsync(
-        int movieId,
-        int? cinemaId,
-        CancellationToken cancellationToken = default);
 
     Task<Showtime?> GetShowtimeByIdAsync(
         int id,
