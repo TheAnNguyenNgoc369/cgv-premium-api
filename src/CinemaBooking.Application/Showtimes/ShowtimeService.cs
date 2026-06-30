@@ -13,7 +13,8 @@ namespace CinemaBooking.Application.Showtimes;
 public sealed class ShowtimeService : IShowtimeService
 {
     private const string InvalidStatusMessage =
-        "Invalid showtime status. (scheduled, ongoing, completed, cancelled)";
+        "Invalid showtime status. (scheduled, completed, cancelled)";
+    private const string InvalidManualStatus = "__invalid_status__";
 
     private readonly IShowtimeRepository _showtimeRepository;
 
@@ -49,18 +50,33 @@ public sealed class ShowtimeService : IShowtimeService
     }
 
     public Task<(bool Succeeded, string? ErrorMessage, Showtime? Showtime)> CreateShowtimeAsync(
-        int movieId, int roomId, DateTime startTime, decimal basePrice, string status,
+        int movieId, int roomId, DateTime startTime, decimal basePrice,
         CancellationToken cancellationToken = default) =>
-        SaveAsync(null, movieId, roomId, startTime, basePrice, status, cancellationToken);
+        SaveAsync(null, movieId, roomId, startTime, basePrice, null, cancellationToken);
 
     public async Task<(bool Succeeded, string? ErrorMessage, Showtime? Showtime)> UpdateShowtimeAsync(
-        int id, int movieId, int roomId, DateTime startTime, decimal basePrice, string status,
+        int id, int movieId, int roomId, DateTime startTime, decimal basePrice, string? status,
         CancellationToken cancellationToken = default)
     {
         var existing = await _showtimeRepository.GetShowtimeByIdAsync(id, cancellationToken);
         if (existing is null) return (false, "Showtime not found", null);
-        if (await _showtimeRepository.HasActiveBookingOrHoldAsync(id, DateTime.UtcNow, cancellationToken))
+
+        var manualStatus = NormalizeManualStatus(status);
+        if (manualStatus == InvalidManualStatus)
+            return (false, InvalidStatusMessage, null);
+
+        var hasProtectedChanges = existing.MovieID != movieId
+            || existing.RoomID != roomId
+            || existing.StartTime != startTime
+            || existing.BasePrice != basePrice;
+        var hasActiveBookingOrHold = await _showtimeRepository.HasActiveBookingOrHoldAsync(
+            id, DateTime.UtcNow, cancellationToken);
+        if (hasActiveBookingOrHold
+            && (hasProtectedChanges || manualStatus is not null and not "cancelled"))
+        {
             return (false, "Showtime has active bookings or seat holds", null);
+        }
+
         return await SaveAsync(existing, movieId, roomId, startTime, basePrice, status, cancellationToken);
     }
 
@@ -81,13 +97,15 @@ public sealed class ShowtimeService : IShowtimeService
 
     private async Task<(bool Succeeded, string? ErrorMessage, Showtime? Showtime)> SaveAsync(
         Showtime? existing, int movieId, int roomId, DateTime startTime,
-        decimal basePrice, string status, CancellationToken cancellationToken)
+        decimal basePrice, string? status, CancellationToken cancellationToken)
     {
-        var statusResult = EnumValueMapper.Validate(
-            status, "Status", DatabaseEnumMappings.ShowtimeStatuses);
-        var normalizedStatus = statusResult.DatabaseValue;
-        if (!statusResult.Succeeded)
+        var manualStatus = NormalizeManualStatus(status);
+        if (manualStatus == InvalidManualStatus)
             return (false, InvalidStatusMessage, null);
+
+        var normalizedStatus = existing is null
+            ? CalculateStatus(startTime, DateTime.UtcNow)
+            : manualStatus ?? existing.Status;
         if (basePrice < 0) return (false, "Base price must be greater than or equal to 0", null);
         var movie = await _showtimeRepository.GetMovieAsync(movieId, cancellationToken);
         if (movie is null) return (false, "Movie not found", null);
@@ -118,6 +136,21 @@ public sealed class ShowtimeService : IShowtimeService
             ? await _showtimeRepository.AddAsync(showtime, cancellationToken)
             : await _showtimeRepository.UpdateAsync(showtime, cancellationToken);
         return saved is null ? (false, "Showtime not found", null) : (true, null, saved);
+    }
+
+    private static string CalculateStatus(DateTime startTime, DateTime now) =>
+        now < startTime ? "scheduled" : "completed";
+
+    private static string? NormalizeManualStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+            return null;
+
+        var statusResult = EnumValueMapper.Validate(
+            status, "Status", DatabaseEnumMappings.ShowtimeStatuses);
+        return statusResult.Succeeded
+            ? statusResult.DatabaseValue
+            : InvalidManualStatus;
     }
 
     public async Task<Showtime?> GetShowtimeByIdAsync(
