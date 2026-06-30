@@ -98,6 +98,12 @@ public sealed class ShowtimeService : IShowtimeService
         var room = await _showtimeRepository.GetRoomAsync(roomId, cancellationToken);
         if (room is null) return (false, "Room not found", null);
         if (room.Status != "active") return (false, "Room must be active", null);
+        if (existing is null
+            && (await _showtimeRepository.GetSeatsByRoomAsync(roomId, cancellationToken)).Count == 0)
+            return (
+                false,
+                "Room has no seats. Please configure seats before creating a showtime.",
+                null);
         var endTime = startTime.AddMinutes(movie.DurationMin + 30);
         if (normalizedStatus != "cancelled" &&
             await _showtimeRepository.HasConflictAsync(roomId, startTime, endTime,
