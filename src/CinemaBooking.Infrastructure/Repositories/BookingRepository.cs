@@ -155,6 +155,16 @@ public sealed class BookingRepository : IBookingRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<List<Product>> GetAvailableProductsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Products
+            .Where(p => p.IsOnMenu && p.Status == "in_stock")
+            .OrderBy(p => p.ItemType)
+            .ThenBy(p => p.ItemName)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<Voucher?> GetVoucherByCodeAsync(
         string voucherCode,
         CancellationToken cancellationToken = default)
@@ -189,5 +199,101 @@ public sealed class BookingRepository : IBookingRepository
         booking.Status = status;
         booking.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeductProductStockAsync(
+        Dictionary<int, int> productQuantities,
+        CancellationToken cancellationToken = default)
+    {
+        var productIds = productQuantities.Keys.ToList();
+        var products = await _db.Products
+            .Where(p => productIds.Contains(p.ItemID))
+            .ToListAsync(cancellationToken);
+
+        foreach (var product in products)
+        {
+            if (productQuantities.TryGetValue(product.ItemID, out var quantity))
+            {
+                if (product.StockQuantity < quantity)
+                {
+                    throw new InvalidOperationException(
+                        $"Insufficient stock for product '{product.ItemName}'. Available: {product.StockQuantity}, Requested: {quantity}");
+                }
+
+                product.StockQuantity -= quantity;
+                product.UpdatedAt = DateTime.UtcNow;
+
+                if (product.StockQuantity <= 0)
+                {
+                    product.Status = "out_of_stock";
+                }
+                else if (product.StockQuantity <= 10)
+                {
+                    product.Status = "low_stock";
+                }
+            }
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RestoreProductStockAsync(
+        Dictionary<int, int> productQuantities,
+        CancellationToken cancellationToken = default)
+    {
+        var productIds = productQuantities.Keys.ToList();
+        var products = await _db.Products
+            .Where(p => productIds.Contains(p.ItemID))
+            .ToListAsync(cancellationToken);
+
+        foreach (var product in products)
+        {
+            if (productQuantities.TryGetValue(product.ItemID, out var quantity))
+            {
+                product.StockQuantity += quantity;
+                product.UpdatedAt = DateTime.UtcNow;
+
+                if (product.StockQuantity > 10)
+                {
+                    product.Status = "in_stock";
+                }
+                else if (product.StockQuantity > 0)
+                {
+                    product.Status = "low_stock";
+                }
+            }
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<List<Product>> GetProductsByIdsWithLockAsync(
+        List<int> productIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (!productIds.Any())
+            return new List<Product>();
+
+        var idsParam = string.Join(",", productIds);
+        var sql = $"SELECT * FROM Product WITH (UPDLOCK, ROWLOCK) WHERE ItemID IN ({idsParam})";
+
+        return await _db.Products
+            .FromSqlRaw(sql)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Voucher?> GetVoucherByCodeWithLockAsync(
+        string voucherCode,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Vouchers
+            .FromSqlRaw("SELECT * FROM Voucher WITH (UPDLOCK, ROWLOCK) WHERE VoucherCode = {0}", voucherCode)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Database.BeginTransactionAsync(cancellationToken);
     }
 }

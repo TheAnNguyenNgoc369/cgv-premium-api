@@ -112,6 +112,7 @@ public sealed class BookingService : IBookingService
 
         var bookingFnBs = new List<BookingFnB>();
         var fnbSubTotal = 0m;
+        var productQuantities = new Dictionary<int, int>();
 
         if (fnbItems.Any())
         {
@@ -147,6 +148,8 @@ public sealed class BookingService : IBookingService
                     UnitPrice = product.Price,
                     SubTotal = itemSubTotal
                 });
+
+                productQuantities[product.ItemID] = fnbItem.Quantity;
             }
         }
 
@@ -172,7 +175,7 @@ public sealed class BookingService : IBookingService
             if (!voucher.IsActive)
                 return (false, "Voucher is not available.", null);
 
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             if (now < voucher.ValidFrom)
                 return (false, "Voucher is not active yet.", null);
 
@@ -198,7 +201,7 @@ public sealed class BookingService : IBookingService
             {
                 VoucherID = voucher.VoucherID,
                 DiscountApplied = voucherDiscount,
-                UsedAt = DateTime.Now
+                UsedAt = DateTime.UtcNow
             };
         }
 
@@ -213,8 +216,8 @@ public sealed class BookingService : IBookingService
             DiscountAmount = discountAmount,
             FinalAmount = finalAmount,
             Status = "pending",
-            BookingDate = DateTime.Now,
-            UpdatedAt = DateTime.Now,
+            BookingDate = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
             BookingSeats = bookingSeats,
             BookingFnBs = bookingFnBs
         };
@@ -224,13 +227,67 @@ public sealed class BookingService : IBookingService
             booking.BookingVoucher = bookingVoucher;
         }
 
-        await _bookingRepository.AddBookingAsync(booking, cancellationToken);
-        await _bookingRepository.MarkHoldsAsConfirmedAsync(myHolds, cancellationToken);
+        await using var transaction = await _bookingRepository.BeginTransactionAsync(cancellationToken);
 
-        if (bookingVoucher is not null)
+        try
         {
-            await _bookingRepository.IncrementVoucherUsageAsync(
-                bookingVoucher.VoucherID, cancellationToken);
+            // Re-validate products with lock to prevent race condition
+            if (productQuantities.Any())
+            {
+                var lockedProducts = await _bookingRepository.GetProductsByIdsWithLockAsync(
+                    productQuantities.Keys.ToList(), cancellationToken);
+
+                foreach (var item in productQuantities)
+                {
+                    var product = lockedProducts.FirstOrDefault(p => p.ItemID == item.Key);
+                    if (product == null)
+                        throw new InvalidOperationException($"Product with ID {item.Key} not found.");
+
+                    if (!product.IsOnMenu || product.Status != "in_stock")
+                        throw new InvalidOperationException($"Product '{product.ItemName}' is no longer available.");
+
+                    if (product.StockQuantity < item.Value)
+                        throw new InvalidOperationException(
+                            $"Insufficient stock for '{product.ItemName}'. Available: {product.StockQuantity}, Requested: {item.Value}");
+                }
+            }
+
+            // Re-validate voucher with lock to prevent race condition
+            if (bookingVoucher != null)
+            {
+                var lockedVoucher = await _bookingRepository.GetVoucherByCodeWithLockAsync(
+                    voucherCode!.Trim(), cancellationToken);
+
+                if (lockedVoucher == null)
+                    throw new InvalidOperationException("Voucher no longer exists.");
+
+                if (!lockedVoucher.IsActive)
+                    throw new InvalidOperationException("Voucher is no longer active.");
+
+                if (lockedVoucher.MaxUses.HasValue && lockedVoucher.UsedCount >= lockedVoucher.MaxUses.Value)
+                    throw new InvalidOperationException("Voucher usage limit has been reached.");
+            }
+
+            await _bookingRepository.AddBookingAsync(booking, cancellationToken);
+            await _bookingRepository.MarkHoldsAsConfirmedAsync(myHolds, cancellationToken);
+
+            if (bookingVoucher is not null)
+            {
+                await _bookingRepository.IncrementVoucherUsageAsync(
+                    bookingVoucher.VoucherID, cancellationToken);
+            }
+
+            if (productQuantities.Any())
+            {
+                await _bookingRepository.DeductProductStockAsync(productQuantities, cancellationToken);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
         }
 
         var savedBooking = await _bookingRepository.GetBookingByIdAsync(booking.BookingID, cancellationToken);
@@ -254,6 +311,6 @@ public sealed class BookingService : IBookingService
 
     private static string GenerateBookingCode()
     {
-        return $"BK{DateTime.Now:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
+        return $"BK{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
     }
 }
