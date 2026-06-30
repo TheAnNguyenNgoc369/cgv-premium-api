@@ -4,12 +4,14 @@ namespace CinemaBooking.Application.Payments;
 
 public interface IPaymentService
 {
-    Task<object> InitiatePaymentAsync(
+    Task<PaymentOperationResult> InitiatePaymentAsync(
         InitiatePaymentRequest request,
+        int actorUserId,
+        bool isStaff,
         string ipAddress = "127.0.0.1",
         CancellationToken cancellationToken = default);
 
-    Task<PaymentResponse?> ConfirmCashPaymentAsync(
+    Task<PaymentOperationResult> ConfirmCashPaymentAsync(
         ConfirmCashPaymentRequest request,
         CancellationToken cancellationToken = default);
 
@@ -17,11 +19,15 @@ public interface IPaymentService
         Dictionary<string, string> vnpayData,
         CancellationToken cancellationToken = default);
 
-    Task<PaymentResponse?> GetPaymentByIdAsync(
+    Task<PaymentOperationResult> GetPaymentByIdAsync(
         int paymentId,
+        int actorUserId,
+        bool isStaff,
         CancellationToken cancellationToken = default);
 
-    Task<PaymentResponse?> GetPaymentByBookingIdAsync(
+    Task<PaymentOperationResult> GetPaymentByBookingIdAsync(
         int bookingId,
+        int actorUserId,
+        bool isStaff,
         CancellationToken cancellationToken = default);
 }

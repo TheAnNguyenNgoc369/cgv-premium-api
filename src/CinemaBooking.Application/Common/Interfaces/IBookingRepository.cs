@@ -39,6 +39,7 @@ public interface IBookingRepository
 
     Task MarkHoldsAsConfirmedAsync(
         IEnumerable<SeatHold> seatHolds,
+        int bookingId,
         CancellationToken cancellationToken = default);
 
     Task<Booking?> GetBookingByIdAsync(
@@ -59,6 +60,20 @@ public interface IBookingRepository
 
     Task IncrementVoucherUsageAsync(
         int voucherId,
+        CancellationToken cancellationToken = default);
+
+    Task DeductProductStockAsync(
+        IReadOnlyDictionary<int, int> productQuantities,
+        CancellationToken cancellationToken = default);
+
+    Task ExtendBookingHoldsAsync(
+        int bookingId,
+        DateTime expiresAt,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> HasActiveBookingHoldsAsync(
+        int bookingId,
+        DateTime now,
         CancellationToken cancellationToken = default);
 
     Task UpdateBookingStatusAsync(

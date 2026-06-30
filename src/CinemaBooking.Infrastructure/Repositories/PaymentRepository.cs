@@ -2,6 +2,7 @@ using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using CinemaBooking.Shared.Constants;
 
 namespace CinemaBooking.Infrastructure.Repositories;
 
@@ -102,6 +103,34 @@ public sealed class PaymentRepository : IPaymentRepository
             throw new InvalidOperationException($"PaymentSession {sessionId} not found");
 
         session.Status = status;
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UpdatePaymentSessionsForPaymentAsync(
+        int paymentId,
+        string status,
+        CancellationToken cancellationToken = default)
+    {
+        await _db.PaymentSessions
+            .Where(session => session.PaymentID == paymentId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(session => session.Status, status),
+                cancellationToken);
+    }
+
+    public async Task ResetPaymentForRetryAsync(
+        int paymentId,
+        string paymentMethod,
+        decimal amount,
+        CancellationToken cancellationToken = default)
+    {
+        var payment = await _db.Payments.FindAsync(new object[] { paymentId }, cancellationToken)
+            ?? throw new InvalidOperationException($"Payment {paymentId} not found");
+        payment.PaymentMethod = paymentMethod;
+        payment.Amount = amount;
+        payment.Status = PaymentStatus.Pending;
+        payment.PaidAt = null;
+        payment.TransactionCode = null;
         await _db.SaveChangesAsync(cancellationToken);
     }
 }

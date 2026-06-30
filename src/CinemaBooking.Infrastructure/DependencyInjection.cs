@@ -60,6 +60,7 @@ public static class DependencyInjection
         services.AddScoped<IEmailSender, SmtpEmailSender>();
         services.AddScoped<IImageStorageService, CloudinaryImageStorageService>();
         services.AddHostedService<SeatHoldExpirationJob>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScopedByConvention(typeof(DependencyInjection).Assembly, "Repository");
 
         return services;

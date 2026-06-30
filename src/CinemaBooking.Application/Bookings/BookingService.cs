@@ -14,13 +14,16 @@ public sealed class BookingService : IBookingService
 
     private readonly IBookingRepository _bookingRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IUnitOfWork _unitOfWork;
 
     public BookingService(
         IBookingRepository bookingRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IUnitOfWork unitOfWork)
     {
         _bookingRepository = bookingRepository;
         _userRepository = userRepository;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, List<int>? HoldIds, DateTime? ExpiresAt)> HoldSeatsAsync(
@@ -35,6 +38,12 @@ public sealed class BookingService : IBookingService
         var showtime = await _bookingRepository.GetShowtimeAsync(showtimeId, cancellationToken);
         if (showtime is null)
             return (false, "Showtime not found.", null, null);
+
+        seatIds = seatIds.Distinct().ToList();
+        var selectedSeats = await _bookingRepository.GetSeatsByIdsAsync(seatIds, cancellationToken);
+        if (selectedSeats.Count != seatIds.Count || selectedSeats.Any(seat =>
+                seat.RoomID != showtime.RoomID || seat.Status != "active"))
+            return (false, "One or more seats do not belong to the showtime room or are inactive.", null, null);
 
         if (showtime.Room.Cinema.Status != "active")
             return (false, "Cinema is not active.", null, null);
@@ -65,7 +74,9 @@ public sealed class BookingService : IBookingService
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, Booking? Booking)> CreateBookingAsync(
-        int userId,
+        int actorUserId,
+        int? customerId,
+        bool isStaff,
         int showtimeId,
         List<int> seatIds,
         List<BookingFnBItemDto> fnbItems,
@@ -82,13 +93,18 @@ public sealed class BookingService : IBookingService
         if (showtime.Room.Cinema.Status != "active")
             return (false, "Cinema is not active.", null);
 
+        seatIds = seatIds.Distinct().ToList();
         var myHolds = await _bookingRepository.GetMyActiveHoldsAsync(
-            userId, showtimeId, seatIds, cancellationToken);
+            actorUserId, showtimeId, seatIds, cancellationToken);
 
         if (myHolds.Count != seatIds.Count)
             return (false, "Some seats are not held or the holds have expired. Please select them again.", null);
 
         var seats = await _bookingRepository.GetSeatsByIdsAsync(seatIds, cancellationToken);
+
+        if (seats.Count != seatIds.Count || seats.Any(seat =>
+                seat.RoomID != showtime.RoomID || seat.Status != "active"))
+            return (false, "One or more seats do not belong to the showtime room or are inactive.", null);
 
         var bookingSeats = seats.Select(seat => new BookingSeat
         {
@@ -101,9 +117,14 @@ public sealed class BookingService : IBookingService
         var bookingFnBs = new List<BookingFnB>();
         var fnbSubTotal = 0m;
 
-        if (fnbItems.Any())
+        var normalizedFnbItems = fnbItems
+            .GroupBy(item => item.ItemId)
+            .Select(group => new BookingFnBItemDto(group.Key, group.Sum(item => item.Quantity)))
+            .ToList();
+
+        if (normalizedFnbItems.Any())
         {
-            var productIds = fnbItems.Select(f => f.ItemId).Distinct().ToList();
+            var productIds = normalizedFnbItems.Select(f => f.ItemId).ToList();
             var products = await _bookingRepository.GetProductsByIdsAsync(productIds, cancellationToken);
 
             if (products.Count != productIds.Count)
@@ -112,14 +133,14 @@ public sealed class BookingService : IBookingService
                 return (false, $"Products with IDs {string.Join(", ", missingIds)} were not found.", null);
             }
 
-            foreach (var fnbItem in fnbItems)
+            foreach (var fnbItem in normalizedFnbItems)
             {
                 var product = products.First(p => p.ItemID == fnbItem.ItemId);
 
                 if (!product.IsOnMenu)
                     return (false, $"Product '{product.ItemName}' is no longer available.", null);
 
-                if (product.Status != "in_stock")
+                if (product.Status != "in_stock" && product.Status != "low_stock")
                     return (false, $"Product '{product.ItemName}' is out of stock.", null);
 
                 if (product.StockQuantity < fnbItem.Quantity)
@@ -140,7 +161,16 @@ public sealed class BookingService : IBookingService
 
         var totalBeforeDiscount = seatsSubTotal + fnbSubTotal;
 
-        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        User? user = null;
+        if (customerId.HasValue)
+        {
+            user = await _userRepository.GetByIdAsync(customerId.Value, cancellationToken);
+            if (user is null || user.Role != "customer")
+                return (false, "Customer account was not found.", null);
+        }
+
+        if (!isStaff && customerId != actorUserId)
+            return (false, "Customers can only create bookings for their own account.", null);
         var membershipDiscount = 0m;
         if (user?.LoyaltyTier is not null)
         {
@@ -152,6 +182,9 @@ public sealed class BookingService : IBookingService
 
         if (!string.IsNullOrWhiteSpace(voucherCode))
         {
+            if (!customerId.HasValue)
+                return (false, "Guest bookings cannot use vouchers.", null);
+
             var voucher = await _bookingRepository.GetVoucherByCodeAsync(voucherCode.Trim(), cancellationToken);
 
             if (voucher is null)
@@ -160,7 +193,7 @@ public sealed class BookingService : IBookingService
             if (!voucher.IsActive)
                 return (false, "Voucher is not available.", null);
 
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             if (now < voucher.ValidFrom)
                 return (false, "Voucher is not active yet.", null);
 
@@ -186,7 +219,7 @@ public sealed class BookingService : IBookingService
             {
                 VoucherID = voucher.VoucherID,
                 DiscountApplied = voucherDiscount,
-                UsedAt = DateTime.Now
+                UsedAt = DateTime.UtcNow
             };
         }
 
@@ -195,14 +228,15 @@ public sealed class BookingService : IBookingService
         var booking = new Booking
         {
             BookingCode = GenerateBookingCode(),
-            UserID = userId,
+            UserID = customerId,
+            CreatedByStaffID = isStaff ? actorUserId : null,
             ShowtimeID = showtimeId,
             SubTotal = totalBeforeDiscount,
             DiscountAmount = discountAmount,
             FinalAmount = finalAmount,
             Status = "pending",
-            BookingDate = DateTime.Now,
-            UpdatedAt = DateTime.Now,
+            BookingDate = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
             BookingSeats = bookingSeats,
             BookingFnBs = bookingFnBs
         };
@@ -212,14 +246,20 @@ public sealed class BookingService : IBookingService
             booking.BookingVoucher = bookingVoucher;
         }
 
-        await _bookingRepository.AddBookingAsync(booking, cancellationToken);
-        await _bookingRepository.MarkHoldsAsConfirmedAsync(myHolds, cancellationToken);
-
-        if (bookingVoucher is not null)
+        var productQuantities = normalizedFnbItems.ToDictionary(item => item.ItemId, item => item.Quantity);
+        await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
-            await _bookingRepository.IncrementVoucherUsageAsync(
-                bookingVoucher.VoucherID, cancellationToken);
-        }
+            await _bookingRepository.AddBookingAsync(booking, cancellationToken);
+            await _bookingRepository.MarkHoldsAsConfirmedAsync(myHolds, booking.BookingID, cancellationToken);
+
+            if (bookingVoucher is not null)
+                await _bookingRepository.IncrementVoucherUsageAsync(bookingVoucher.VoucherID, cancellationToken);
+
+            if (productQuantities.Count > 0)
+                await _bookingRepository.DeductProductStockAsync(productQuantities, cancellationToken);
+
+            return true;
+        }, cancellationToken);
 
         var savedBooking = await _bookingRepository.GetBookingByIdAsync(booking.BookingID, cancellationToken);
 
@@ -242,6 +282,6 @@ public sealed class BookingService : IBookingService
 
     private static string GenerateBookingCode()
     {
-        return $"BK{DateTime.Now:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
+        return $"BK{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
     }
 }

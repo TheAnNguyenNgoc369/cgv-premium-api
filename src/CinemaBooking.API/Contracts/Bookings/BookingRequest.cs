@@ -14,6 +14,8 @@ public sealed class HoldSeatsRequest
 
 public sealed class CreateBookingRequest
 {
+    public int? CustomerId { get; set; }
+
     [Required]
     public int ShowtimeId { get; set; }
 

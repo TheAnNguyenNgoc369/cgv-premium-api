@@ -39,4 +39,15 @@ public interface IPaymentRepository
         int sessionId,
         string status,
         CancellationToken cancellationToken = default);
+
+    Task UpdatePaymentSessionsForPaymentAsync(
+        int paymentId,
+        string status,
+        CancellationToken cancellationToken = default);
+
+    Task ResetPaymentForRetryAsync(
+        int paymentId,
+        string paymentMethod,
+        decimal amount,
+        CancellationToken cancellationToken = default);
 }
