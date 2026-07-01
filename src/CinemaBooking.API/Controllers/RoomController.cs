@@ -1,6 +1,7 @@
 using CinemaBooking.API.Contracts.Rooms;
 using CinemaBooking.Application.Rooms;
 using CinemaBooking.Application.Common.Enums;
+using CinemaBooking.Application.Common.Security;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -13,10 +14,12 @@ namespace CinemaBooking.API.Controllers;
 public sealed class RoomController : ControllerBase
 {
     private readonly IRoomService _roomService;
+    private readonly IManagerCinemaScopeService _managerCinemaScopeService;
 
-    public RoomController(IRoomService roomService)
+    public RoomController(IRoomService roomService, IManagerCinemaScopeService managerCinemaScopeService)
     {
         _roomService = roomService;
+        _managerCinemaScopeService = managerCinemaScopeService;
     }
 
     [HttpGet]
@@ -50,17 +53,20 @@ public sealed class RoomController : ControllerBase
         [FromBody] RoomRequest request,
         CancellationToken cancellationToken)
     {
+        var managerCinemaId = await GetManagerCinemaIdAsync(cancellationToken);
+        if (!managerCinemaId.HasValue) return CinemaScopeForbidden();
         var result = await _roomService.CreateRoomAsync(
             request.CinemaId,
             request.Name,
             request.Type,
             request.Status,
             request.Description,
+            managerCinemaId,
             cancellationToken);
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { success = false, message = result.ErrorMessage });
+            return MapError(result.ErrorMessage);
         }
 
         var response = ToResponse(result.Room!);
@@ -78,6 +84,8 @@ public sealed class RoomController : ControllerBase
         [FromBody] RoomRequest request,
         CancellationToken cancellationToken)
     {
+        var managerCinemaId = await GetManagerCinemaIdAsync(cancellationToken);
+        if (!managerCinemaId.HasValue) return CinemaScopeForbidden();
         var result = await _roomService.UpdateRoomAsync(
             id,
             request.CinemaId,
@@ -85,6 +93,7 @@ public sealed class RoomController : ControllerBase
             request.Type,
             request.Status,
             request.Description,
+            managerCinemaId,
             cancellationToken);
 
         if (!result.Succeeded)
@@ -94,7 +103,7 @@ public sealed class RoomController : ControllerBase
                 return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return BadRequest(new { success = false, message = result.ErrorMessage });
+            return MapError(result.ErrorMessage);
         }
 
         return Ok(ToResponse(result.Room!));
@@ -106,7 +115,9 @@ public sealed class RoomController : ControllerBase
         int id,
         CancellationToken cancellationToken)
     {
-        var result = await _roomService.DeleteRoomAsync(id, cancellationToken);
+        var managerCinemaId = await GetManagerCinemaIdAsync(cancellationToken);
+        if (!managerCinemaId.HasValue) return CinemaScopeForbidden();
+        var result = await _roomService.DeleteRoomAsync(id, managerCinemaId, cancellationToken);
 
         if (!result.Succeeded)
         {
@@ -114,6 +125,9 @@ public sealed class RoomController : ControllerBase
             {
                 return NotFound(new { success = false, message = result.ErrorMessage });
             }
+
+            if (result.ErrorMessage == CinemaScopeMessages.AccessDenied)
+                return CinemaScopeForbidden();
 
             return Conflict(new { success = false, message = result.ErrorMessage });
         }
@@ -133,4 +147,18 @@ public sealed class RoomController : ControllerBase
             room.Description,
             room.CreatedAt);
     }
+
+    private async Task<int?> GetManagerCinemaIdAsync(CancellationToken cancellationToken) =>
+        int.TryParse(User.FindFirst("userId")?.Value, out var userId)
+            ? await _managerCinemaScopeService.GetAssignedCinemaIdAsync(userId, cancellationToken)
+            : null;
+
+    private IActionResult MapError(string? message) =>
+        message == CinemaScopeMessages.AccessDenied
+            ? CinemaScopeForbidden()
+            : BadRequest(new { success = false, message });
+
+    private ObjectResult CinemaScopeForbidden() => StatusCode(
+        StatusCodes.Status403Forbidden,
+        new { success = false, message = CinemaScopeMessages.AccessDenied });
 }

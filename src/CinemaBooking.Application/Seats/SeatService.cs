@@ -1,6 +1,7 @@
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
+using CinemaBooking.Application.Common.Security;
 
 namespace CinemaBooking.Application.Seats;
 
@@ -64,8 +65,14 @@ public sealed class SeatService : ISeatService
         int seatNumber,
         int seatTypeId,
         string status,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default)
     {
+        var room = await _seatRepository.GetRoomByIdAsync(roomId, cancellationToken);
+        if (room is null)
+            return (false, "Room not found", null);
+        if (managerCinemaId.HasValue && room.CinemaID != managerCinemaId)
+            return (false, CinemaScopeMessages.AccessDenied, null);
         var validation = await ValidateSeatAsync(
             roomId,
             rowLabel,
@@ -97,12 +104,16 @@ public sealed class SeatService : ISeatService
         int seatId,
         int seatTypeId,
         string status,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default)
     {
-        if (await _seatRepository.GetRoomByIdAsync(roomId, cancellationToken) is null)
+        var room = await _seatRepository.GetRoomByIdAsync(roomId, cancellationToken);
+        if (room is null)
         {
             return (false, "Room not found", null);
         }
+        if (managerCinemaId.HasValue && room.CinemaID != managerCinemaId)
+            return (false, CinemaScopeMessages.AccessDenied, null);
 
         if (await _seatRepository.GetSeatByIdAsync(roomId, seatId, cancellationToken) is null)
         {
@@ -146,8 +157,14 @@ public sealed class SeatService : ISeatService
     public async Task<(bool Succeeded, string? ErrorMessage)> DeleteSeatAsync(
         int roomId,
         int seatId,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default)
     {
+        var room = await _seatRepository.GetRoomByIdAsync(roomId, cancellationToken);
+        if (room is null)
+            return (false, "Room not found");
+        if (managerCinemaId.HasValue && room.CinemaID != managerCinemaId)
+            return (false, CinemaScopeMessages.AccessDenied);
         var seat = await _seatRepository.GetSeatByIdAsync(roomId, seatId, cancellationToken);
         if (seat is null)
         {
@@ -174,6 +191,7 @@ public sealed class SeatService : ISeatService
         int totalRows,
         int totalCols,
         IReadOnlyCollection<SeatLayoutSeatItem> seats,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default)
     {
         var room = await _seatRepository.GetRoomByIdAsync(roomId, cancellationToken);
@@ -181,6 +199,8 @@ public sealed class SeatService : ISeatService
         {
             return (false, "Room not found", []);
         }
+        if (managerCinemaId.HasValue && room.CinemaID != managerCinemaId)
+            return (false, CinemaScopeMessages.AccessDenied, []);
 
         if (await _seatRepository.HasActiveOrUpcomingShowtimesAsync(roomId, cancellationToken))
         {
@@ -402,4 +422,5 @@ public sealed class SeatService : ISeatService
 
         return rowNumber;
     }
+
 }

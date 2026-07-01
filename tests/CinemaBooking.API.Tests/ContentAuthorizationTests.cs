@@ -1,0 +1,38 @@
+using CinemaBooking.API.Controllers;
+using CinemaBooking.Shared.Constants;
+using Microsoft.AspNetCore.Authorization;
+
+namespace CinemaBooking.API.Tests;
+
+public sealed class ContentAuthorizationTests
+{
+    [Theory]
+    [InlineData(nameof(GenreController.GetGenres))]
+    [InlineData(nameof(GenreController.GetGenreById))]
+    public void GenreReads_AllowAnonymous(string methodName)
+    {
+        var method = typeof(GenreController).GetMethod(methodName)!;
+        Assert.NotNull(method.GetCustomAttributes(typeof(AllowAnonymousAttribute), true).SingleOrDefault());
+    }
+
+    [Theory]
+    [InlineData(nameof(GenreController.CreateGenre))]
+    [InlineData(nameof(GenreController.UpdateGenre))]
+    [InlineData(nameof(GenreController.DeleteGenre))]
+    public void GenreWrites_RequireManager(string methodName)
+    {
+        var method = typeof(GenreController).GetMethod(methodName)!;
+        var attribute = Assert.Single(method.GetCustomAttributes(typeof(AuthorizeAttribute), true)
+            .Cast<AuthorizeAttribute>());
+        Assert.Equal(Roles.Manager, attribute.Roles);
+    }
+
+    [Fact]
+    public void SeatTypeModule_RequiresManagerOnly()
+    {
+        var attribute = Assert.Single(typeof(SeatTypeController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), true)
+            .Cast<AuthorizeAttribute>());
+        Assert.Equal(Roles.Manager, attribute.Roles);
+    }
+}

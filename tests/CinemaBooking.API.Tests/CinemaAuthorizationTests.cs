@@ -20,12 +20,12 @@ public sealed class CinemaAuthorizationTests
     [InlineData(nameof(CinemaController.CreateCinema))]
     [InlineData(nameof(CinemaController.UpdateCinema))]
     [InlineData(nameof(CinemaController.DeleteCinema))]
-    public void WriteEndpoints_RequireManagerOrAdmin(string methodName)
+    public void WriteEndpoints_RequireAdmin(string methodName)
     {
         var method = typeof(CinemaController).GetMethod(methodName)!;
         var attribute = Assert.Single(
             method.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>());
 
-        Assert.Equal($"{Roles.Manager},{Roles.Admin}", attribute.Roles);
+        Assert.Equal(Roles.Admin, attribute.Roles);
     }
 }

@@ -47,7 +47,7 @@ public sealed class CinemaController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = Roles.Manager + "," + Roles.Admin)]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> CreateCinema(
         [FromBody] CinemaRequest request,
         CancellationToken cancellationToken)
@@ -72,7 +72,7 @@ public sealed class CinemaController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    [Authorize(Roles = Roles.Manager + "," + Roles.Admin)]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> UpdateCinema(
         int id,
         [FromBody] CinemaRequest request,
@@ -99,7 +99,7 @@ public sealed class CinemaController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = Roles.Manager + "," + Roles.Admin)]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> DeleteCinema(
         int id,
         CancellationToken cancellationToken)

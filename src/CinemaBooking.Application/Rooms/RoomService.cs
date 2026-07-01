@@ -1,6 +1,7 @@
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
+using CinemaBooking.Application.Common.Security;
 
 namespace CinemaBooking.Application.Rooms;
 
@@ -31,8 +32,11 @@ public sealed class RoomService : IRoomService
         string type,
         string status,
         string? description,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default)
     {
+        if (managerCinemaId.HasValue && cinemaId != managerCinemaId)
+            return (false, CinemaScopeMessages.AccessDenied, null);
         var validation = await ValidateRoomAsync(
             cinemaId,
             name,
@@ -69,6 +73,7 @@ public sealed class RoomService : IRoomService
         string type,
         string status,
         string? description,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default)
     {
         var existingRoom = await _roomRepository.GetByIdAsync(roomId, cancellationToken);
@@ -76,6 +81,9 @@ public sealed class RoomService : IRoomService
         {
             return (false, "Room not found", null);
         }
+        if (managerCinemaId.HasValue
+            && (existingRoom.CinemaID != managerCinemaId || cinemaId != managerCinemaId))
+            return (false, CinemaScopeMessages.AccessDenied, null);
 
         var validation = await ValidateRoomAsync(
             cinemaId,
@@ -106,6 +114,7 @@ public sealed class RoomService : IRoomService
 
     public async Task<(bool Succeeded, string? ErrorMessage)> DeleteRoomAsync(
         int roomId,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default)
     {
         var existingRoom = await _roomRepository.GetByIdAsync(roomId, cancellationToken);
@@ -113,6 +122,8 @@ public sealed class RoomService : IRoomService
         {
             return (false, "Room not found");
         }
+        if (managerCinemaId.HasValue && existingRoom.CinemaID != managerCinemaId)
+            return (false, CinemaScopeMessages.AccessDenied);
 
         if (await _roomRepository.HasActiveOrUpcomingShowtimesAsync(roomId, cancellationToken))
         {

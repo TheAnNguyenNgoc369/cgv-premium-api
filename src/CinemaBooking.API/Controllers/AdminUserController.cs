@@ -127,7 +127,7 @@ public sealed class AdminUserController : ControllerBase
         if (result.Value!.PhysicallyDeleted) return NoContent();
         return Ok(new
         {
-            success = true,
+            success = false,
             message = "User could not be physically deleted and was deactivated",
             deactivated = true
         });
@@ -142,6 +142,8 @@ public sealed class AdminUserController : ControllerBase
         AdminUserErrorType.Conflict => Conflict(new { success = false, message }),
         AdminUserErrorType.Forbidden => StatusCode(
             StatusCodes.Status403Forbidden, new { success = false, message }),
+        AdminUserErrorType.Storage => StatusCode(
+            StatusCodes.Status500InternalServerError, new { success = false, message }),
         _ => BadRequest(new { success = false, message })
     };
 

@@ -15,15 +15,18 @@ public sealed class AdminUserService : IAdminUserService
     private const string AvatarFolder = "cgvp/avatars";
     private readonly IAdminUserRepository _repository;
     private readonly IImageStorageService _imageStorageService;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<AdminUserService> _logger;
 
     public AdminUserService(
         IAdminUserRepository repository,
         IImageStorageService imageStorageService,
+        IUnitOfWork unitOfWork,
         ILogger<AdminUserService> logger)
     {
         _repository = repository;
         _imageStorageService = imageStorageService;
+        _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
@@ -243,18 +246,62 @@ public sealed class AdminUserService : IAdminUserService
         var existing = await _repository.GetByIdAsync(userId, cancellationToken);
         if (existing is null) return NotFound<AdminUserDeleteResult>();
 
-        if (await _repository.HasBookingHistoryAsync(userId, cancellationToken))
+        if (!string.IsNullOrWhiteSpace(existing.AvatarURL)
+            && string.IsNullOrWhiteSpace(existing.AvatarPublicId))
+        {
+            return AdminUserResult<AdminUserDeleteResult>.Failure(
+                AdminUserErrorType.Storage,
+                "Unable to delete the user's avatar because its Cloudinary public ID is missing. The user account was not deleted.");
+        }
+
+        if (await _repository.HasDeletionBlockingDataAsync(userId, cancellationToken))
             return await DeactivateAsync(adminId, userId, ipAddress,
-                "Deactivated user because booking history prevents physical deletion.", cancellationToken);
+                "Deactivated user because retained business or audit data prevents physical deletion.",
+                cancellationToken);
 
         var deleteLog = BuildLog(adminId, null, AdminActionTypes.DeleteUser,
             "Permanently deleted user.", ipAddress);
-        if (!await _repository.TryDeleteAsync(userId, deleteLog, cancellationToken))
-            return await DeactivateAsync(adminId, userId, ipAddress,
-                "Deactivated user because related records prevent physical deletion.", cancellationToken);
+        Exception? avatarDeleteException = null;
+        bool physicallyDeleted;
+        try
+        {
+            physicallyDeleted = await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                var deleted = await _repository.TryDeleteAsync(
+                    userId, deleteLog, cancellationToken);
+                if (!deleted) return false;
 
-        if (!string.IsNullOrWhiteSpace(existing.AvatarPublicId))
-            await TryDeleteImageAsync(existing.AvatarPublicId, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(existing.AvatarPublicId))
+                {
+                    try
+                    {
+                        await _imageStorageService.DeleteImageAsync(
+                            existing.AvatarPublicId, cancellationToken);
+                    }
+                    catch (Exception exception) when (exception is not OperationCanceledException)
+                    {
+                        avatarDeleteException = exception;
+                        throw;
+                    }
+                }
+
+                return true;
+            }, cancellationToken);
+        }
+        catch (Exception) when (avatarDeleteException is not null)
+        {
+            _logger.LogError(
+                avatarDeleteException,
+                "Failed to delete avatar while deleting user {UserId}",
+                userId);
+            return AdminUserResult<AdminUserDeleteResult>.Failure(
+                AdminUserErrorType.Storage,
+                "Unable to delete the user's avatar. The user account was not deleted.");
+        }
+
+        if (!physicallyDeleted)
+            return NotFound<AdminUserDeleteResult>();
+
         return AdminUserResult<AdminUserDeleteResult>.Success(new(true, false));
     }
 
@@ -262,7 +309,7 @@ public sealed class AdminUserService : IAdminUserService
         int adminId, int userId, string? ipAddress, string description,
         CancellationToken cancellationToken)
     {
-        var log = BuildLog(adminId, userId, AdminActionTypes.DeactivateUser, description, ipAddress);
+        var log = BuildLog(adminId, userId, AdminActionTypes.DeleteUser, description, ipAddress);
         var user = await _repository.ChangeStatusAsync(
             userId, UserStatuses.Inactive, log, cancellationToken);
         return user is null
