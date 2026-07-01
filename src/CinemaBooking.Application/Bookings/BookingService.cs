@@ -152,6 +152,9 @@ public sealed class BookingService : IBookingService
             {
                 var product = products.First(p => p.ItemID == fnbItem.ItemId);
 
+                if (product.CinemaID != showtime.Room.CinemaID)
+                    return (false, $"Product '{product.ItemName}' is not available at this cinema.", null);
+
                 if (!product.IsOnMenu)
                     return (false, $"Product '{product.ItemName}' is no longer available.", null);
 
@@ -276,6 +279,10 @@ public sealed class BookingService : IBookingService
                     var product = lockedProducts.FirstOrDefault(p => p.ItemID == item.Key);
                     if (product is null)
                         throw new InvalidOperationException($"Product with ID {item.Key} not found.");
+
+                    if (product.CinemaID != showtime.Room.CinemaID)
+                        throw new InvalidOperationException(
+                            $"Product '{product.ItemName}' is not available at this cinema.");
 
                     if (!product.IsOnMenu)
                         throw new InvalidOperationException($"Product '{product.ItemName}' is no longer available.");

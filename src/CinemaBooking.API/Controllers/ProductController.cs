@@ -2,6 +2,7 @@ using CinemaBooking.API.Contracts.Products;
 using CinemaBooking.Application.Products;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
+using CinemaBooking.Application.Common.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,25 +13,35 @@ namespace CinemaBooking.API.Controllers;
 public sealed class ProductController : ControllerBase
 {
     private readonly IProductService _productService;
+    private readonly IManagerCinemaScopeService _managerCinemaScopeService;
 
-    public ProductController(IProductService productService)
+    public ProductController(
+        IProductService productService,
+        IManagerCinemaScopeService managerCinemaScopeService)
     {
         _productService = productService;
+        _managerCinemaScopeService = managerCinemaScopeService;
     }
 
     [HttpGet]
     [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> GetProducts(CancellationToken cancellationToken)
     {
-        var products = await _productService.GetProductsAsync(cancellationToken);
+        var cinemaId = await GetManagerCinemaIdAsync(cancellationToken);
+        if (!cinemaId.HasValue) return CinemaScopeForbidden();
+        var products = await _productService.GetProductsAsync(cinemaId.Value, cancellationToken);
 
         return Ok(new ProductListResponse(products.Select(ToResponse).ToList()));
     }
 
     [HttpGet("available")]
-    public async Task<IActionResult> GetAvailableProducts(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAvailableProducts(
+        [FromQuery] int cinemaId,
+        CancellationToken cancellationToken)
     {
-        var products = await _productService.GetAvailableProductsAsync(cancellationToken);
+        if (cinemaId <= 0)
+            return BadRequest(new { success = false, message = "CinemaId must be greater than 0" });
+        var products = await _productService.GetAvailableProductsAsync(cinemaId, cancellationToken);
 
         return Ok(new ProductListResponse(products.Select(ToResponse).ToList()));
     }
@@ -56,7 +67,10 @@ public sealed class ProductController : ControllerBase
         [FromBody] CreateProductRequest request,
         CancellationToken cancellationToken)
     {
+        var cinemaId = await GetManagerCinemaIdAsync(cancellationToken);
+        if (!cinemaId.HasValue) return CinemaScopeForbidden();
         var result = await _productService.CreateProductAsync(
+            cinemaId.Value,
             request.ItemName,
             request.ItemType,
             request.Description,
@@ -87,8 +101,11 @@ public sealed class ProductController : ControllerBase
         [FromBody] UpdateProductRequest request,
         CancellationToken cancellationToken)
     {
+        var cinemaId = await GetManagerCinemaIdAsync(cancellationToken);
+        if (!cinemaId.HasValue) return CinemaScopeForbidden();
         var result = await _productService.UpdateProductAsync(
             id,
+            cinemaId.Value,
             request.ItemName,
             request.ItemType,
             request.Description,
@@ -107,6 +124,9 @@ public sealed class ProductController : ControllerBase
                 return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
+            if (result.ErrorMessage == CinemaScopeMessages.AccessDenied)
+                return CinemaScopeForbidden();
+
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
@@ -119,7 +139,10 @@ public sealed class ProductController : ControllerBase
         int id,
         CancellationToken cancellationToken)
     {
-        var result = await _productService.DeleteProductAsync(id, cancellationToken);
+        var cinemaId = await GetManagerCinemaIdAsync(cancellationToken);
+        if (!cinemaId.HasValue) return CinemaScopeForbidden();
+        var result = await _productService.DeleteProductAsync(
+            id, cinemaId.Value, cancellationToken);
 
         if (!result.Succeeded)
         {
@@ -127,6 +150,9 @@ public sealed class ProductController : ControllerBase
             {
                 return NotFound(new { success = false, message = result.ErrorMessage });
             }
+
+            if (result.ErrorMessage == CinemaScopeMessages.AccessDenied)
+                return CinemaScopeForbidden();
 
             return Conflict(new { success = false, message = result.ErrorMessage });
         }
@@ -138,6 +164,7 @@ public sealed class ProductController : ControllerBase
     {
         return new ProductResponse(
             product.ItemID,
+            product.CinemaID,
             product.ItemName,
             product.ItemType,
             product.Description,
@@ -149,4 +176,13 @@ public sealed class ProductController : ControllerBase
             product.Status,
             product.UpdatedAt);
     }
+
+    private async Task<int?> GetManagerCinemaIdAsync(CancellationToken cancellationToken) =>
+        int.TryParse(User.FindFirst("userId")?.Value, out var userId)
+            ? await _managerCinemaScopeService.GetAssignedCinemaIdAsync(userId, cancellationToken)
+            : null;
+
+    private ObjectResult CinemaScopeForbidden() => StatusCode(
+        StatusCodes.Status403Forbidden,
+        new { success = false, message = CinemaScopeMessages.AccessDenied });
 }

@@ -12,6 +12,12 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         builder.HasKey(p => p.ItemID);
 
+        builder.HasIndex(p => p.CinemaID)
+            .HasDatabaseName("IX_Product_CinemaID");
+        builder.HasIndex(p => new { p.CinemaID, p.ItemName })
+            .IsUnique()
+            .HasDatabaseName("UQ_Product_CinemaID_ItemName");
+
         builder.Property(p => p.ItemName).HasMaxLength(150).IsRequired();
         builder.Property(p => p.ItemType).HasMaxLength(30).IsRequired();
         builder.Property(p => p.Description).HasMaxLength(500);
@@ -22,6 +28,11 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.IsLoyaltyEligible).HasDefaultValue(false);
         builder.Property(p => p.Status).HasMaxLength(20).IsRequired().HasDefaultValue("in_stock");
         builder.Property(p => p.UpdatedAt).HasDefaultValueSql("GETDATE()");
+
+        builder.HasOne(p => p.Cinema)
+            .WithMany(c => c.Products)
+            .HasForeignKey(p => p.CinemaID)
+            .HasConstraintName("FK_Product_Cinema");
 
         builder.ToTable(t =>
         {
