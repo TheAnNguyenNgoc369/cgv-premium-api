@@ -2,6 +2,9 @@ using System.Security.Claims;
 using CinemaBooking.API.Controllers;
 using CinemaBooking.Application.Contracts.Payment;
 using CinemaBooking.Application.Payments;
+using CinemaBooking.Application.Payments.PayOS;
+using CinemaBooking.Application.Common.Enums;
+using System.Text.Json;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -10,6 +13,41 @@ namespace CinemaBooking.API.Tests;
 
 public sealed class PaymentFlowRegressionTests
 {
+    [Fact]
+    public void PaymentMethodMapping_AcceptsPayOS()
+    {
+        var result = EnumValueMapper.Validate(
+            "PAYOS", "PaymentMethod", DatabaseEnumMappings.PaymentMethods);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("payos", result.DatabaseValue);
+    }
+
+    [Fact]
+    public void PayOSWebhookRequest_DeserializesBothDescFields()
+    {
+        const string json = """
+            {
+              "code": "00",
+              "desc": "success",
+              "success": true,
+              "data": {
+                "orderCode": 123,
+                "amount": 100000,
+                "desc": "Thanh cong"
+              },
+              "signature": "signature"
+            }
+            """;
+
+        var request = JsonSerializer.Deserialize<CinemaBooking.API.Contracts.Payment.PayOSWebhookRequest>(
+            json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(request);
+        Assert.Equal("success", request.Description);
+        Assert.Equal("Thanh cong", request.Data.DescriptionDetail);
+    }
+
     [Fact]
     public async Task InitiatePayment_ExistingPayment_ReturnsConflictInsteadOfThrowing()
     {
@@ -47,6 +85,43 @@ public sealed class PaymentFlowRegressionTests
 
         Assert.IsType<OkObjectResult>(result);
     }
+
+    [Fact]
+    public async Task ProcessPayOSWebhook_ValidWebhook_ReturnsOk()
+    {
+        var controller = CreateController(new ExistingPaymentService());
+
+        var result = await controller.ProcessPayOSWebhook(
+            CreatePayOSWebhookRequest("valid"), CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task ProcessPayOSWebhook_InvalidWebhook_ReturnsBadRequest()
+    {
+        var controller = CreateController(new ExistingPaymentService());
+
+        var result = await controller.ProcessPayOSWebhook(
+            CreatePayOSWebhookRequest("invalid"), CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    private static CinemaBooking.API.Contracts.Payment.PayOSWebhookRequest CreatePayOSWebhookRequest(
+        string signature) => new()
+        {
+            Code = "00",
+            Description = "success",
+            Success = true,
+            Signature = signature,
+            Data = new CinemaBooking.API.Contracts.Payment.PayOSWebhookDataRequest
+            {
+                OrderCode = 1,
+                Amount = 100000,
+                Code = "00"
+            }
+        };
 
     private static PaymentController CreateController(IPaymentService service)
     {
@@ -94,6 +169,13 @@ public sealed class PaymentFlowRegressionTests
         public Task<VNPayCallbackResult> ProcessVNPayCallbackAsync(
             Dictionary<string, string> vnpayData,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<PayOSWebhookResult> ProcessPayOSWebhookAsync(
+            PayOSWebhook webhook,
+            CancellationToken cancellationToken = default) => Task.FromResult(
+                webhook.Signature == "valid"
+                    ? new PayOSWebhookResult(true, "Payment completed successfully.", 1, 1, "success", "paid")
+                    : new PayOSWebhookResult(false, "Invalid signature from PayOS."));
 
         public Task<PaymentOperationResult> GetPaymentByIdAsync(
             int paymentId,

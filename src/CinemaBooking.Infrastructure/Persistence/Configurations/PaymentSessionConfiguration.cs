@@ -28,7 +28,7 @@ public class PaymentSessionConfiguration : IEntityTypeConfiguration<PaymentSessi
 
         builder.ToTable(t =>
         {
-            t.HasCheckConstraint("CK_PaymentSession_GatewayName", "[GatewayName] IN ('vnpay', 'momo')");
+            t.HasCheckConstraint("CK_PaymentSession_GatewayName", "[GatewayName] IN ('vnpay', 'payos', 'momo')");
             t.HasCheckConstraint("CK_PaymentSession_Status", "[Status] IN ('waiting', 'processing', 'completed', 'expired', 'cancelled')");
         });
     }

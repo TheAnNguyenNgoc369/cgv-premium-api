@@ -102,6 +102,17 @@ public sealed class BookingAuthorizationTests
                 (false, "Booking validation stopped the request.", null));
         }
 
+        public Task<(bool Succeeded, string? ErrorMessage, PricingCalculationResult? Result)> CalculatePricingAsync(
+            int? userId,
+            int showtimeId,
+            List<int> seatIds,
+            List<BookingFnBItemDto> fnbItems,
+            string? voucherCode,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<Booking?> GetBookingByIdAsync(
             int bookingId,
             CancellationToken cancellationToken = default)

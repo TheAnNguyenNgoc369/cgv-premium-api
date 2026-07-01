@@ -1,4 +1,5 @@
 using CinemaBooking.Application.Contracts.Payment;
+using CinemaBooking.Application.Payments.PayOS;
 
 namespace CinemaBooking.Application.Payments;
 
@@ -17,6 +18,10 @@ public interface IPaymentService
 
     Task<VNPayCallbackResult> ProcessVNPayCallbackAsync(
         Dictionary<string, string> vnpayData,
+        CancellationToken cancellationToken = default);
+
+    Task<PayOSWebhookResult> ProcessPayOSWebhookAsync(
+        PayOSWebhook webhook,
         CancellationToken cancellationToken = default);
 
     Task<PaymentOperationResult> GetPaymentByIdAsync(

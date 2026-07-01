@@ -63,6 +63,23 @@ public sealed class PaymentController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("payos/webhook")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ProcessPayOSWebhook(
+        [FromBody] CinemaBooking.API.Contracts.Payment.PayOSWebhookRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(new { success = false, message = "Invalid PayOS webhook payload." });
+
+        var result = await _paymentService.ProcessPayOSWebhookAsync(
+            request.ToApplicationModel(), cancellationToken);
+
+        return result.Success
+            ? Ok(result)
+            : BadRequest(new { success = false, message = result.Message });
+    }
+
     [HttpGet("{id}")]
     [Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
     public async Task<IActionResult> GetPaymentById(
@@ -98,6 +115,7 @@ public sealed class PaymentController : ControllerBase
             PaymentErrorType.NotFound => NotFound(body),
             PaymentErrorType.Forbidden => StatusCode(StatusCodes.Status403Forbidden, body),
             PaymentErrorType.Conflict => Conflict(body),
+            PaymentErrorType.Gateway => StatusCode(StatusCodes.Status502BadGateway, body),
             _ => BadRequest(body)
         };
     }

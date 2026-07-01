@@ -5,7 +5,8 @@ public enum PaymentErrorType
     Validation,
     NotFound,
     Forbidden,
-    Conflict
+    Conflict,
+    Gateway
 }
 
 public sealed record PaymentOperationResult(
