@@ -9,7 +9,7 @@ namespace CinemaBooking.API.Controllers;
 
 [ApiController]
 [Route("api/seat-types")]
-[Authorize(Roles = $"{Roles.Manager},{Roles.Admin}")]
+[Authorize(Roles = Roles.Manager)]
 public sealed class SeatTypeController : ControllerBase
 {
     private readonly ISeatTypeService _seatTypeService;

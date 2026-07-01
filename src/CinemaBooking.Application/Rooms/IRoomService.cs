@@ -14,6 +14,7 @@ public interface IRoomService
         string type,
         string status,
         string? description,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, Room? Room)> UpdateRoomAsync(
@@ -23,9 +24,11 @@ public interface IRoomService
         string type,
         string status,
         string? description,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage)> DeleteRoomAsync(
         int roomId,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default);
 }

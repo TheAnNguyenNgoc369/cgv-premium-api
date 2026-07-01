@@ -2,6 +2,7 @@
 using CinemaBooking.Application.Showtimes;
 using CinemaBooking.API.Contracts.Cinemas;
 using CinemaBooking.Application.Common.Enums;
+using CinemaBooking.Application.Common.Security;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -14,10 +15,14 @@ namespace CinemaBooking.API.Controllers;
 public sealed class ShowtimeController : ControllerBase
 {
     private readonly IShowtimeService _showtimeService;
+    private readonly IManagerCinemaScopeService _managerCinemaScopeService;
 
-    public ShowtimeController(IShowtimeService showtimeService)
+    public ShowtimeController(
+        IShowtimeService showtimeService,
+        IManagerCinemaScopeService managerCinemaScopeService)
     {
         _showtimeService = showtimeService;
+        _managerCinemaScopeService = managerCinemaScopeService;
     }
 
     [HttpGet("showtimes")]
@@ -30,14 +35,19 @@ public sealed class ShowtimeController : ControllerBase
         [FromQuery] string? sortBy = "startTime", [FromQuery] string? sortDir = "asc",
         CancellationToken cancellationToken = default)
     {
+        var scope = await GetManagerCinemaIdAsync(cancellationToken);
+        if (scope.Forbidden) return CinemaScopeForbidden();
         var result = await _showtimeService.GetShowtimesAsync(
             movieId, cinemaId, movieName, roomName, date, status,
-            page, pageSize, sortBy, sortDir, cancellationToken);
-        if (!result.Succeeded) return BadRequest(new { success = false, message = result.ErrorMessage });
+            page, pageSize, sortBy, sortDir, scope.CinemaId, cancellationToken);
+        if (!result.Succeeded)
+            return result.ErrorMessage == CinemaScopeMessages.AccessDenied
+                ? CinemaScopeForbidden()
+                : BadRequest(new { success = false, message = result.ErrorMessage });
         var data = result.Page!;
         var items = new List<ShowtimeListItemResponse>();
         foreach (var showtime in data.Items)
-            items.Add(await ToListResponseAsync(showtime, cancellationToken));
+            items.Add(ToListResponse(showtime, data.SoldOutShowtimeIds.Contains(showtime.ShowtimeID)));
         return Ok(new PagedShowtimeResponse(items, data.Page, data.PageSize, data.TotalItems,
             (int)Math.Ceiling(data.TotalItems / (double)data.PageSize)));
     }
@@ -47,8 +57,10 @@ public sealed class ShowtimeController : ControllerBase
     public async Task<IActionResult> CreateShowtime(
         CreateShowtimeRequest request, CancellationToken cancellationToken)
     {
+        var scope = await GetRequiredManagerCinemaIdAsync(cancellationToken);
+        if (!scope.HasValue) return CinemaScopeForbidden();
         var result = await _showtimeService.CreateShowtimeAsync(
-            request.MovieId, request.RoomId, request.StartTime, request.BasePrice, cancellationToken);
+            request.MovieId, request.RoomId, request.StartTime, request.BasePrice, scope, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
         var response = await ToManagementResponseAsync(result.Showtime!, cancellationToken);
         return CreatedAtAction(nameof(GetShowtimeById), new { id = response.ShowtimeId }, response);
@@ -59,8 +71,10 @@ public sealed class ShowtimeController : ControllerBase
     public async Task<IActionResult> UpdateShowtime(
         int id, UpdateShowtimeRequest request, CancellationToken cancellationToken)
     {
+        var scope = await GetRequiredManagerCinemaIdAsync(cancellationToken);
+        if (!scope.HasValue) return CinemaScopeForbidden();
         var result = await _showtimeService.UpdateShowtimeAsync(
-            id, request.MovieId, request.RoomId, request.StartTime, request.BasePrice, request.Status, cancellationToken);
+            id, request.MovieId, request.RoomId, request.StartTime, request.BasePrice, request.Status, scope, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
         return Ok(await ToManagementResponseAsync(result.Showtime!, cancellationToken));
     }
@@ -69,7 +83,9 @@ public sealed class ShowtimeController : ControllerBase
     [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> DeleteShowtime(int id, CancellationToken cancellationToken)
     {
-        var result = await _showtimeService.DeleteShowtimeAsync(id, cancellationToken);
+        var scope = await GetRequiredManagerCinemaIdAsync(cancellationToken);
+        if (!scope.HasValue) return CinemaScopeForbidden();
+        var result = await _showtimeService.DeleteShowtimeAsync(id, scope, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
         return NoContent();
     }
@@ -80,7 +96,19 @@ public sealed class ShowtimeController : ControllerBase
         int id,
         CancellationToken cancellationToken)
     {
-        var showtime = await _showtimeService.GetShowtimeByIdAsync(id, cancellationToken);
+        Showtime? showtime;
+        if (User.Identity?.IsAuthenticated == true && User.IsInRole(Roles.Manager))
+        {
+            var managerCinemaId = await GetRequiredManagerCinemaIdAsync(cancellationToken);
+            if (!managerCinemaId.HasValue) return CinemaScopeForbidden();
+            showtime = await _showtimeService.GetManagedShowtimeByIdAsync(id, cancellationToken);
+            if (showtime is not null && showtime.Room.CinemaID != managerCinemaId)
+                return CinemaScopeForbidden();
+        }
+        else
+        {
+            showtime = await _showtimeService.GetShowtimeByIdAsync(id, cancellationToken);
+        }
 
         if (showtime is null)
             return NotFound(new { success = false, message = "Showtime not found." });
@@ -108,12 +136,12 @@ public sealed class ShowtimeController : ControllerBase
             new(showtime.MovieID, showtime.Movie.Title, showtime.Movie.AgeRating,
                 showtime.Movie.DurationMin, showtime.Movie.PosterURL),
             new(showtime.RoomID, showtime.Room.RoomName, showtime.Room.RoomType, showtime.Room.Capacity),
-            showtime.StartTime, showtime.EndTime, showtime.BasePrice,
+            AsUtc(showtime.StartTime), AsUtc(showtime.EndTime), showtime.BasePrice,
             EnumValueMapper.ToApiValue(showtime.Status),
             await _showtimeService.IsSoldOutAsync(showtime, cancellationToken));
 
-    private async Task<ShowtimeListItemResponse> ToListResponseAsync(
-        Showtime showtime, CancellationToken cancellationToken) =>
+    private static ShowtimeListItemResponse ToListResponse(
+        Showtime showtime, bool isSoldOut) =>
         new(showtime.ShowtimeID,
             new(showtime.MovieID, showtime.Movie.Title, showtime.Movie.AgeRating,
                 showtime.Movie.DurationMin, showtime.Movie.PosterURL),
@@ -123,18 +151,42 @@ public sealed class ShowtimeController : ControllerBase
                 showtime.Room.Cinema.CinemaName,
                 showtime.Room.Cinema.Address,
                 EnumValueMapper.ToApiValue(showtime.Room.Cinema.Status)),
-            showtime.StartTime, showtime.EndTime, showtime.BasePrice,
-            EnumValueMapper.ToApiValue(showtime.Status),
-            await _showtimeService.IsSoldOutAsync(showtime, cancellationToken));
+            AsUtc(showtime.StartTime), AsUtc(showtime.EndTime), showtime.BasePrice,
+            EnumValueMapper.ToApiValue(showtime.Status), isSoldOut);
 
     private IActionResult MapWriteError(string? message) => message switch
     {
         "Showtime not found" or "Movie not found" or "Room not found" =>
             NotFound(new { success = false, message }),
         "Showtime conflicts with another showtime in the same room"
-            or "Showtime has active bookings or seat holds" =>
+            or "Showtime has active bookings or seat holds"
+            or "Showtime has booking or seat hold history" =>
             Conflict(new { success = false, message }),
+        CinemaScopeMessages.AccessDenied => CinemaScopeForbidden(),
         _ => BadRequest(new { success = false, message })
     };
+
+    private async Task<(bool Forbidden, int? CinemaId)> GetManagerCinemaIdAsync(
+        CancellationToken cancellationToken)
+    {
+        if (User.Identity?.IsAuthenticated != true || !User.IsInRole(Roles.Manager))
+            return (false, null);
+        var cinemaId = await GetRequiredManagerCinemaIdAsync(cancellationToken);
+        return (!cinemaId.HasValue, cinemaId);
+    }
+
+    private async Task<int?> GetRequiredManagerCinemaIdAsync(CancellationToken cancellationToken)
+    {
+        return int.TryParse(User.FindFirst("userId")?.Value, out var userId)
+            ? await _managerCinemaScopeService.GetAssignedCinemaIdAsync(userId, cancellationToken)
+            : null;
+    }
+
+    private ObjectResult CinemaScopeForbidden() =>
+        StatusCode(StatusCodes.Status403Forbidden,
+            new { success = false, message = CinemaScopeMessages.AccessDenied });
+
+    private static DateTime AsUtc(DateTime value) =>
+        value.Kind == DateTimeKind.Utc ? value : DateTime.SpecifyKind(value, DateTimeKind.Utc);
 
 }

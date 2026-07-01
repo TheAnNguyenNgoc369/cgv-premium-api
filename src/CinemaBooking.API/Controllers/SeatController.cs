@@ -2,6 +2,7 @@ using CinemaBooking.API.Contracts.Seats;
 using CinemaBooking.Application.Seats;
 using CinemaBooking.Application.SeatTypes;
 using CinemaBooking.Application.Common.Enums;
+using CinemaBooking.Application.Common.Security;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -16,13 +17,16 @@ public sealed class SeatController : ControllerBase
 {
     private readonly ISeatService _seatService;
     private readonly ISeatTypeService _seatTypeService;
+    private readonly IManagerCinemaScopeService _managerCinemaScopeService;
 
     public SeatController(
         ISeatService seatService,
-        ISeatTypeService seatTypeService)
+        ISeatTypeService seatTypeService,
+        IManagerCinemaScopeService managerCinemaScopeService)
     {
         _seatService = seatService;
         _seatTypeService = seatTypeService;
+        _managerCinemaScopeService = managerCinemaScopeService;
     }
 
     [HttpGet("seats")]
@@ -60,12 +64,15 @@ public sealed class SeatController : ControllerBase
         [FromBody] SeatRequest request,
         CancellationToken cancellationToken)
     {
+        var managerCinemaId = await GetManagerCinemaIdAsync(cancellationToken);
+        if (!managerCinemaId.HasValue) return CinemaScopeForbidden();
         var result = await _seatService.CreateSeatAsync(
             roomId,
             request.RowLabel,
             request.SeatNumber,
             request.SeatTypeId,
             request.Status,
+            managerCinemaId,
             cancellationToken);
 
         if (!result.Succeeded)
@@ -88,11 +95,14 @@ public sealed class SeatController : ControllerBase
         [FromBody] SeatUpdateRequest request,
         CancellationToken cancellationToken)
     {
+        var managerCinemaId = await GetManagerCinemaIdAsync(cancellationToken);
+        if (!managerCinemaId.HasValue) return CinemaScopeForbidden();
         var result = await _seatService.UpdateSeatAsync(
             roomId,
             seatId,
             request.SeatTypeId,
             request.Status,
+            managerCinemaId,
             cancellationToken);
 
         if (!result.Succeeded)
@@ -109,7 +119,10 @@ public sealed class SeatController : ControllerBase
         int seatId,
         CancellationToken cancellationToken)
     {
-        var result = await _seatService.DeleteSeatAsync(roomId, seatId, cancellationToken);
+        var managerCinemaId = await GetManagerCinemaIdAsync(cancellationToken);
+        if (!managerCinemaId.HasValue) return CinemaScopeForbidden();
+        var result = await _seatService.DeleteSeatAsync(
+            roomId, seatId, managerCinemaId, cancellationToken);
 
         if (!result.Succeeded)
         {
@@ -140,11 +153,14 @@ public sealed class SeatController : ControllerBase
         [FromBody] SeatLayoutRequest request,
         CancellationToken cancellationToken)
     {
+        var managerCinemaId = await GetManagerCinemaIdAsync(cancellationToken);
+        if (!managerCinemaId.HasValue) return CinemaScopeForbidden();
         var result = await _seatService.ReplaceLayoutAsync(
             roomId,
             request.TotalRows,
             request.TotalCols,
             request.Seats?.Select(ToSeatLayoutSeatItem).ToList() ?? [],
+            managerCinemaId,
             cancellationToken);
 
         if (!result.Succeeded)
@@ -174,6 +190,9 @@ public sealed class SeatController : ControllerBase
                 availableSeatTypes = seatTypes.Select(ToSeatTypeResponse)
             });
         }
+
+        if (errorMessage == CinemaScopeMessages.AccessDenied)
+            return CinemaScopeForbidden();
 
         if (errorMessage is "Room not found" or "Seat not found")
         {
@@ -234,4 +253,13 @@ public sealed class SeatController : ControllerBase
             extraPrice = seatType.ExtraPrice
         };
     }
+
+    private async Task<int?> GetManagerCinemaIdAsync(CancellationToken cancellationToken) =>
+        int.TryParse(User.FindFirst("userId")?.Value, out var userId)
+            ? await _managerCinemaScopeService.GetAssignedCinemaIdAsync(userId, cancellationToken)
+            : null;
+
+    private ObjectResult CinemaScopeForbidden() => StatusCode(
+        StatusCodes.Status403Forbidden,
+        new { success = false, message = CinemaScopeMessages.AccessDenied });
 }

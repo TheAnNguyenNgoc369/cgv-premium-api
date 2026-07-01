@@ -43,6 +43,26 @@ public sealed class SeatServiceTests
         Assert.Equal(0, repository.ReplaceLayoutCallCount);
     }
 
+    [Fact]
+    public async Task CreateSeat_WhenRoomBelongsToAnotherCinema_ReturnsForbiddenMessage()
+    {
+        var repository = new StubSeatRepository
+        {
+            Room = new Room { RoomID = 1, CinemaID = 1 },
+            SeatType = new SeatType { SeatTypeID = 1, TypeName = "standard", Capacity = 1 }
+        };
+        var service = new SeatService(repository);
+
+        var result = await service.CreateSeatAsync(
+            1, "A", 1, 1, "ACTIVE", managerCinemaId: 2);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+            "Access denied. This resource belongs to another cinema branch outside your management scope.",
+            result.ErrorMessage);
+        Assert.Equal(0, repository.AddCallCount);
+    }
+
     private sealed class StubSeatRepository : ISeatRepository
     {
         public Room? Room { get; set; }

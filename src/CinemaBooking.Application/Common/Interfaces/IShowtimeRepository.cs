@@ -12,6 +12,7 @@ public interface IShowtimeRepository
     Task<(List<Showtime> Items, int TotalItems)> GetShowtimesAsync(
         int? movieId, int? cinemaId, string? movieName, string? roomName,
         DateOnly? date, string? status,
+        bool onlyActiveLocations,
         int page, int pageSize, string sortBy, bool descending,
         CancellationToken cancellationToken = default);
 
@@ -22,13 +23,22 @@ public interface IShowtimeRepository
         int? excludingShowtimeId = null, CancellationToken cancellationToken = default);
     Task<bool> HasActiveBookingOrHoldAsync(int showtimeId, DateTime now,
         CancellationToken cancellationToken = default);
-    Task<bool> IsSoldOutAsync(int showtimeId, int capacity, DateTime now,
+    Task<bool> HasAnyBookingOrHoldAsync(int showtimeId,
         CancellationToken cancellationToken = default);
+    Task<IReadOnlySet<int>> GetSoldOutShowtimeIdsAsync(
+        IReadOnlyCollection<int> showtimeIds, DateTime now,
+        CancellationToken cancellationToken = default);
+    Task<bool> AcquireRoomScheduleLockAsync(
+        int roomId, CancellationToken cancellationToken = default);
     Task<Showtime> AddAsync(Showtime showtime, CancellationToken cancellationToken = default);
     Task<Showtime?> UpdateAsync(Showtime showtime, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(int showtimeId, CancellationToken cancellationToken = default);
 
     Task<Showtime?> GetShowtimeByIdAsync(
+        int id,
+        CancellationToken cancellationToken = default);
+
+    Task<Showtime?> GetManagedShowtimeByIdAsync(
         int id,
         CancellationToken cancellationToken = default);
 
@@ -42,5 +52,6 @@ public interface IShowtimeRepository
 
     Task<List<int>> GetHeldSeatIdsAsync(
         int showtimeId,
+        DateTime now,
         CancellationToken cancellationToken = default);
 }

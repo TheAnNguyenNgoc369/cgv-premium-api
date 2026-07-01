@@ -9,7 +9,6 @@ namespace CinemaBooking.API.Controllers;
 
 [ApiController]
 [Route("api/genres")]
-[Authorize(Roles = Roles.Manager)]
 public sealed class GenreController : ControllerBase
 {
     private readonly IGenreService _genreService;
@@ -20,6 +19,7 @@ public sealed class GenreController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetGenres(CancellationToken cancellationToken)
     {
         var genres = await _genreService.GetGenresAsync(cancellationToken);
@@ -28,6 +28,7 @@ public sealed class GenreController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetGenreById(
         int id,
         CancellationToken cancellationToken)
@@ -43,6 +44,7 @@ public sealed class GenreController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> CreateGenre(
         [FromBody] GenreRequest request,
         CancellationToken cancellationToken)
@@ -65,6 +67,7 @@ public sealed class GenreController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> UpdateGenre(
         int id,
         [FromBody] GenreRequest request,
@@ -89,6 +92,7 @@ public sealed class GenreController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> DeleteGenre(
         int id,
         CancellationToken cancellationToken)

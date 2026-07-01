@@ -22,6 +22,58 @@ public sealed class ShowtimeServiceTests
         Assert.Equal(0, repository.AddCallCount);
     }
 
+    [Theory]
+    [InlineData(0, 10, "startTime", "asc")]
+    [InlineData(1, 0, "startTime", "asc")]
+    [InlineData(1, 101, "startTime", "asc")]
+    [InlineData(1, 10, "unknown", "asc")]
+    [InlineData(1, 10, "startTime", "sideways")]
+    public async Task GetShowtimesAsync_InvalidPagingOrSort_ReturnsValidationError(
+        int page, int pageSize, string sortBy, string sortDir)
+    {
+        var service = new ShowtimeService(new StubShowtimeRepository());
+
+        var result = await service.GetShowtimesAsync(
+            null, null, null, null, null, null, page, pageSize, sortBy, sortDir);
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task CreateShowtimeAsync_StartTimeWithoutUtcOffset_ReturnsValidationError()
+    {
+        var repository = new StubShowtimeRepository
+        {
+            ActiveSeats = [new Seat { SeatID = 1, RoomID = 1, Status = "active" }]
+        };
+        var service = new ShowtimeService(repository);
+
+        var result = await service.CreateShowtimeAsync(
+            1, 1, DateTime.SpecifyKind(DateTime.Now.AddDays(1), DateTimeKind.Unspecified), 100_000);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("StartTime must be a UTC ISO 8601 value ending in Z", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task CreateShowtimeAsync_RoomOutsideManagerCinema_ReturnsForbiddenMessage()
+    {
+        var repository = new StubShowtimeRepository
+        {
+            ActiveSeats = [new Seat { SeatID = 1, RoomID = 1, Status = "active" }]
+        };
+        var service = new ShowtimeService(repository);
+
+        var result = await service.CreateShowtimeAsync(
+            1, 1, DateTime.UtcNow.AddDays(1), 100_000, managerCinemaId: 2);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+            "Access denied. This resource belongs to another cinema branch outside your management scope.",
+            result.ErrorMessage);
+        Assert.Equal(0, repository.AddCallCount);
+    }
+
     [Fact]
     public async Task CreateShowtimeAsync_RoomHasActiveSeat_CreatesShowtime()
     {
@@ -99,6 +151,53 @@ public sealed class ShowtimeServiceTests
         Assert.True(result.Succeeded);
         Assert.Equal("cancelled", result.Showtime!.Status);
         Assert.Equal(1, repository.UpdateCallCount);
+    }
+
+    [Fact]
+    public async Task UpdateShowtimeAsync_StatusOnlyCancellation_DoesNotRequireActiveMovieOrRoom()
+    {
+        var startTime = DateTime.UtcNow.AddDays(1);
+        var repository = new StubShowtimeRepository
+        {
+            ExistingShowtime = new Showtime
+            {
+                ShowtimeID = 1, MovieID = 1, RoomID = 1,
+                StartTime = startTime, BasePrice = 100_000, Status = "scheduled",
+                Room = new Room
+                {
+                    RoomID = 1, CinemaID = 1, Status = "inactive",
+                    Cinema = new Cinema { CinemaID = 1, Status = "inactive" }
+                }
+            }
+        };
+        var service = new ShowtimeService(repository);
+
+        var result = await service.UpdateShowtimeAsync(
+            1, 1, 1, startTime, 100_000, "cancelled");
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("cancelled", result.Showtime!.Status);
+        Assert.Equal(1, repository.UpdateCallCount);
+    }
+
+    [Fact]
+    public async Task DeleteShowtimeAsync_AnyHistoricalRelation_ReturnsConflict()
+    {
+        var repository = new StubShowtimeRepository
+        {
+            HasAnyBookingOrHold = true,
+            ExistingShowtime = new Showtime
+            {
+                ShowtimeID = 1,
+                Room = new Room { CinemaID = 1 }
+            }
+        };
+        var service = new ShowtimeService(repository);
+
+        var result = await service.DeleteShowtimeAsync(1);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Showtime has booking or seat hold history", result.ErrorMessage);
     }
 
     [Fact]
@@ -191,13 +290,20 @@ public sealed class ShowtimeServiceTests
         public List<Seat> ActiveSeats { get; init; } = [];
         public Showtime? ExistingShowtime { get; init; }
         public bool HasActiveBookingOrHold { get; init; }
+        public bool HasAnyBookingOrHold { get; init; }
         public int AddCallCount { get; private set; }
         public int UpdateCallCount { get; private set; }
 
         public Task<Movie?> GetMovieAsync(int movieId, CancellationToken cancellationToken = default) =>
             Task.FromResult<Movie?>(new Movie { MovieID = movieId, DurationMin = 120, Status = "now_showing" });
         public Task<Room?> GetRoomAsync(int roomId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<Room?>(new Room { RoomID = roomId, Status = "active" });
+            Task.FromResult<Room?>(new Room
+            {
+                RoomID = roomId,
+                CinemaID = 1,
+                Status = "active",
+                Cinema = new Cinema { CinemaID = 1, Status = "active" }
+            });
         public Task<List<Seat>> GetSeatsByRoomAsync(int roomId, CancellationToken cancellationToken = default) =>
             Task.FromResult(ActiveSeats);
         public Task<bool> HasConflictAsync(int roomId, DateTime startTime, DateTime endTime,
@@ -209,13 +315,20 @@ public sealed class ShowtimeServiceTests
         }
 
         public Task<(List<Showtime> Items, int TotalItems)> GetShowtimesAsync(int? movieId, int? cinemaId,
-            string? movieName, string? roomName, DateOnly? date, string? status, int page, int pageSize,
+            string? movieName, string? roomName, DateOnly? date, string? status, bool onlyActiveLocations,
+            int page, int pageSize,
             string sortBy, bool descending, CancellationToken cancellationToken = default) =>
             Task.FromResult((new List<Showtime>(), 0));
         public Task<bool> HasActiveBookingOrHoldAsync(int showtimeId, DateTime now,
             CancellationToken cancellationToken = default) => Task.FromResult(HasActiveBookingOrHold);
-        public Task<bool> IsSoldOutAsync(int showtimeId, int capacity, DateTime now,
-            CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task<bool> HasAnyBookingOrHoldAsync(int showtimeId,
+            CancellationToken cancellationToken = default) => Task.FromResult(HasAnyBookingOrHold);
+        public Task<IReadOnlySet<int>> GetSoldOutShowtimeIdsAsync(
+            IReadOnlyCollection<int> showtimeIds, DateTime now,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
+        public Task<bool> AcquireRoomScheduleLockAsync(int roomId,
+            CancellationToken cancellationToken = default) => Task.FromResult(true);
         public Task<Showtime?> UpdateAsync(Showtime showtime, CancellationToken cancellationToken = default)
         {
             UpdateCallCount++;
@@ -224,9 +337,12 @@ public sealed class ShowtimeServiceTests
         public Task<bool> DeleteAsync(int showtimeId, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task<Showtime?> GetShowtimeByIdAsync(int id, CancellationToken cancellationToken = default) =>
             Task.FromResult(ExistingShowtime?.ShowtimeID == id ? ExistingShowtime : null);
+        public Task<Showtime?> GetManagedShowtimeByIdAsync(int id, CancellationToken cancellationToken = default) =>
+            Task.FromResult(ExistingShowtime?.ShowtimeID == id ? ExistingShowtime : null);
         public Task<List<int>> GetBookedSeatIdsAsync(int showtimeId, CancellationToken cancellationToken = default) =>
             Task.FromResult(new List<int>());
-        public Task<List<int>> GetHeldSeatIdsAsync(int showtimeId, CancellationToken cancellationToken = default) =>
+        public Task<List<int>> GetHeldSeatIdsAsync(int showtimeId, DateTime now,
+            CancellationToken cancellationToken = default) =>
             Task.FromResult(new List<int>());
     }
 }

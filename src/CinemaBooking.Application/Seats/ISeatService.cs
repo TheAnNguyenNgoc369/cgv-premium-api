@@ -23,6 +23,7 @@ public interface ISeatService
         int seatNumber,
         int seatTypeId,
         string status,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, Seat? Seat)> UpdateSeatAsync(
@@ -30,11 +31,13 @@ public interface ISeatService
         int seatId,
         int seatTypeId,
         string status,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage)> DeleteSeatAsync(
         int roomId,
         int seatId,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, List<Seat> Seats)> ReplaceLayoutAsync(
@@ -42,5 +45,6 @@ public interface ISeatService
         int totalRows,
         int totalCols,
         IReadOnlyCollection<SeatLayoutSeatItem> seats,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default);
 }
