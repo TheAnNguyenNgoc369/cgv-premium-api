@@ -53,7 +53,7 @@ public sealed class AuthService : IAuthService
 
         if (await _userRepository.EmailExistsAsync(normalizedEmail, cancellationToken))
         {
-            return (false, "Email is already registered.", null, false);
+            return (false, "Email is already in use.", null, false);
         }
 
         var now = DateTime.UtcNow;
@@ -134,7 +134,7 @@ public sealed class AuthService : IAuthService
 
         if (string.Equals(user.Status, InactiveStatus, StringComparison.OrdinalIgnoreCase))
         {
-            return (false, "Account is inactive.", null);
+            return (false, "Your account is currently inactive. Please contact our Administrator for assistance", null);
         }
 
         if (string.Equals(user.Status, UserStatuses.Unverified, StringComparison.OrdinalIgnoreCase)

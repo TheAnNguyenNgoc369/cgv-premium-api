@@ -68,9 +68,40 @@ public sealed class AdminUserRepository : IAdminUserRepository
         int cinemaId, CancellationToken cancellationToken = default) =>
         _dbContext.Cinemas.AnyAsync(cinema => cinema.CinemaID == cinemaId, cancellationToken);
 
-    public Task<bool> HasBookingHistoryAsync(
-        int userId, CancellationToken cancellationToken = default) =>
-        _dbContext.Bookings.AnyAsync(booking => booking.UserID == userId, cancellationToken);
+    public async Task<bool> HasDeletionBlockingDataAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        if (await _dbContext.Bookings.AnyAsync(
+                booking => booking.UserID == userId || booking.CreatedByStaffID == userId,
+                cancellationToken))
+            return true;
+
+        if (await _dbContext.Wallets.AnyAsync(
+                wallet => wallet.UserID == userId
+                    && (wallet.Balance != 0 || wallet.Transactions.Any()),
+                cancellationToken))
+            return true;
+
+        if (await _dbContext.LoyaltyPoints.AnyAsync(
+                points => points.UserID == userId, cancellationToken))
+            return true;
+
+        if (await _dbContext.AdminActionLogs.AnyAsync(
+                log => log.AdminID == userId, cancellationToken))
+            return true;
+
+        if (await _dbContext.EmailLogs.AnyAsync(
+                log => log.UserID == userId, cancellationToken))
+            return true;
+
+        if (await _dbContext.Refunds.AnyAsync(
+                refund => refund.ProcessedBy == userId, cancellationToken))
+            return true;
+
+        return await _dbContext.Tickets.AnyAsync(
+            ticket => ticket.CheckedInByID == userId, cancellationToken);
+    }
 
     public async Task AddAsync(
         User user, Wallet wallet, AdminActionLog actionLog,
@@ -157,10 +188,22 @@ public sealed class AdminUserRepository : IAdminUserRepository
         int userId, AdminActionLog actionLog,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var user = await _dbContext.Users.FirstOrDefaultAsync(
             candidate => candidate.UserID == userId, cancellationToken);
         if (user is null) return false;
+
+        await _dbContext.EmailVerificationTokens
+            .Where(token => token.UserID == userId)
+            .ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.PasswordResetTokens
+            .Where(token => token.UserID == userId)
+            .ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.Notifications
+            .Where(notification => notification.UserID == userId)
+            .ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.SeatHolds
+            .Where(hold => hold.UserID == userId)
+            .ExecuteDeleteAsync(cancellationToken);
 
         var wallet = await _dbContext.Wallets.FirstOrDefaultAsync(
             candidate => candidate.UserID == userId, cancellationToken);
@@ -180,19 +223,8 @@ public sealed class AdminUserRepository : IAdminUserRepository
         actionLog.TargetUserID = null;
         actionLog.TargetID = userId;
         _dbContext.AdminActionLogs.Add(actionLog);
-
-        try
-        {
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return true;
-        }
-        catch (DbUpdateException)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            _dbContext.ChangeTracker.Clear();
-            return false;
-        }
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     private async Task<User?> UpdateWithLogAsync(

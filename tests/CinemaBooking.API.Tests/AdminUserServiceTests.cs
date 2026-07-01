@@ -39,7 +39,7 @@ public sealed class AdminUserServiceTests
         var repository = new StubAdminUserRepository
         {
             User = new User { UserID = 2, Role = Roles.Customer, Status = UserStatuses.Active },
-            HasBookingHistory = true
+            HasDeletionBlockingData = true
         };
         var service = CreateService(repository);
 
@@ -50,7 +50,7 @@ public sealed class AdminUserServiceTests
         Assert.False(result.Value.PhysicallyDeleted);
         Assert.Equal(0, repository.DeleteCallCount);
         Assert.Equal(UserStatuses.Inactive, repository.ChangedStatus);
-        Assert.Equal(AdminActionTypes.DeactivateUser, repository.LastLog!.ActionType);
+        Assert.Equal(AdminActionTypes.DeleteUser, repository.LastLog!.ActionType);
     }
 
     [Fact]
@@ -70,12 +70,12 @@ public sealed class AdminUserServiceTests
     }
 
     [Fact]
-    public async Task DeleteAsync_ForeignKeyBlocksDelete_DeactivatesUser()
+    public async Task DeleteAsync_FinancialDataBlocksDelete_DeactivatesUser()
     {
         var repository = new StubAdminUserRepository
         {
             User = new User { UserID = 2, Role = Roles.Staff, Status = UserStatuses.Active },
-            TryDeleteResult = false
+            HasDeletionBlockingData = true
         };
         var service = CreateService(repository);
 
@@ -83,29 +83,102 @@ public sealed class AdminUserServiceTests
 
         Assert.True(result.Succeeded);
         Assert.True(result.Value!.Deactivated);
-        Assert.Equal(1, repository.DeleteCallCount);
+        Assert.Equal(0, repository.DeleteCallCount);
         Assert.Equal(UserStatuses.Inactive, repository.ChangedStatus);
-        Assert.Equal(AdminActionTypes.DeactivateUser, repository.LastLog!.ActionType);
+        Assert.Equal(AdminActionTypes.DeleteUser, repository.LastLog!.ActionType);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_CloudinaryDeleteFails_ReturnsStorageError()
+    {
+        var repository = new StubAdminUserRepository
+        {
+            User = new User
+            {
+                UserID = 2,
+                Role = Roles.Customer,
+                Status = UserStatuses.Active,
+                AvatarPublicId = "avatar-id"
+            }
+        };
+        var service = new AdminUserService(
+            repository,
+            new StubImageStorageService { DeleteShouldFail = true },
+            new StubUnitOfWork(),
+            NullLogger<AdminUserService>.Instance);
+
+        var result = await service.DeleteAsync(1, 2, null);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(AdminUserErrorType.Storage, result.ErrorType);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_EligibleUser_PhysicallyDeletesAndKeepsAuditTargetId()
+    {
+        var repository = new StubAdminUserRepository
+        {
+            User = new User { UserID = 2, Role = Roles.Customer, Status = UserStatuses.Active }
+        };
+        var service = CreateService(repository);
+
+        var result = await service.DeleteAsync(1, 2, "127.0.0.1");
+
+        Assert.True(result.Succeeded);
+        Assert.True(result.Value!.PhysicallyDeleted);
+        Assert.Equal(1, repository.DeleteCallCount);
+        Assert.Equal(AdminActionTypes.DeleteUser, repository.LastLog!.ActionType);
+        Assert.Null(repository.LastLog.TargetUserID);
+        Assert.Equal(2, repository.LastLog.TargetID);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_AdminDeletesSelf_ReturnsForbidden()
+    {
+        var repository = new StubAdminUserRepository
+        {
+            User = new User { UserID = 1, Role = Roles.Admin, Status = UserStatuses.Active }
+        };
+        var service = CreateService(repository);
+
+        var result = await service.DeleteAsync(1, 1, null);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(AdminUserErrorType.Forbidden, result.ErrorType);
+        Assert.Equal(0, repository.DeleteCallCount);
     }
 
     private static AdminUserService CreateService(StubAdminUserRepository repository) =>
-        new(repository, new StubImageStorageService(), NullLogger<AdminUserService>.Instance);
+        new(repository, new StubImageStorageService(), new StubUnitOfWork(),
+            NullLogger<AdminUserService>.Instance);
+
+    private sealed class StubUnitOfWork : IUnitOfWork
+    {
+        public Task<T> ExecuteInTransactionAsync<T>(
+            Func<Task<T>> operation,
+            CancellationToken cancellationToken = default) => operation();
+    }
 
     private sealed class StubImageStorageService : IImageStorageService
     {
+        public bool DeleteShouldFail { get; init; }
+
         public Task<StoredImageResult> UploadImageAsync(
             Stream imageStream, string fileName, string folder,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new StoredImageResult("https://example.com/avatar", "avatar-id"));
 
         public Task DeleteImageAsync(
-            string publicId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+            string publicId, CancellationToken cancellationToken = default) =>
+            DeleteShouldFail
+                ? Task.FromException(new InvalidOperationException("Cloudinary failed"))
+                : Task.CompletedTask;
     }
 
     private sealed class StubAdminUserRepository : IAdminUserRepository
     {
         public User? User { get; set; }
-        public bool HasBookingHistory { get; set; }
+        public bool HasDeletionBlockingData { get; set; }
         public bool TryDeleteResult { get; set; } = true;
         public User? AddedUser { get; private set; }
         public Wallet? AddedWallet { get; private set; }
@@ -130,9 +203,9 @@ public sealed class AdminUserServiceTests
         public Task<bool> CinemaExistsAsync(
             int cinemaId, CancellationToken cancellationToken = default) => Task.FromResult(true);
 
-        public Task<bool> HasBookingHistoryAsync(
+        public Task<bool> HasDeletionBlockingDataAsync(
             int userId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(HasBookingHistory);
+            Task.FromResult(HasDeletionBlockingData);
 
         public Task AddAsync(
             User user, Wallet wallet, AdminActionLog actionLog,
@@ -177,6 +250,9 @@ public sealed class AdminUserServiceTests
             CancellationToken cancellationToken = default)
         {
             DeleteCallCount++;
+            actionLog.TargetUserID = null;
+            actionLog.TargetID = userId;
+            LastLog = actionLog;
             return Task.FromResult(TryDeleteResult);
         }
     }

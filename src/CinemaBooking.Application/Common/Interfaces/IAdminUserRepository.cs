@@ -12,7 +12,9 @@ public interface IAdminUserRepository
     Task<bool> EmailExistsAsync(string email, int? excludingUserId = null,
         CancellationToken cancellationToken = default);
     Task<bool> CinemaExistsAsync(int cinemaId, CancellationToken cancellationToken = default);
-    Task<bool> HasBookingHistoryAsync(int userId, CancellationToken cancellationToken = default);
+    Task<bool> HasDeletionBlockingDataAsync(
+        int userId,
+        CancellationToken cancellationToken = default);
 
     Task AddAsync(User user, Wallet wallet, AdminActionLog actionLog,
         CancellationToken cancellationToken = default);
