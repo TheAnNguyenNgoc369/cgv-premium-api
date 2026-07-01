@@ -78,7 +78,7 @@ public sealed class BookingAuthorizationTests
     {
         public int CreateBookingCallCount { get; private set; }
 
-        public Task<(bool Succeeded, string? ErrorMessage, List<int>? HoldIds, DateTime? ExpiresAt)> HoldSeatsAsync(
+        public Task<(bool Succeeded, string? ErrorMessage, List<int>? HoldIds, DateTime? ExpiresAt, SeatValidationErrors? SeatErrors)> HoldSeatsAsync(
             int userId,
             int showtimeId,
             List<int> seatIds,
@@ -87,7 +87,7 @@ public sealed class BookingAuthorizationTests
             throw new NotSupportedException();
         }
 
-        public Task<(bool Succeeded, string? ErrorMessage, Booking? Booking)> CreateBookingAsync(
+        public Task<(bool Succeeded, string? ErrorMessage, Booking? Booking, SeatValidationErrors? SeatErrors)> CreateBookingAsync(
             int actorUserId,
             int? customerId,
             bool isStaff,
@@ -98,8 +98,8 @@ public sealed class BookingAuthorizationTests
             CancellationToken cancellationToken = default)
         {
             CreateBookingCallCount++;
-            return Task.FromResult<(bool, string?, Booking?)>(
-                (false, "Booking validation stopped the request.", null));
+            return Task.FromResult<(bool, string?, Booking?, SeatValidationErrors?)>(
+                (false, "Booking validation stopped the request.", null, null));
         }
 
         public Task<Booking?> GetBookingByIdAsync(

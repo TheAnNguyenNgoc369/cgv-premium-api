@@ -122,12 +122,14 @@ public sealed class ShowtimeController : ControllerBase
         int showtimeId,
         CancellationToken cancellationToken)
     {
-        var seatMap = await _showtimeService.GetSeatMapAsync(showtimeId, cancellationToken);
+        var result = await _showtimeService.GetSeatMapAsync(showtimeId, cancellationToken);
 
-        if (seatMap is null)
-            return NotFound(new { success = false, message = "Showtime not found or not available for booking." });
+        if (result.SeatMap is null)
+            return result.ErrorMessage == "Showtime not found."
+                ? NotFound(new { success = false, message = result.ErrorMessage })
+                : BadRequest(new { success = false, message = result.ErrorMessage });
 
-        return Ok(seatMap);
+        return Ok(result.SeatMap);
     }
 
     private async Task<ShowtimeManagementResponse> ToManagementResponseAsync(

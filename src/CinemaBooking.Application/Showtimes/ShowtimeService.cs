@@ -219,12 +219,17 @@ public sealed class ShowtimeService : IShowtimeService
         int id, CancellationToken cancellationToken = default) =>
         _showtimeRepository.GetManagedShowtimeByIdAsync(id, cancellationToken);
 
-    public async Task<SeatMapResult?> GetSeatMapAsync(
+    public async Task<(SeatMapResult? SeatMap, string? ErrorMessage)> GetSeatMapAsync(
         int showtimeId, CancellationToken cancellationToken = default)
     {
         var showtime = await _showtimeRepository.GetShowtimeByIdAsync(showtimeId, cancellationToken);
-        if (showtime is null || showtime.Status != "scheduled"
-            || showtime.Room.Status != "active" || showtime.Room.Cinema.Status != "active") return null;
+        if (showtime is null) return (null, "Showtime not found.");
+        if (showtime.Status != "scheduled")
+            return (null, "This showtime is not scheduled and its seat map is unavailable.");
+        if (showtime.Room.Status != "active")
+            return (null, "The showtime room is inactive.");
+        if (showtime.Room.Cinema.Status != "active")
+            return (null, "The showtime cinema is inactive.");
 
         var now = DateTime.UtcNow;
         var seats = await _showtimeRepository.GetSeatsByRoomAsync(showtime.RoomID, cancellationToken);
@@ -235,6 +240,6 @@ public sealed class ShowtimeService : IShowtimeService
             seat.SeatType.ExtraPrice, showtime.BasePrice + seat.SeatType.ExtraPrice,
             bookedSeatIds.Contains(seat.SeatID) ? SeatStatus.Booked
                 : heldSeatIds.Contains(seat.SeatID) ? SeatStatus.Held : SeatStatus.Available)).ToList();
-        return new SeatMapResult(showtime.ShowtimeID, showtime.Room.RoomName, showtime.Room.RoomType, seatResults);
+        return (new SeatMapResult(showtime.ShowtimeID, showtime.Room.RoomName, showtime.Room.RoomType, seatResults), null);
     }
 }

@@ -35,7 +35,14 @@ public sealed class BookingController : ControllerBase
 
         if (!result.Succeeded)
         {
-            if (result.ErrorMessage == "One or more seats are already booked or being held")
+            if (result.SeatErrors is not null)
+                return BadRequest(new { success = false, message = result.ErrorMessage, errors = result.SeatErrors });
+
+            if (result.ErrorMessage == "Showtime not found.")
+                return NotFound(new { success = false, message = result.ErrorMessage });
+
+            if (result.ErrorMessage == "One or more seats are already booked or being held."
+                || result.ErrorMessage?.StartsWith("Seats with IDs ", StringComparison.Ordinal) == true)
                 return Conflict(new { success = false, message = result.ErrorMessage });
 
             return BadRequest(new { success = false, message = result.ErrorMessage });
@@ -75,7 +82,15 @@ public sealed class BookingController : ControllerBase
             request.VoucherCode, cancellationToken);
 
         if (!result.Succeeded)
+        {
+            if (result.SeatErrors is not null)
+                return BadRequest(new { success = false, message = result.ErrorMessage, errors = result.SeatErrors });
+
+            if (result.ErrorMessage == "Showtime not found.")
+                return NotFound(new { success = false, message = result.ErrorMessage });
+
             return BadRequest(new { success = false, message = result.ErrorMessage });
+        }
 
         return Ok(MapToResponse(result.Booking!));
     }
