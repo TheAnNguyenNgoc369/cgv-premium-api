@@ -4,13 +4,18 @@ namespace CinemaBooking.Application.Products;
 
 public interface IProductService
 {
-    Task<List<Product>> GetProductsAsync(CancellationToken cancellationToken = default);
+    Task<List<Product>> GetProductsAsync(
+        int cinemaId,
+        CancellationToken cancellationToken = default);
 
-    Task<List<Product>> GetAvailableProductsAsync(CancellationToken cancellationToken = default);
+    Task<List<Product>> GetAvailableProductsAsync(
+        int cinemaId,
+        CancellationToken cancellationToken = default);
 
     Task<Product?> GetProductByIdAsync(int itemId, CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, Product? Product)> CreateProductAsync(
+        int cinemaId,
         string itemName,
         string itemType,
         string? description,
@@ -23,6 +28,7 @@ public interface IProductService
 
     Task<(bool Succeeded, string? ErrorMessage, Product? Product)> UpdateProductAsync(
         int itemId,
+        int managerCinemaId,
         string itemName,
         string itemType,
         string? description,
@@ -36,5 +42,6 @@ public interface IProductService
 
     Task<(bool Succeeded, string? ErrorMessage)> DeleteProductAsync(
         int itemId,
+        int managerCinemaId,
         CancellationToken cancellationToken = default);
 }

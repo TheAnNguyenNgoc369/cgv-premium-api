@@ -1,5 +1,6 @@
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
+using CinemaBooking.Application.Common.Security;
 
 namespace CinemaBooking.Application.Products;
 
@@ -15,14 +16,18 @@ public sealed class ProductService : IProductService
         _productRepository = productRepository;
     }
 
-    public Task<List<Product>> GetProductsAsync(CancellationToken cancellationToken = default)
+    public Task<List<Product>> GetProductsAsync(
+        int cinemaId,
+        CancellationToken cancellationToken = default)
     {
-        return _productRepository.GetProductsAsync(cancellationToken);
+        return _productRepository.GetProductsAsync(cinemaId, cancellationToken);
     }
 
-    public Task<List<Product>> GetAvailableProductsAsync(CancellationToken cancellationToken = default)
+    public Task<List<Product>> GetAvailableProductsAsync(
+        int cinemaId,
+        CancellationToken cancellationToken = default)
     {
-        return _productRepository.GetAvailableProductsAsync(cancellationToken);
+        return _productRepository.GetAvailableProductsAsync(cinemaId, cancellationToken);
     }
 
     public Task<Product?> GetProductByIdAsync(
@@ -33,6 +38,7 @@ public sealed class ProductService : IProductService
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, Product? Product)> CreateProductAsync(
+        int cinemaId,
         string itemName,
         string itemType,
         string? description,
@@ -70,13 +76,15 @@ public sealed class ProductService : IProductService
             return (false, "StockQuantity must be greater than or equal to 0", null);
         }
 
-        if (await _productRepository.NameExistsAsync(normalizedName, cancellationToken: cancellationToken))
+        if (await _productRepository.NameExistsAsync(
+                cinemaId, normalizedName, cancellationToken: cancellationToken))
         {
             return (false, "ItemName must be unique", null);
         }
 
         var product = new Product
         {
+            CinemaID = cinemaId,
             ItemName = normalizedName,
             ItemType = normalizedType,
             Description = description?.Trim(),
@@ -95,6 +103,7 @@ public sealed class ProductService : IProductService
 
     public async Task<(bool Succeeded, string? ErrorMessage, Product? Product)> UpdateProductAsync(
         int itemId,
+        int managerCinemaId,
         string itemName,
         string itemType,
         string? description,
@@ -111,6 +120,8 @@ public sealed class ProductService : IProductService
         {
             return (false, "Product not found", null);
         }
+        if (existingProduct.CinemaID != managerCinemaId)
+            return (false, CinemaScopeMessages.AccessDenied, null);
 
         var normalizedName = NormalizeName(itemName);
         if (normalizedName is null)
@@ -151,6 +162,7 @@ public sealed class ProductService : IProductService
         }
 
         if (await _productRepository.NameExistsAsync(
+                managerCinemaId,
                 normalizedName,
                 itemId,
                 cancellationToken))
@@ -161,6 +173,7 @@ public sealed class ProductService : IProductService
         var productToUpdate = new Product
         {
             ItemID = itemId,
+            CinemaID = managerCinemaId,
             ItemName = normalizedName,
             ItemType = normalizedType,
             Description = description?.Trim(),
@@ -181,6 +194,7 @@ public sealed class ProductService : IProductService
 
     public async Task<(bool Succeeded, string? ErrorMessage)> DeleteProductAsync(
         int itemId,
+        int managerCinemaId,
         CancellationToken cancellationToken = default)
     {
         var existingProduct = await _productRepository.GetByIdAsync(itemId, cancellationToken);
@@ -188,6 +202,8 @@ public sealed class ProductService : IProductService
         {
             return (false, "Product not found");
         }
+        if (existingProduct.CinemaID != managerCinemaId)
+            return (false, CinemaScopeMessages.AccessDenied);
 
         if (await _productRepository.IsUsedInBookingsAsync(itemId, cancellationToken))
         {

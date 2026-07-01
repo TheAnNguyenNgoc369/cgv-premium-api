@@ -6,6 +6,7 @@ public sealed record ProductListResponse(
 
 public sealed record ProductResponse(
     int ItemID,
+    int CinemaID,
     string ItemName,
     string ItemType,
     string? Description,

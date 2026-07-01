@@ -11,4 +11,5 @@ public class Cinema
 
     public ICollection<Room> Rooms { get; set; } = [];
     public ICollection<User> Users { get; set; } = [];
+    public ICollection<Product> Products { get; set; } = [];
 }
