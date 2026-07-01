@@ -19,28 +19,40 @@ public sealed class MembershipService : IMembershipService
     {
         var totalPoints = await _loyaltyRepository.GetUserTotalPointsAsync(userId, cancellationToken);
         var totalSpent = await _loyaltyRepository.GetUserTotalSpentAsync(userId, cancellationToken);
-        var tier = await _loyaltyRepository.GetUserTierAsync(userId, cancellationToken);
+        var allTiers = await _loyaltyRepository.GetAllTiersAsync(cancellationToken);
 
-        var tierName = tier?.TierName ?? MembershipTiers.Member;
-        var discountRate = tier?.DiscountRate ?? MembershipTiers.MemberDiscountRate;
-        var discountPercent = discountRate * 100;
-
-        var isVip = string.Equals(tierName, MembershipTiers.VIP, StringComparison.OrdinalIgnoreCase);
-
-        var pointsToVip = 0;
-        if (!isVip)
+        if (!allTiers.Any())
         {
-            var pointsNeeded = MembershipTiers.VipMinPoints - totalPoints;
-            pointsToVip = pointsNeeded > 0 ? pointsNeeded : 0;
+            throw new InvalidOperationException("No loyalty tiers found in database. Please run migrations.");
         }
 
+        var currentTier = allTiers
+            .Where(t => totalPoints >= t.MinPoints)
+            .OrderByDescending(t => t.MinPoints)
+            .FirstOrDefault();
+
+        // Fallback to lowest tier if user doesn't qualify for any tier yet
+        currentTier ??= allTiers.OrderBy(t => t.MinPoints).FirstOrDefault();
+
+        var currentTierName = currentTier?.TierName ?? "unknown";
+        var discountRate = currentTier?.DiscountRate ?? 0m;
+        var discountPercent = discountRate * 100;
+
+        var nextTier = allTiers
+            .Where(t => t.MinPoints > totalPoints)
+            .OrderBy(t => t.MinPoints)
+            .FirstOrDefault();
+
+        var nextTierName = nextTier?.TierName;
+        var pointsToNextTier = nextTier != null ? nextTier.MinPoints - totalPoints : 0;
+
         return new MembershipInfo(
-            Tier: tierName,
+            CurrentTier: currentTierName,
+            NextTier: nextTierName,
+            PointsToNextTier: pointsToNextTier,
             TotalPoints: totalPoints,
             TotalSpent: totalSpent,
-            DiscountPercent: discountPercent,
-            IsVip: isVip,
-            PointsToVip: pointsToVip
+            DiscountPercent: discountPercent
         );
     }
 
@@ -100,28 +112,26 @@ public sealed class MembershipService : IMembershipService
         CancellationToken cancellationToken = default)
     {
         var totalPoints = await _loyaltyRepository.GetUserTotalPointsAsync(userId, cancellationToken);
-        var totalSpent = await _loyaltyRepository.GetUserTotalSpentAsync(userId, cancellationToken);
+        var allTiers = await _loyaltyRepository.GetAllTiersAsync(cancellationToken);
+
+        if (!allTiers.Any())
+        {
+            throw new InvalidOperationException("No loyalty tiers found in database. Please run migrations.");
+        }
+
+        var appropriateTier = allTiers
+            .Where(t => totalPoints >= t.MinPoints)
+            .OrderByDescending(t => t.MinPoints)
+            .FirstOrDefault();
+
+        if (appropriateTier is null)
+            return;
+
         var currentTier = await _loyaltyRepository.GetUserTierAsync(userId, cancellationToken);
 
-        var isCurrentlyVip = currentTier != null &&
-            string.Equals(currentTier.TierName, MembershipTiers.VIP, StringComparison.OrdinalIgnoreCase);
-
-        if (isCurrentlyVip)
-            return;
-
-        var qualifiesForVip = totalPoints >= MembershipTiers.VipMinPoints ||
-                              totalSpent >= MembershipTiers.VipMinSpent;
-
-        if (!qualifiesForVip)
-            return;
-
-        var tiers = await _loyaltyRepository.GetAllTiersAsync(cancellationToken);
-        var vipTier = tiers.FirstOrDefault(t =>
-            string.Equals(t.TierName, MembershipTiers.VIP, StringComparison.OrdinalIgnoreCase));
-
-        if (vipTier is null)
-            return;
-
-        await _loyaltyRepository.UpdateUserTierAsync(userId, vipTier.TierID, cancellationToken);
+        if (currentTier?.TierID != appropriateTier.TierID)
+        {
+            await _loyaltyRepository.UpdateUserTierAsync(userId, appropriateTier.TierID, cancellationToken);
+        }
     }
 }

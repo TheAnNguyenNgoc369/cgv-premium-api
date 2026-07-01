@@ -25,12 +25,12 @@ public sealed class MembershipController : ControllerBase
         var membership = await _membershipService.GetMyMembershipAsync(userId, cancellationToken);
 
         var response = new MembershipResponse(
-            Tier: membership.Tier,
+            CurrentTier: membership.CurrentTier,
+            NextTier: membership.NextTier,
+            PointsToNextTier: membership.PointsToNextTier,
             TotalPoints: membership.TotalPoints,
             TotalSpent: membership.TotalSpent,
-            DiscountPercent: membership.DiscountPercent,
-            IsVip: membership.IsVip,
-            PointsToVip: membership.PointsToVip
+            DiscountPercent: membership.DiscountPercent
         );
 
         return Ok(response);
