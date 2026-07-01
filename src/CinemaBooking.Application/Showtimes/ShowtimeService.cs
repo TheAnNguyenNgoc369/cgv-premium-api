@@ -11,6 +11,8 @@ public sealed class ShowtimeService : IShowtimeService
     private const string InvalidStatusMessage =
         "Invalid showtime status. (scheduled, completed, cancelled)";
     private const string InvalidManualStatus = "__invalid_status__";
+    private const string StartTimeMustBeUtcMessage =
+        "StartTime must be normalized to UTC";
     private readonly IShowtimeRepository _showtimeRepository;
     private readonly IUnitOfWork? _unitOfWork;
 
@@ -89,7 +91,7 @@ public sealed class ShowtimeService : IShowtimeService
         var manualStatus = NormalizeManualStatus(status);
         if (manualStatus == InvalidManualStatus) return (false, InvalidStatusMessage, null);
         if (startTime.Kind != DateTimeKind.Utc)
-            return (false, "StartTime must be a UTC ISO 8601 value ending in Z", null);
+            return (false, StartTimeMustBeUtcMessage, null);
 
         var hasProtectedChanges = existing.MovieID != movieId
             || existing.RoomID != roomId
@@ -136,7 +138,7 @@ public sealed class ShowtimeService : IShowtimeService
         var manualStatus = NormalizeManualStatus(status);
         if (manualStatus == InvalidManualStatus) return (false, InvalidStatusMessage, null);
         if (startTime.Kind != DateTimeKind.Utc)
-            return (false, "StartTime must be a UTC ISO 8601 value ending in Z", null);
+            return (false, StartTimeMustBeUtcMessage, null);
         if (basePrice < 0) return (false, "Base price must be greater than or equal to 0", null);
 
         var movie = await _showtimeRepository.GetMovieAsync(movieId, cancellationToken);

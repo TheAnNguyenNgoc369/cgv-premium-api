@@ -1,6 +1,6 @@
-@CinemaBooking.API_HostAddress = http://localhost:5053
+@baseUrl = http://localhost:5053
 
-GET {{CinemaBooking.API_HostAddress}}/weatherforecast/
+GET {{{{baseUrl}}}}/api/cinemas
 Accept: application/json
 
 ###

@@ -40,7 +40,7 @@ public sealed class ShowtimeServiceTests
     }
 
     [Fact]
-    public async Task CreateShowtimeAsync_StartTimeWithoutUtcOffset_ReturnsValidationError()
+    public async Task CreateShowtimeAsync_StartTimeNotNormalizedToUtc_ReturnsValidationError()
     {
         var repository = new StubShowtimeRepository
         {
@@ -52,7 +52,7 @@ public sealed class ShowtimeServiceTests
             1, 1, DateTime.SpecifyKind(DateTime.Now.AddDays(1), DateTimeKind.Unspecified), 100_000);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("StartTime must be a UTC ISO 8601 value ending in Z", result.ErrorMessage);
+        Assert.Equal("StartTime must be normalized to UTC", result.ErrorMessage);
     }
 
     [Fact]

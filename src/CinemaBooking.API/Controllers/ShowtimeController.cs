@@ -60,7 +60,8 @@ public sealed class ShowtimeController : ControllerBase
         var scope = await GetRequiredManagerCinemaIdAsync(cancellationToken);
         if (!scope.HasValue) return CinemaScopeForbidden();
         var result = await _showtimeService.CreateShowtimeAsync(
-            request.MovieId, request.RoomId, request.StartTime, request.BasePrice, scope, cancellationToken);
+            request.MovieId, request.RoomId, request.StartTime.UtcDateTime,
+            request.BasePrice, scope, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
         var response = await ToManagementResponseAsync(result.Showtime!, cancellationToken);
         return CreatedAtAction(nameof(GetShowtimeById), new { id = response.ShowtimeId }, response);
@@ -74,7 +75,8 @@ public sealed class ShowtimeController : ControllerBase
         var scope = await GetRequiredManagerCinemaIdAsync(cancellationToken);
         if (!scope.HasValue) return CinemaScopeForbidden();
         var result = await _showtimeService.UpdateShowtimeAsync(
-            id, request.MovieId, request.RoomId, request.StartTime, request.BasePrice, request.Status, scope, cancellationToken);
+            id, request.MovieId, request.RoomId, request.StartTime.UtcDateTime,
+            request.BasePrice, request.Status, scope, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
         return Ok(await ToManagementResponseAsync(result.Showtime!, cancellationToken));
     }
