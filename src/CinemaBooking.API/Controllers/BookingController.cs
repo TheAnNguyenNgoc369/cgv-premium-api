@@ -44,6 +44,33 @@ public sealed class BookingController : ControllerBase
         return Ok(new HoldSeatsResponse(result.HoldIds!, result.ExpiresAt!.Value));
     }
 
+    [HttpPost("bookings/calculate-pricing")]
+    [Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
+    public async Task<IActionResult> CalculatePricing(
+        [FromBody] CalculatePricingRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var currentUserId = GetCurrentUserId();
+        var isStaff = User.IsInRole(Roles.Staff);
+        var userId = isStaff ? request.CustomerId : currentUserId;
+
+        var fnbItems = request.FnbItems
+            .Select(item => new BookingFnBItemDto(item.ItemId, item.Quantity))
+            .ToList();
+
+        var result = await _bookingService.CalculatePricingAsync(
+            userId, request.ShowtimeId, request.SeatIds, fnbItems,
+            request.VoucherCode, cancellationToken);
+
+        if (!result.Succeeded)
+            return BadRequest(new { success = false, message = result.ErrorMessage });
+
+        return Ok(MapToPricingResponse(result.Result!));
+    }
+
     [HttpPost("bookings")]
     [Authorize]
     public async Task<IActionResult> CreateBooking(
@@ -142,5 +169,43 @@ public sealed class BookingController : ControllerBase
                   )
                 : null
         );
+    }
+
+    private static CalculatePricingResponse MapToPricingResponse(PricingCalculationResult result)
+    {
+        return new CalculatePricingResponse
+        {
+            SeatsSubTotal = result.SeatsSubTotal,
+            FnBSubTotal = result.FnBSubTotal,
+            TotalBeforeDiscount = result.TotalBeforeDiscount,
+            MembershipDiscount = result.MembershipDiscount,
+            VoucherDiscount = result.VoucherDiscount,
+            TotalDiscount = result.TotalDiscount,
+            FinalAmount = result.FinalAmount,
+            SeatDetails = result.SeatDetails.Select(s => new SeatPricingResponse
+            {
+                SeatId = s.SeatId,
+                SeatRow = s.SeatRow,
+                SeatCol = s.SeatCol,
+                SeatTypeName = s.SeatTypeName,
+                Price = s.Price
+            }).ToList(),
+            FnBDetails = result.FnBDetails.Select(f => new FnBPricingResponse
+            {
+                ItemId = f.ItemId,
+                ItemName = f.ItemName,
+                Quantity = f.Quantity,
+                UnitPrice = f.UnitPrice,
+                SubTotal = f.SubTotal
+            }).ToList(),
+            VoucherDetails = result.VoucherDetails != null
+                ? new VoucherPricingResponse
+                {
+                    VoucherCode = result.VoucherDetails.VoucherCode,
+                    DiscountType = result.VoucherDetails.DiscountType,
+                    DiscountApplied = result.VoucherDetails.DiscountApplied
+                }
+                : null
+        };
     }
 }
