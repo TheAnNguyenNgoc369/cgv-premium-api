@@ -146,8 +146,10 @@ public sealed class BookingService : IBookingService
         if (myHolds.Count != seatIds.Count)
             return (false, "Some seats are not held or the holds have expired. Please select them again.", null, null);
 
-        var seats = await _bookingRepository.GetSeatsByIdsAsync(seatIds, cancellationToken);
+        var pricingResult = await CalculatePricingAsync(
+            customerId, showtimeId, seatIds, fnbItems, voucherCode, cancellationToken);
 
+<<<<<<< src/CinemaBooking.Application/Bookings/BookingService.cs
         var seatErrors = GetSeatValidationErrors(seatIds, seats, showtime.RoomID);
         if (seatErrors is not null)
             return (false, "Some selected seats are invalid.", null, seatErrors);
@@ -221,19 +223,33 @@ public sealed class BookingService : IBookingService
                 return (false, "Customer account was not found.", null, null);
         }
 
+        if (!pricingResult.Succeeded)
+            return (false, pricingResult.ErrorMessage, null);
+
         if (!isStaff && customerId != actorUserId)
             return (false, "Customers can only create bookings for their own account.", null, null);
 
-        var membershipDiscount = 0m;
-        if (user?.LoyaltyTier is not null)
-        {
-            membershipDiscount = Math.Round(totalBeforeDiscount * user.LoyaltyTier.DiscountRate, 0);
-        }
+        var bookingSeats = pricingResult.Result!.SeatDetails
+            .Select(s => new BookingSeat
+            {
+                SeatID = s.SeatId,
+                TicketPrice = s.Price
+            }).ToList();
 
-        var discountAmount = membershipDiscount;
+        var bookingFnBs = pricingResult.Result.FnBDetails
+            .Select(f => new BookingFnB
+            {
+                ItemID = f.ItemId,
+                Quantity = f.Quantity,
+                UnitPrice = f.UnitPrice,
+                SubTotal = f.SubTotal
+            }).ToList();
+
+        var productQuantities = pricingResult.Result.FnBDetails
+            .ToDictionary(f => f.ItemId, f => f.Quantity);
+
         BookingVoucher? bookingVoucher = null;
-
-        if (!string.IsNullOrWhiteSpace(voucherCode))
+        if (pricingResult.Result.VoucherDetails is not null)
         {
             if (!customerId.HasValue)
                 return (false, "Guest bookings cannot use vouchers.", null, null);
@@ -267,16 +283,16 @@ public sealed class BookingService : IBookingService
 
             if (discountAmount > totalBeforeDiscount)
                 discountAmount = totalBeforeDiscount;
+            var voucher = await _bookingRepository.GetVoucherByCodeAsync(
+                pricingResult.Result.VoucherDetails.VoucherCode, cancellationToken);
 
             bookingVoucher = new BookingVoucher
             {
-                VoucherID = voucher.VoucherID,
-                DiscountApplied = voucherDiscount,
+                VoucherID = voucher!.VoucherID,
+                DiscountApplied = pricingResult.Result.VoucherDetails.DiscountApplied,
                 UsedAt = DateTime.UtcNow
             };
         }
-
-        var finalAmount = totalBeforeDiscount - discountAmount;
 
         var booking = new Booking
         {
@@ -284,9 +300,9 @@ public sealed class BookingService : IBookingService
             UserID = customerId,
             CreatedByStaffID = isStaff ? actorUserId : null,
             ShowtimeID = showtimeId,
-            SubTotal = totalBeforeDiscount,
-            DiscountAmount = discountAmount,
-            FinalAmount = finalAmount,
+            SubTotal = pricingResult.Result!.TotalBeforeDiscount,
+            DiscountAmount = pricingResult.Result.TotalDiscount,
+            FinalAmount = pricingResult.Result.FinalAmount,
             Status = "pending",
             BookingDate = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
@@ -379,6 +395,178 @@ public sealed class BookingService : IBookingService
         CancellationToken cancellationToken = default)
     {
         return await _bookingRepository.GetBookingsByUserAsync(userId, cancellationToken);
+    }
+
+    public async Task<(bool Succeeded, string? ErrorMessage, PricingCalculationResult? Result)> CalculatePricingAsync(
+        int? userId,
+        int showtimeId,
+        List<int> seatIds,
+        List<BookingFnBItemDto> fnbItems,
+        string? voucherCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (seatIds.Count == 0)
+            return (false, "Please select at least one seat.", null);
+
+        var showtime = await _bookingRepository.GetShowtimeAsync(showtimeId, cancellationToken);
+        if (showtime is null)
+            return (false, "Showtime not found.", null);
+
+        if (showtime.Status != "scheduled")
+            return (false, "Cannot calculate pricing for showtimes that are not scheduled.", null);
+
+        if (showtime.StartTime <= DateTime.UtcNow)
+            return (false, "Cannot calculate pricing for showtimes that have already started.", null);
+
+        if (showtime.Room.Cinema.Status != "active")
+            return (false, "Cinema is not active.", null);
+
+        seatIds = seatIds.Distinct().ToList();
+
+        var seats = await _bookingRepository.GetSeatsByIdsAsync(seatIds, cancellationToken);
+
+        if (seats.Count != seatIds.Count || seats.Any(seat =>
+                seat.RoomID != showtime.RoomID || seat.Status != "active"))
+            return (false, "One or more seats do not belong to the showtime room or are inactive.", null);
+
+        var seatDetails = seats.Select(seat => new SeatPricingDetail
+        {
+            SeatId = seat.SeatID,
+            SeatRow = seat.SeatRow,
+            SeatCol = seat.SeatCol,
+            SeatTypeName = seat.SeatType.TypeName,
+            Price = showtime.BasePrice + seat.SeatType.ExtraPrice
+        }).ToList();
+
+        var seatsSubTotal = seatDetails.Sum(s => s.Price);
+
+        var fnbDetails = new List<FnBPricingDetail>();
+        var fnbSubTotal = 0m;
+
+        var normalizedFnbItems = fnbItems
+            .GroupBy(item => item.ItemId)
+            .Select(group => new BookingFnBItemDto(group.Key, group.Sum(item => item.Quantity)))
+            .ToList();
+
+        if (normalizedFnbItems.Any())
+        {
+            var productIds = normalizedFnbItems.Select(f => f.ItemId).ToList();
+            var products = await _bookingRepository.GetProductsByIdsAsync(productIds, cancellationToken);
+
+            if (products.Count != productIds.Count)
+            {
+                var missingIds = productIds.Except(products.Select(p => p.ItemID)).ToList();
+                return (false, $"Products with IDs {string.Join(", ", missingIds)} were not found.", null);
+            }
+
+            foreach (var fnbItem in normalizedFnbItems)
+            {
+                var product = products.First(p => p.ItemID == fnbItem.ItemId);
+
+                if (product.CinemaID != showtime.Room.CinemaID)
+                    return (false, $"Product '{product.ItemName}' is not available at this cinema.", null);
+
+                if (!product.IsOnMenu)
+                    return (false, $"Product '{product.ItemName}' is no longer available.", null);
+
+                if (product.Status != "in_stock" && product.Status != "low_stock")
+                    return (false, $"Product '{product.ItemName}' is out of stock.", null);
+
+                if (product.StockQuantity < fnbItem.Quantity)
+                    return (false, $"Only {product.StockQuantity} units of '{product.ItemName}' are available.", null);
+
+                var itemSubTotal = product.Price * fnbItem.Quantity;
+                fnbSubTotal += itemSubTotal;
+
+                fnbDetails.Add(new FnBPricingDetail
+                {
+                    ItemId = product.ItemID,
+                    ItemName = product.ItemName,
+                    Quantity = fnbItem.Quantity,
+                    UnitPrice = product.Price,
+                    SubTotal = itemSubTotal
+                });
+            }
+        }
+
+        var totalBeforeDiscount = seatsSubTotal + fnbSubTotal;
+
+        User? user = null;
+        if (userId.HasValue)
+        {
+            user = await _userRepository.GetByIdAsync(userId.Value, cancellationToken);
+            if (user is null || user.Role != "customer")
+                return (false, "Customer account was not found.", null);
+        }
+
+        var membershipDiscount = 0m;
+        if (user?.LoyaltyTier is not null)
+        {
+            membershipDiscount = Math.Round(totalBeforeDiscount * user.LoyaltyTier.DiscountRate, 0);
+        }
+
+        var voucherDiscount = 0m;
+        VoucherPricingDetail? voucherDetails = null;
+
+        if (!string.IsNullOrWhiteSpace(voucherCode))
+        {
+            if (!userId.HasValue)
+                return (false, "Guest bookings cannot use vouchers.", null);
+
+            var voucher = await _bookingRepository.GetVoucherByCodeAsync(voucherCode.Trim(), cancellationToken);
+
+            if (voucher is null)
+                return (false, "Voucher code does not exist.", null);
+
+            if (!voucher.IsActive)
+                return (false, "Voucher is not available.", null);
+
+            var now = DateTime.UtcNow;
+            if (now < voucher.ValidFrom)
+                return (false, "Voucher is not active yet.", null);
+
+            if (now > voucher.ValidUntil)
+                return (false, "Voucher has expired.", null);
+
+            if (voucher.MaxUses.HasValue && voucher.UsedCount >= voucher.MaxUses.Value)
+                return (false, "Voucher usage limit has been reached.", null);
+
+            if (voucher.MinOrderValue.HasValue && totalBeforeDiscount < voucher.MinOrderValue.Value)
+                return (false, $"A minimum order value of {voucher.MinOrderValue.Value:N0} VND is required to use this voucher.", null);
+
+            voucherDiscount = voucher.DiscountType == "percent"
+                ? Math.Round(totalBeforeDiscount * voucher.DiscountValue / 100, 0)
+                : voucher.DiscountValue;
+
+            voucherDetails = new VoucherPricingDetail
+            {
+                VoucherCode = voucher.VoucherCode,
+                DiscountType = voucher.DiscountType,
+                DiscountApplied = voucherDiscount
+            };
+        }
+
+        var totalDiscount = membershipDiscount + voucherDiscount;
+        if (totalDiscount > totalBeforeDiscount)
+            totalDiscount = totalBeforeDiscount;
+
+        var finalAmount = totalBeforeDiscount - totalDiscount;
+
+        var result = new PricingCalculationResult
+        {
+            SeatsSubTotal = seatsSubTotal,
+            FnBSubTotal = fnbSubTotal,
+            TotalBeforeDiscount = totalBeforeDiscount,
+            MembershipDiscount = membershipDiscount,
+            VoucherDiscount = voucherDiscount,
+            TotalDiscount = totalDiscount,
+            FinalAmount = finalAmount,
+            SeatDetails = seatDetails,
+            FnBDetails = fnbDetails,
+            VoucherDetails = voucherDetails
+        };
+
+        return (true, null, result);
     }
 
     private static string GenerateBookingCode()

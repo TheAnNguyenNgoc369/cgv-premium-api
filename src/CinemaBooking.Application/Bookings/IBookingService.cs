@@ -26,6 +26,14 @@ public interface IBookingService
         string? voucherCode,
         CancellationToken cancellationToken = default);
 
+    Task<(bool Succeeded, string? ErrorMessage, PricingCalculationResult? Result)> CalculatePricingAsync(
+        int? userId,
+        int showtimeId,
+        List<int> seatIds,
+        List<BookingFnBItemDto> fnbItems,
+        string? voucherCode,
+        CancellationToken cancellationToken = default);
+
     Task<Booking?> GetBookingByIdAsync(
         int bookingId,
         CancellationToken cancellationToken = default);
