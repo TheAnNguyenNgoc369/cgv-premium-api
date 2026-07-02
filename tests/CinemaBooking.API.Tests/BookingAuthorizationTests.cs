@@ -115,8 +115,10 @@ public sealed class BookingAuthorizationTests
             List<int> seatIds,
             List<BookingFnBItemDto> fnbItems,
             string? voucherCode,
-            CancellationToken cancellationToken = default) =>
+            CancellationToken cancellationToken = default)
+        {
             throw new NotSupportedException();
+        }
 
         public Task<Booking?> GetBookingByIdAsync(
             int bookingId,

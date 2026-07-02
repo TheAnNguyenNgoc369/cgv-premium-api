@@ -29,7 +29,7 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
 
         builder.ToTable(t =>
         {
-            t.HasCheckConstraint("CK_Payment_Method", "[PaymentMethod] IN ('vnpay', 'momo', 'credit_card', 'banking', 'cash', 'wallet')");
+            t.HasCheckConstraint("CK_Payment_Method", "[PaymentMethod] IN ('vnpay', 'payos', 'momo', 'credit_card', 'banking', 'cash', 'wallet')");
             t.HasCheckConstraint("CK_Payment_Amount", "[Amount] >= 0");
             t.HasCheckConstraint("CK_Payment_Status", "[Status] IN ('pending', 'success', 'failed', 'refunded', 'cancelled', 'expired')");
         });

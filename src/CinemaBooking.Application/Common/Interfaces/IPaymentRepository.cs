@@ -23,6 +23,12 @@ public interface IPaymentRepository
         string? transactionCode = null,
         CancellationToken cancellationToken = default);
 
+    Task<bool> TryCompletePendingPaymentAsync(
+        int paymentId,
+        DateTime paidAt,
+        string transactionCode,
+        CancellationToken cancellationToken = default);
+
     Task<PaymentSession> CreatePaymentSessionAsync(
         PaymentSession session,
         CancellationToken cancellationToken = default);

@@ -5,6 +5,8 @@ using CinemaBooking.Infrastructure.Email;
 using CinemaBooking.Infrastructure.Persistence;
 using CinemaBooking.Infrastructure.Storage;
 using CinemaBooking.Infrastructure.BackgroundJobs;
+using CinemaBooking.Application.Payments.PayOS;
+using CinemaBooking.Infrastructure.Payments.PayOS;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -59,6 +61,7 @@ public static class DependencyInjection
         services.AddSingleton(Options.Create(cloudinarySettings));
         services.AddScoped<IEmailSender, SmtpEmailSender>();
         services.AddScoped<IImageStorageService, CloudinaryImageStorageService>();
+        services.AddScoped<IPayOSService, PayOSService>();
         services.AddHostedService<SeatHoldExpirationJob>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScopedByConvention(typeof(DependencyInjection).Assembly, "Repository");

@@ -1,6 +1,6 @@
 @baseUrl = http://localhost:5053
 
-GET {{{{baseUrl}}}}/api/cinemas
+GET {{baseUrl}}/api/cinemas
 Accept: application/json
 
 ###

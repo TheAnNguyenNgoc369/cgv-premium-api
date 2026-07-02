@@ -4,6 +4,7 @@ using CinemaBooking.Application.Contracts.Payment;
 using CinemaBooking.Application.Invoices;
 using CinemaBooking.Application.Membership;
 using CinemaBooking.Application.Payments.VNPay;
+using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 
@@ -12,12 +13,14 @@ namespace CinemaBooking.Application.Payments;
 public sealed class PaymentService : IPaymentService
 {
     private const int VNPaySessionExpiryMinutes = 15;
+    private const int PayOSSessionExpiryMinutes = 15;
     private const int FailedPaymentHoldMinutes = 5;
 
     private readonly IPaymentRepository _paymentRepository;
     private readonly IWalletRepository _walletRepository;
     private readonly IBookingRepository _bookingRepository;
     private readonly IVNPayService _vnpayService;
+    private readonly IPayOSService _payOSService;
     private readonly IInvoiceService _invoiceService;
     private readonly IMembershipService _membershipService;
     private readonly IUnitOfWork _unitOfWork;
@@ -27,6 +30,7 @@ public sealed class PaymentService : IPaymentService
         IWalletRepository walletRepository,
         IBookingRepository bookingRepository,
         IVNPayService vnpayService,
+        IPayOSService payOSService,
         IInvoiceService invoiceService,
         IMembershipService membershipService,
         IUnitOfWork unitOfWork)
@@ -35,6 +39,7 @@ public sealed class PaymentService : IPaymentService
         _walletRepository = walletRepository;
         _bookingRepository = bookingRepository;
         _vnpayService = vnpayService;
+        _payOSService = payOSService;
         _invoiceService = invoiceService;
         _membershipService = membershipService;
         _unitOfWork = unitOfWork;
@@ -73,6 +78,7 @@ public sealed class PaymentService : IPaymentService
         {
             PaymentMethod.Wallet => await ProcessWalletPaymentAsync(booking!, existingPayment, cancellationToken),
             PaymentMethod.VNPay => await ProcessVNPayPaymentAsync(booking!, existingPayment, ipAddress, cancellationToken),
+            PaymentMethod.PayOS => await ProcessPayOSPaymentAsync(booking!, existingPayment, cancellationToken),
             PaymentMethod.Cash => await ProcessCashPaymentAsync(booking!, existingPayment, cancellationToken),
             _ => Error(PaymentErrorType.Validation, method.ErrorMessage ?? "Payment method is not supported.")
         };
@@ -150,6 +156,70 @@ public sealed class PaymentService : IPaymentService
             isSuccess ? "Payment completed successfully" : $"Payment failed with code: {responseCode}",
             payment.PaymentID, payment.BookingID, EnumValueMapper.ToApiValue(paymentStatus),
             EnumValueMapper.ToApiValue(bookingStatus));
+    }
+
+    public async Task<PayOSWebhookResult> ProcessPayOSWebhookAsync(
+        PayOSWebhook webhook,
+        CancellationToken cancellationToken = default)
+    {
+        PayOSVerifiedWebhookData verified;
+        try
+        {
+            verified = await _payOSService.VerifyWebhookAsync(webhook, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return new(false, "Invalid signature from PayOS.");
+        }
+
+        if (verified.OrderCode <= 0)
+            return new(false, $"Invalid PayOS order code: {verified.OrderCode}.");
+
+        var paymentSession = await _paymentRepository.GetPaymentSessionByOrderNoAsync(
+            verified.OrderCode.ToString(), cancellationToken);
+        if (paymentSession is null || paymentSession.GatewayName != PaymentMethod.PayOS)
+            return new(false, $"PayOS order {verified.OrderCode} not found.");
+
+        var paymentId = paymentSession.PaymentID;
+        var payment = await _paymentRepository.GetPaymentByIdAsync(paymentId, cancellationToken);
+        if (payment is null)
+            return new(false, $"Payment {paymentId} not found.");
+        if (payment.PaymentMethod != PaymentMethod.PayOS)
+            return new(false, "PayOS order code does not belong to a PayOS payment.");
+        if (payment.Amount != verified.Amount)
+            return new(false, "PayOS payment amount does not match the booking amount.");
+        if (payment.Status != PaymentStatus.Pending)
+            return new(true, "Payment already processed.", payment.PaymentID, payment.BookingID,
+                EnumValueMapper.ToApiValue(payment.Status),
+                EnumValueMapper.ToApiValue(payment.Booking.Status));
+
+        if (verified.Code != "00")
+            return new(true, $"PayOS webhook acknowledged with code {verified.Code}.",
+                payment.PaymentID, payment.BookingID,
+                EnumValueMapper.ToApiValue(payment.Status),
+                EnumValueMapper.ToApiValue(payment.Booking.Status));
+
+        var completed = await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            if (!await _paymentRepository.TryCompletePendingPaymentAsync(
+                    paymentId, DateTime.UtcNow, verified.Reference, cancellationToken))
+                return false;
+
+            await FinalizeSuccessfulBookingAsync(payment.Booking, cancellationToken);
+            await _invoiceService.CreateInvoiceAsync(payment.BookingID, cancellationToken);
+            await _paymentRepository.UpdatePaymentSessionsForPaymentAsync(
+                paymentId, "completed", cancellationToken);
+            return true;
+        }, cancellationToken);
+
+        if (!completed)
+            return new(true, "Payment already processed.", payment.PaymentID, payment.BookingID,
+                EnumValueMapper.ToApiValue(PaymentStatus.Completed),
+                EnumValueMapper.ToApiValue(BookingStatus.Paid));
+
+        return new(true, "Payment completed successfully.", payment.PaymentID, payment.BookingID,
+            EnumValueMapper.ToApiValue(PaymentStatus.Completed),
+            EnumValueMapper.ToApiValue(BookingStatus.Paid));
     }
 
     public async Task<PaymentOperationResult> GetPaymentByIdAsync(
@@ -317,6 +387,82 @@ public sealed class PaymentService : IPaymentService
         }, cancellationToken);
     }
 
+    private async Task<PaymentOperationResult> ProcessPayOSPaymentAsync(
+        Booking booking,
+        Payment? existingPayment,
+        CancellationToken cancellationToken)
+    {
+        if (booking.FinalAmount != decimal.Truncate(booking.FinalAmount)
+            || booking.FinalAmount is <= 0 or > int.MaxValue)
+            return Error(PaymentErrorType.Validation,
+                "PayOS requires a positive whole-number VND amount within the supported range.");
+
+        try
+        {
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                Payment payment;
+                if (existingPayment is null)
+                {
+                    payment = await _paymentRepository.CreatePaymentAsync(new Payment
+                    {
+                        BookingID = booking.BookingID,
+                        PaymentMethod = PaymentMethod.PayOS,
+                        Amount = booking.FinalAmount,
+                        Status = PaymentStatus.Pending,
+                        CreatedAt = DateTime.UtcNow
+                    }, cancellationToken);
+                }
+                else
+                {
+                    payment = existingPayment;
+                    await _paymentRepository.ResetPaymentForRetryAsync(
+                        payment.PaymentID, PaymentMethod.PayOS, booking.FinalAmount, cancellationToken);
+                    await _bookingRepository.UpdateBookingStatusAsync(
+                        booking.BookingID, BookingStatus.Pending, cancellationToken);
+                }
+
+                var expiresAt = DateTime.UtcNow.AddMinutes(PayOSSessionExpiryMinutes);
+                var orderCode = CreatePayOSOrderCode();
+                var paymentLink = await _payOSService.CreatePaymentLinkAsync(
+                    orderCode,
+                    decimal.ToInt32(booking.FinalAmount),
+                    $"PAY {payment.PaymentID}",
+                    expiresAt,
+                    cancellationToken);
+                var session = await _paymentRepository.CreatePaymentSessionAsync(new PaymentSession
+                {
+                    PaymentID = payment.PaymentID,
+                    GatewayName = PaymentMethod.PayOS,
+                    GatewayOrderNo = paymentLink.OrderCode.ToString(),
+                    QRCodeURL = paymentLink.CheckoutUrl,
+                    ExpiresAt = expiresAt,
+                    Status = "waiting",
+                    CreatedAt = DateTime.UtcNow
+                }, cancellationToken);
+
+                return PaymentOperationResult.Success(new PayOSPaymentResponse(
+                    true,
+                    payment.PaymentID,
+                    booking.BookingID,
+                    EnumValueMapper.ToApiValue(PaymentMethod.PayOS),
+                    booking.FinalAmount,
+                    EnumValueMapper.ToApiValue(PaymentStatus.Pending),
+                    paymentLink.CheckoutUrl,
+                    paymentLink.QrCode,
+                    paymentLink.PaymentLinkId,
+                    paymentLink.OrderCode,
+                    session.SessionID,
+                    expiresAt));
+            }, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return Error(PaymentErrorType.Gateway,
+                "Unable to create PayOS payment link. Please try again later.");
+        }
+    }
+
     private async Task CompletePaymentAsync(
         Payment payment,
         string? transactionCode,
@@ -380,4 +526,8 @@ public sealed class PaymentService : IPaymentService
         var parts = txnRef.Split('_');
         return parts.Length >= 2 && int.TryParse(parts[1], out var paymentId) ? paymentId : 0;
     }
+
+    private static long CreatePayOSOrderCode() =>
+        DateTimeOffset.UtcNow.ToUnixTimeSeconds() * 1_000_000L
+        + Random.Shared.Next(1, 1_000_000);
 }

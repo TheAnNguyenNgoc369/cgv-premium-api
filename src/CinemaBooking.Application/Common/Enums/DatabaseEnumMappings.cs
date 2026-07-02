@@ -25,7 +25,7 @@ public static class DatabaseEnumMappings
             ["DISABLED"] = "inactive", ["MAINTENANCE"] = "inactive"
         };
     public static readonly IReadOnlyDictionary<string, string> PaymentMethods =
-        EnumValueMapper.CreateMappings("vnpay", "momo", "credit_card", "banking", "cash", "wallet");
+        EnumValueMapper.CreateMappings("vnpay", "payos", "momo", "credit_card", "banking", "cash", "wallet");
     public static readonly IReadOnlyDictionary<string, string> BookingStatuses =
         EnumValueMapper.CreateMappings("pending", "paid", "cancelled", "refunded", "used",
             "expired", "payment_failed", "partially_refunded");
@@ -34,7 +34,7 @@ public static class DatabaseEnumMappings
     public static readonly IReadOnlyDictionary<string, string> PaymentSessionStatuses =
         EnumValueMapper.CreateMappings("waiting", "processing", "completed", "expired", "cancelled");
     public static readonly IReadOnlyDictionary<string, string> PaymentGateways =
-        EnumValueMapper.CreateMappings("vnpay", "momo");
+        EnumValueMapper.CreateMappings("vnpay", "payos", "momo");
     public static readonly IReadOnlyDictionary<string, string> WalletTransactionTypes =
         EnumValueMapper.CreateMappings("top_up", "payment", "refund");
     public static readonly IReadOnlyDictionary<string, string> LoyaltyTransactionTypes =

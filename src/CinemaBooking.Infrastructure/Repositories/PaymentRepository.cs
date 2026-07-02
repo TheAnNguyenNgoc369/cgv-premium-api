@@ -64,6 +64,24 @@ public sealed class PaymentRepository : IPaymentRepository
         await _db.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<bool> TryCompletePendingPaymentAsync(
+        int paymentId,
+        DateTime paidAt,
+        string transactionCode,
+        CancellationToken cancellationToken = default)
+    {
+        var affectedRows = await _db.Payments
+            .Where(payment => payment.PaymentID == paymentId
+                && payment.Status == PaymentStatus.Pending)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(payment => payment.Status, PaymentStatus.Completed)
+                .SetProperty(payment => payment.PaidAt, paidAt)
+                .SetProperty(payment => payment.TransactionCode, transactionCode),
+                cancellationToken);
+
+        return affectedRows == 1;
+    }
+
     public async Task<PaymentSession> CreatePaymentSessionAsync(
         PaymentSession session,
         CancellationToken cancellationToken = default)
