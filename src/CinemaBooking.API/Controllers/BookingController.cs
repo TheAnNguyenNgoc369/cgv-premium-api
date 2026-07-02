@@ -55,10 +55,6 @@ public sealed class BookingController : ControllerBase
     [Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
     public async Task<IActionResult> ReleaseSeatHolds(
         [FromBody] ReleaseSeatHoldsRequest request,
-    [HttpPost("bookings/calculate-pricing")]
-    [Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
-    public async Task<IActionResult> CalculatePricing(
-        [FromBody] CalculatePricingRequest request,
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
@@ -70,6 +66,16 @@ public sealed class BookingController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
 
         return Ok(new { success = true, message = "Seat holds released successfully." });
+    }
+
+    [HttpPost("bookings/calculate-pricing")]
+    [Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
+    public async Task<IActionResult> CalculatePricing(
+        [FromBody] CalculatePricingRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
 
         var currentUserId = GetCurrentUserId();
         var isStaff = User.IsInRole(Roles.Staff);

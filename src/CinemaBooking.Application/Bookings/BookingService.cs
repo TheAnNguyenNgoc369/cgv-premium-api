@@ -149,82 +149,8 @@ public sealed class BookingService : IBookingService
         var pricingResult = await CalculatePricingAsync(
             customerId, showtimeId, seatIds, fnbItems, voucherCode, cancellationToken);
 
-<<<<<<< src/CinemaBooking.Application/Bookings/BookingService.cs
-        var seatErrors = GetSeatValidationErrors(seatIds, seats, showtime.RoomID);
-        if (seatErrors is not null)
-            return (false, "Some selected seats are invalid.", null, seatErrors);
-
-        var bookingSeats = seats.Select(seat => new BookingSeat
-        {
-            SeatID = seat.SeatID,
-            TicketPrice = showtime.BasePrice + seat.SeatType.ExtraPrice
-        }).ToList();
-
-        var seatsSubTotal = bookingSeats.Sum(bs => bs.TicketPrice);
-
-        var bookingFnBs = new List<BookingFnB>();
-        var fnbSubTotal = 0m;
-        var productQuantities = new Dictionary<int, int>();
-
-        var normalizedFnbItems = fnbItems
-            .GroupBy(item => item.ItemId)
-            .Select(group => new BookingFnBItemDto(group.Key, group.Sum(item => item.Quantity)))
-            .ToList();
-
-        if (normalizedFnbItems.Any())
-        {
-            var productIds = normalizedFnbItems.Select(f => f.ItemId).ToList();
-            var products = await _bookingRepository.GetProductsByIdsAsync(productIds, cancellationToken);
-
-            if (products.Count != productIds.Count)
-            {
-                var missingIds = productIds.Except(products.Select(p => p.ItemID)).ToList();
-                return (false, $"Products with IDs {string.Join(", ", missingIds)} were not found.", null, null);
-            }
-
-            foreach (var fnbItem in normalizedFnbItems)
-            {
-                var product = products.First(p => p.ItemID == fnbItem.ItemId);
-
-                if (product.CinemaID != showtime.Room.CinemaID)
-                    return (false, $"Product '{product.ItemName}' is not available at this cinema.", null, null);
-
-                if (!product.IsOnMenu)
-                    return (false, $"Product '{product.ItemName}' is no longer available.", null, null);
-
-                if (product.Status != "in_stock" && product.Status != "low_stock")
-                    return (false, $"Product '{product.ItemName}' is out of stock.", null, null);
-
-                if (product.StockQuantity < fnbItem.Quantity)
-                    return (false, $"Only {product.StockQuantity} units of '{product.ItemName}' are available.", null, null);
-
-                var itemSubTotal = product.Price * fnbItem.Quantity;
-                fnbSubTotal += itemSubTotal;
-
-                bookingFnBs.Add(new BookingFnB
-                {
-                    ItemID = product.ItemID,
-                    Quantity = fnbItem.Quantity,
-                    UnitPrice = product.Price,
-                    SubTotal = itemSubTotal
-                });
-
-                productQuantities[product.ItemID] = fnbItem.Quantity;
-            }
-        }
-
-        var totalBeforeDiscount = seatsSubTotal + fnbSubTotal;
-
-        User? user = null;
-        if (customerId.HasValue)
-        {
-            user = await _userRepository.GetByIdAsync(customerId.Value, cancellationToken);
-            if (user is null || user.Role != "customer")
-                return (false, "Customer account was not found.", null, null);
-        }
-
         if (!pricingResult.Succeeded)
-            return (false, pricingResult.ErrorMessage, null);
+            return (false, pricingResult.ErrorMessage, null, null);
 
         if (!isStaff && customerId != actorUserId)
             return (false, "Customers can only create bookings for their own account.", null, null);
@@ -251,44 +177,15 @@ public sealed class BookingService : IBookingService
         BookingVoucher? bookingVoucher = null;
         if (pricingResult.Result.VoucherDetails is not null)
         {
-            if (!customerId.HasValue)
-                return (false, "Guest bookings cannot use vouchers.", null, null);
-
-            var voucher = await _bookingRepository.GetVoucherByCodeAsync(voucherCode.Trim(), cancellationToken);
+            var voucher = await _bookingRepository.GetVoucherByCodeAsync(
+                pricingResult.Result.VoucherDetails.VoucherCode, cancellationToken);
 
             if (voucher is null)
                 return (false, "Voucher code does not exist.", null, null);
 
-            if (!voucher.IsActive)
-                return (false, "Voucher is not available.", null, null);
-
-            var now = DateTime.UtcNow;
-            if (now < voucher.ValidFrom)
-                return (false, "Voucher is not active yet.", null, null);
-
-            if (now > voucher.ValidUntil)
-                return (false, "Voucher has expired.", null, null);
-
-            if (voucher.MaxUses.HasValue && voucher.UsedCount >= voucher.MaxUses.Value)
-                return (false, "Voucher usage limit has been reached.", null, null);
-
-            if (voucher.MinOrderValue.HasValue && totalBeforeDiscount < voucher.MinOrderValue.Value)
-                return (false, $"A minimum order value of {voucher.MinOrderValue.Value:N0} VND is required to use this voucher.", null, null);
-
-            var voucherDiscount = voucher.DiscountType == "percent"
-                ? Math.Round(totalBeforeDiscount * voucher.DiscountValue / 100, 0)
-                : voucher.DiscountValue;
-
-            discountAmount += voucherDiscount;
-
-            if (discountAmount > totalBeforeDiscount)
-                discountAmount = totalBeforeDiscount;
-            var voucher = await _bookingRepository.GetVoucherByCodeAsync(
-                pricingResult.Result.VoucherDetails.VoucherCode, cancellationToken);
-
             bookingVoucher = new BookingVoucher
             {
-                VoucherID = voucher!.VoucherID,
+                VoucherID = voucher.VoucherID,
                 DiscountApplied = pricingResult.Result.VoucherDetails.DiscountApplied,
                 UsedAt = DateTime.UtcNow
             };
