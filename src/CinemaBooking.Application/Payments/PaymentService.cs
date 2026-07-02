@@ -19,6 +19,7 @@ public sealed class PaymentService : IPaymentService
     private readonly IPaymentRepository _paymentRepository;
     private readonly IWalletRepository _walletRepository;
     private readonly IBookingRepository _bookingRepository;
+    private readonly IUserRepository _userRepository;
     private readonly IVNPayService _vnpayService;
     private readonly IPayOSService _payOSService;
     private readonly IInvoiceService _invoiceService;
@@ -29,6 +30,7 @@ public sealed class PaymentService : IPaymentService
         IPaymentRepository paymentRepository,
         IWalletRepository walletRepository,
         IBookingRepository bookingRepository,
+        IUserRepository userRepository,
         IVNPayService vnpayService,
         IPayOSService payOSService,
         IInvoiceService invoiceService,
@@ -38,6 +40,7 @@ public sealed class PaymentService : IPaymentService
         _paymentRepository = paymentRepository;
         _walletRepository = walletRepository;
         _bookingRepository = bookingRepository;
+        _userRepository = userRepository;
         _vnpayService = vnpayService;
         _payOSService = payOSService;
         _invoiceService = invoiceService;
@@ -479,9 +482,16 @@ public sealed class PaymentService : IPaymentService
     {
         await _bookingRepository.UpdateBookingStatusAsync(
             booking.BookingID, BookingStatus.Paid, cancellationToken);
+
         if (booking.UserID.HasValue)
-            await _membershipService.AddPointsAfterPaymentSuccessAsync(
-                booking.UserID.Value, booking.BookingID, booking.FinalAmount, cancellationToken);
+        {
+            var user = await _userRepository.GetByIdAsync(booking.UserID.Value, cancellationToken);
+            if (user?.Role == Roles.Customer)
+            {
+                await _membershipService.AddPointsAfterPaymentSuccessAsync(
+                    booking.UserID.Value, booking.BookingID, booking.FinalAmount, cancellationToken);
+            }
+        }
     }
 
     private static PaymentOperationResult? ValidateBookingForPayment(
