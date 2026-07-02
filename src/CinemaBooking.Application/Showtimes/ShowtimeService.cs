@@ -11,6 +11,8 @@ public sealed class ShowtimeService : IShowtimeService
     private const string InvalidStatusMessage =
         "Invalid showtime status. (scheduled, completed, cancelled)";
     private const string InvalidManualStatus = "__invalid_status__";
+    private const string StartTimeMustBeUtcMessage =
+        "StartTime must be normalized to UTC";
     private readonly IShowtimeRepository _showtimeRepository;
     private readonly IUnitOfWork? _unitOfWork;
 
@@ -89,7 +91,7 @@ public sealed class ShowtimeService : IShowtimeService
         var manualStatus = NormalizeManualStatus(status);
         if (manualStatus == InvalidManualStatus) return (false, InvalidStatusMessage, null);
         if (startTime.Kind != DateTimeKind.Utc)
-            return (false, "StartTime must be a UTC ISO 8601 value ending in Z", null);
+            return (false, StartTimeMustBeUtcMessage, null);
 
         var hasProtectedChanges = existing.MovieID != movieId
             || existing.RoomID != roomId
@@ -136,7 +138,7 @@ public sealed class ShowtimeService : IShowtimeService
         var manualStatus = NormalizeManualStatus(status);
         if (manualStatus == InvalidManualStatus) return (false, InvalidStatusMessage, null);
         if (startTime.Kind != DateTimeKind.Utc)
-            return (false, "StartTime must be a UTC ISO 8601 value ending in Z", null);
+            return (false, StartTimeMustBeUtcMessage, null);
         if (basePrice < 0) return (false, "Base price must be greater than or equal to 0", null);
 
         var movie = await _showtimeRepository.GetMovieAsync(movieId, cancellationToken);
@@ -170,6 +172,15 @@ public sealed class ShowtimeService : IShowtimeService
 
         return await ExecuteInTransactionAsync(async () =>
         {
+            var cinemaIds = existing is null || existing.RoomID == roomId
+                ? [room.CinemaID]
+                : new[] { existing.Room.CinemaID, room.CinemaID }.Distinct().Order().ToArray();
+            foreach (var cinemaId in cinemaIds)
+            {
+                if (!await _showtimeRepository.AcquireCinemaScheduleLockAsync(cinemaId, cancellationToken))
+                    return (false, "Cinema not found", (Showtime?)null);
+            }
+
             var roomIds = existing is null ? [roomId] : new[] { existing.RoomID, roomId }.Distinct().Order().ToArray();
             foreach (var id in roomIds)
             {
@@ -181,6 +192,13 @@ public sealed class ShowtimeService : IShowtimeService
                 && await _showtimeRepository.HasConflictAsync(
                     roomId, startTime, endTime, existing?.ShowtimeID, cancellationToken))
                 return (false, "Showtime conflicts with another showtime in the same room", (Showtime?)null);
+
+            if (normalizedStatus != "cancelled"
+                && await _showtimeRepository.HasRoomTypeStartConflictAsync(
+                    room.CinemaID, room.RoomType, startTime, existing?.ShowtimeID, cancellationToken))
+                return (false,
+                    "Another showtime with the same room type already starts at this time in the cinema",
+                    (Showtime?)null);
 
             var showtime = existing ?? new Showtime { CreatedAt = DateTime.UtcNow };
             showtime.MovieID = movieId;
@@ -219,12 +237,17 @@ public sealed class ShowtimeService : IShowtimeService
         int id, CancellationToken cancellationToken = default) =>
         _showtimeRepository.GetManagedShowtimeByIdAsync(id, cancellationToken);
 
-    public async Task<SeatMapResult?> GetSeatMapAsync(
+    public async Task<(SeatMapResult? SeatMap, string? ErrorMessage)> GetSeatMapAsync(
         int showtimeId, CancellationToken cancellationToken = default)
     {
         var showtime = await _showtimeRepository.GetShowtimeByIdAsync(showtimeId, cancellationToken);
-        if (showtime is null || showtime.Status != "scheduled"
-            || showtime.Room.Status != "active" || showtime.Room.Cinema.Status != "active") return null;
+        if (showtime is null) return (null, "Showtime not found.");
+        if (showtime.Status != "scheduled")
+            return (null, "This showtime is not scheduled and its seat map is unavailable.");
+        if (showtime.Room.Status != "active")
+            return (null, "The showtime room is inactive.");
+        if (showtime.Room.Cinema.Status != "active")
+            return (null, "The showtime cinema is inactive.");
 
         var now = DateTime.UtcNow;
         var seats = await _showtimeRepository.GetSeatsByRoomAsync(showtime.RoomID, cancellationToken);
@@ -235,6 +258,6 @@ public sealed class ShowtimeService : IShowtimeService
             seat.SeatType.ExtraPrice, showtime.BasePrice + seat.SeatType.ExtraPrice,
             bookedSeatIds.Contains(seat.SeatID) ? SeatStatus.Booked
                 : heldSeatIds.Contains(seat.SeatID) ? SeatStatus.Held : SeatStatus.Available)).ToList();
-        return new SeatMapResult(showtime.ShowtimeID, showtime.Room.RoomName, showtime.Room.RoomType, seatResults);
+        return (new SeatMapResult(showtime.ShowtimeID, showtime.Room.RoomName, showtime.Room.RoomType, seatResults), null);
     }
 }

@@ -26,40 +26,43 @@ public sealed class BookingService : IBookingService
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<(bool Succeeded, string? ErrorMessage, List<int>? HoldIds, DateTime? ExpiresAt)> HoldSeatsAsync(
+    public async Task<(bool Succeeded, string? ErrorMessage, List<int>? HoldIds, DateTime? ExpiresAt, SeatValidationErrors? SeatErrors)> HoldSeatsAsync(
         int userId,
         int showtimeId,
         List<int> seatIds,
         CancellationToken cancellationToken = default)
     {
         if (seatIds.Count == 0)
-            return (false, "Please select at least one seat.", null, null);
+            return (false, "Please select at least one seat.", null, null, null);
 
         var showtime = await _bookingRepository.GetShowtimeAsync(showtimeId, cancellationToken);
         if (showtime is null)
-            return (false, "Showtime not found.", null, null);
+            return (false, "Showtime not found.", null, null, null);
 
         if (showtime.Status != "scheduled")
-            return (false, "Cannot hold seats for showtimes that are not scheduled.", null, null);
+            return (false, "This showtime is not scheduled and is unavailable for seat holds.", null, null, null);
 
         if (showtime.StartTime <= DateTime.UtcNow.AddMinutes(15))
-            return (false, "Cannot hold seats for showtimes starting within 15 minutes or that have already started.", null, null);
+            return (false, "Seat holds close 15 minutes before the showtime starts.", null, null, null);
+
+        if (showtime.Room.Status != "active")
+            return (false, "The showtime room is inactive.", null, null, null);
 
         if (showtime.Room.Cinema.Status != "active")
-            return (false, "Cinema is not active.", null, null);
+            return (false, "The showtime cinema is inactive.", null, null, null);
 
         seatIds = seatIds.Distinct().ToList();
 
         var selectedSeats = await _bookingRepository.GetSeatsByIdsAsync(seatIds, cancellationToken);
-        if (selectedSeats.Count != seatIds.Count || selectedSeats.Any(seat =>
-                seat.RoomID != showtime.RoomID || seat.Status != "active"))
-            return (false, "One or more seats do not belong to the showtime room or are inactive.", null, null);
+        var seatErrors = GetSeatValidationErrors(seatIds, selectedSeats, showtime.RoomID);
+        if (seatErrors is not null)
+            return (false, "Some selected seats are invalid.", null, null, seatErrors);
 
         var unavailableSeatIds = await _bookingRepository.GetUnavailableSeatIdsAsync(
             showtimeId, seatIds, userId, cancellationToken);
 
         if (unavailableSeatIds.Count > 0)
-            return (false, $"Seats with IDs {string.Join(", ", unavailableSeatIds)} are booked or held by another user.", null, null);
+            return (false, $"Seats with IDs {string.Join(", ", unavailableSeatIds)} are booked or held by another user.", null, null, null);
 
         var now = DateTime.UtcNow;
         var expiresAt = now.AddMinutes(HoldDurationMinutes);
@@ -75,12 +78,38 @@ public sealed class BookingService : IBookingService
         }).ToList();
 
         if (!await _bookingRepository.TryAddSeatHoldsAsync(holds, cancellationToken))
-            return (false, "One or more seats are already booked or being held", null, null);
+            return (false, "One or more seats are already booked or being held.", null, null, null);
 
-        return (true, null, holds.Select(h => h.HoldID).ToList(), expiresAt);
+        return (true, null, holds.Select(h => h.HoldID).ToList(), expiresAt, null);
     }
 
-    public async Task<(bool Succeeded, string? ErrorMessage, Booking? Booking)> CreateBookingAsync(
+    public async Task<(bool Succeeded, string? ErrorMessage)> ReleaseSeatHoldsAsync(
+        int userId,
+        int showtimeId,
+        List<int> seatIds,
+        CancellationToken cancellationToken = default)
+    {
+        var requestedSeatIds = seatIds.Distinct().ToHashSet();
+        if (requestedSeatIds.Count == 0)
+            return (false, "Please select at least one seat.");
+
+        return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            var activeHolds = await _bookingRepository.GetMyActiveHoldsForUpdateAsync(
+                userId, showtimeId, DateTime.UtcNow, cancellationToken);
+            var requestedHolds = activeHolds
+                .Where(hold => requestedSeatIds.Contains(hold.SeatID))
+                .ToList();
+
+            if (requestedHolds.Count != requestedSeatIds.Count)
+                return (false, "One or more seats are not actively held by the current user.");
+
+            await _bookingRepository.ReleaseSeatHoldsAsync(requestedHolds, cancellationToken);
+            return (true, (string?)null);
+        }, cancellationToken);
+    }
+
+    public async Task<(bool Succeeded, string? ErrorMessage, Booking? Booking, SeatValidationErrors? SeatErrors)> CreateBookingAsync(
         int actorUserId,
         int? customerId,
         bool isStaff,
@@ -91,20 +120,23 @@ public sealed class BookingService : IBookingService
         CancellationToken cancellationToken = default)
     {
         if (seatIds.Count == 0)
-            return (false, "Please select at least one seat.", null);
+            return (false, "Please select at least one seat.", null, null);
 
         var showtime = await _bookingRepository.GetShowtimeAsync(showtimeId, cancellationToken);
         if (showtime is null)
-            return (false, "Showtime not found.", null);
+            return (false, "Showtime not found.", null, null);
 
         if (showtime.Status != "scheduled")
-            return (false, "Cannot book seats for showtimes that are not scheduled.", null);
+            return (false, "This showtime is not scheduled and is unavailable for booking.", null, null);
 
         if (showtime.StartTime <= DateTime.UtcNow)
-            return (false, "Cannot book seats for showtimes that have already started.", null);
+            return (false, "This showtime has already started.", null, null);
+
+        if (showtime.Room.Status != "active")
+            return (false, "The showtime room is inactive.", null, null);
 
         if (showtime.Room.Cinema.Status != "active")
-            return (false, "Cinema is not active.", null);
+            return (false, "The showtime cinema is inactive.", null, null);
 
         seatIds = seatIds.Distinct().ToList();
 
@@ -112,16 +144,16 @@ public sealed class BookingService : IBookingService
             actorUserId, showtimeId, seatIds, cancellationToken);
 
         if (myHolds.Count != seatIds.Count)
-            return (false, "Some seats are not held or the holds have expired. Please select them again.", null);
+            return (false, "Some seats are not held or the holds have expired. Please select them again.", null, null);
 
         var pricingResult = await CalculatePricingAsync(
             customerId, showtimeId, seatIds, fnbItems, voucherCode, cancellationToken);
 
         if (!pricingResult.Succeeded)
-            return (false, pricingResult.ErrorMessage, null);
+            return (false, pricingResult.ErrorMessage, null, null);
 
         if (!isStaff && customerId != actorUserId)
-            return (false, "Customers can only create bookings for their own account.", null);
+            return (false, "Customers can only create bookings for their own account.", null, null);
 
         var bookingSeats = pricingResult.Result!.SeatDetails
             .Select(s => new BookingSeat
@@ -148,9 +180,12 @@ public sealed class BookingService : IBookingService
             var voucher = await _bookingRepository.GetVoucherByCodeAsync(
                 pricingResult.Result.VoucherDetails.VoucherCode, cancellationToken);
 
+            if (voucher is null)
+                return (false, "Voucher code does not exist.", null, null);
+
             bookingVoucher = new BookingVoucher
             {
-                VoucherID = voucher!.VoucherID,
+                VoucherID = voucher.VoucherID,
                 DiscountApplied = pricingResult.Result.VoucherDetails.DiscountApplied,
                 UsedAt = DateTime.UtcNow
             };
@@ -242,7 +277,7 @@ public sealed class BookingService : IBookingService
 
         var savedBooking = await _bookingRepository.GetBookingByIdAsync(booking.BookingID, cancellationToken);
 
-        return (true, null, savedBooking);
+        return (true, null, savedBooking, null);
     }
 
     public async Task<Booking?> GetBookingByIdAsync(
@@ -434,5 +469,22 @@ public sealed class BookingService : IBookingService
     private static string GenerateBookingCode()
     {
         return $"BK{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
+    }
+
+    private static SeatValidationErrors? GetSeatValidationErrors(
+        IReadOnlyCollection<int> requestedSeatIds,
+        IReadOnlyCollection<Seat> seats,
+        int showtimeRoomId)
+    {
+        var foundSeatIds = seats.Select(seat => seat.SeatID).ToHashSet();
+        var notFoundSeatIds = requestedSeatIds.Where(id => !foundSeatIds.Contains(id)).Order().ToList();
+        var wrongRoomSeatIds = seats.Where(seat => seat.RoomID != showtimeRoomId)
+            .Select(seat => seat.SeatID).Order().ToList();
+        var inactiveSeatIds = seats.Where(seat => seat.RoomID == showtimeRoomId && seat.Status != "active")
+            .Select(seat => seat.SeatID).Order().ToList();
+
+        return notFoundSeatIds.Count == 0 && wrongRoomSeatIds.Count == 0 && inactiveSeatIds.Count == 0
+            ? null
+            : new SeatValidationErrors(notFoundSeatIds, wrongRoomSeatIds, inactiveSeatIds);
     }
 }

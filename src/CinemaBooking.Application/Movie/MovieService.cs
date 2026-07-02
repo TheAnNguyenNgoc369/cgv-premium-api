@@ -1,6 +1,7 @@
 using CinemaBooking.Application.Common.ImageFiles;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Enums;
+using CinemaBooking.Shared.Time;
 using MovieEntity = CinemaBooking.Domain.Entities.Movie;
 
 namespace CinemaBooking.Application.Movie;
@@ -102,7 +103,7 @@ public sealed class MovieService : IMovieService
             Status = CalculateStatus(
                 showingFromDate!.Value,
                 showingToDate!.Value,
-                DateOnly.FromDateTime(DateTime.UtcNow)),
+                VietnamTime.GetDate(now)),
             CreatedAt = now,
             UpdatedAt = now
         };

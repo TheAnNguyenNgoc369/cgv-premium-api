@@ -35,7 +35,7 @@ public interface IShowtimeService
         int id,
         CancellationToken cancellationToken = default);
 
-    Task<SeatMapResult?> GetSeatMapAsync(
+    Task<(SeatMapResult? SeatMap, string? ErrorMessage)> GetSeatMapAsync(
         int showtimeId,
         CancellationToken cancellationToken = default);
 }

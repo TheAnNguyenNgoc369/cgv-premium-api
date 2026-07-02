@@ -2,6 +2,7 @@ using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
 using CinemaBooking.Shared.Constants;
+using CinemaBooking.Shared.Time;
 using Microsoft.EntityFrameworkCore;
 
 namespace CinemaBooking.Infrastructure.Repositories;
@@ -32,8 +33,7 @@ public sealed class ShowtimeRepository : IShowtimeRepository
             query = query.Where(s => EF.Functions.Like(s.Room.RoomName, $"%{roomName}%"));
         if (date.HasValue)
         {
-            var from = DateTime.SpecifyKind(date.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
-            var to = from.AddDays(1);
+            var (from, to) = VietnamTime.GetUtcDayRange(date.Value);
             query = query.Where(s => s.StartTime >= from && s.StartTime < to);
         }
         if (status is not null) query = query.Where(s => s.Status == status);
@@ -67,6 +67,16 @@ public sealed class ShowtimeRepository : IShowtimeRepository
         _db.Showtimes.AnyAsync(s => s.RoomID == roomId && s.Status != "cancelled"
             && (!excludingShowtimeId.HasValue || s.ShowtimeID != excludingShowtimeId.Value)
             && s.StartTime < endTime && s.EndTime > startTime, cancellationToken);
+
+    public Task<bool> HasRoomTypeStartConflictAsync(
+        int cinemaId, string roomType, DateTime startTime, int? excludingShowtimeId = null,
+        CancellationToken cancellationToken = default) =>
+        _db.Showtimes.AnyAsync(s => s.Room.CinemaID == cinemaId
+            && s.Room.RoomType == roomType
+            && s.StartTime == startTime
+            && s.Status != "cancelled"
+            && (!excludingShowtimeId.HasValue || s.ShowtimeID != excludingShowtimeId.Value),
+            cancellationToken);
 
     public async Task<bool> HasActiveBookingOrHoldAsync(
         int showtimeId, DateTime now, CancellationToken cancellationToken = default)
@@ -144,6 +154,15 @@ public sealed class ShowtimeRepository : IShowtimeRepository
             .FromSqlInterpolated($"SELECT * FROM [Room] WITH (UPDLOCK, HOLDLOCK) WHERE RoomID = {roomId}")
             .FirstOrDefaultAsync(cancellationToken);
         return room is not null;
+    }
+
+    public async Task<bool> AcquireCinemaScheduleLockAsync(
+        int cinemaId, CancellationToken cancellationToken = default)
+    {
+        var cinema = await _db.Cinemas
+            .FromSqlInterpolated($"SELECT * FROM [Cinema] WITH (UPDLOCK, HOLDLOCK) WHERE CinemaID = {cinemaId}")
+            .FirstOrDefaultAsync(cancellationToken);
+        return cinema is not null;
     }
 
     public async Task<Showtime> AddAsync(Showtime showtime, CancellationToken cancellationToken = default)

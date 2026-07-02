@@ -1,4 +1,4 @@
-﻿using CinemaBooking.API.Contracts.Bookings;
+using CinemaBooking.API.Contracts.Bookings;
 using CinemaBooking.Application.Bookings;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
@@ -35,13 +35,37 @@ public sealed class BookingController : ControllerBase
 
         if (!result.Succeeded)
         {
-            if (result.ErrorMessage == "One or more seats are already booked or being held")
+            if (result.SeatErrors is not null)
+                return BadRequest(new { success = false, message = result.ErrorMessage, errors = result.SeatErrors });
+
+            if (result.ErrorMessage == "Showtime not found.")
+                return NotFound(new { success = false, message = result.ErrorMessage });
+
+            if (result.ErrorMessage == "One or more seats are already booked or being held."
+                || result.ErrorMessage?.StartsWith("Seats with IDs ", StringComparison.Ordinal) == true)
                 return Conflict(new { success = false, message = result.ErrorMessage });
 
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         return Ok(new HoldSeatsResponse(result.HoldIds!, result.ExpiresAt!.Value));
+    }
+
+    [HttpDelete("seat-holds")]
+    [Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
+    public async Task<IActionResult> ReleaseSeatHolds(
+        [FromBody] ReleaseSeatHoldsRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result = await _bookingService.ReleaseSeatHoldsAsync(
+            GetCurrentUserId(), request.ShowtimeId, request.SeatIds, cancellationToken);
+        if (!result.Succeeded)
+            return BadRequest(new { success = false, message = result.ErrorMessage });
+
+        return Ok(new { success = true, message = "Seat holds released successfully." });
     }
 
     [HttpPost("bookings/calculate-pricing")]
@@ -102,7 +126,15 @@ public sealed class BookingController : ControllerBase
             request.VoucherCode, cancellationToken);
 
         if (!result.Succeeded)
+        {
+            if (result.SeatErrors is not null)
+                return BadRequest(new { success = false, message = result.ErrorMessage, errors = result.SeatErrors });
+
+            if (result.ErrorMessage == "Showtime not found.")
+                return NotFound(new { success = false, message = result.ErrorMessage });
+
             return BadRequest(new { success = false, message = result.ErrorMessage });
+        }
 
         return Ok(MapToResponse(result.Booking!));
     }
