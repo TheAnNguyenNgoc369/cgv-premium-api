@@ -24,6 +24,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.Price).HasColumnType("decimal(18,2)");
         builder.Property(p => p.StockQuantity).HasDefaultValue(0);
         builder.Property(p => p.ImageURL).HasMaxLength(500);
+        builder.Property(p => p.ImagePublicId).HasMaxLength(255);
         builder.Property(p => p.IsOnMenu).HasDefaultValue(true);
         builder.Property(p => p.IsLoyaltyEligible).HasDefaultValue(false);
         builder.Property(p => p.Status).HasMaxLength(20).IsRequired().HasDefaultValue("in_stock");

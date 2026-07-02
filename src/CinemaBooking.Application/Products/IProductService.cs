@@ -40,6 +40,15 @@ public interface IProductService
         string status,
         CancellationToken cancellationToken = default);
 
+    Task<(bool Succeeded, string? ErrorMessage, Product? Product)> UpdateProductImageAsync(
+        int itemId,
+        int managerCinemaId,
+        Stream imageStream,
+        string fileName,
+        string? contentType,
+        long fileSize,
+        CancellationToken cancellationToken = default);
+
     Task<(bool Succeeded, string? ErrorMessage)> DeleteProductAsync(
         int itemId,
         int managerCinemaId,

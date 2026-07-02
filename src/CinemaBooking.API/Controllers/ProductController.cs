@@ -1,4 +1,5 @@
 using CinemaBooking.API.Contracts.Products;
+using CinemaBooking.API.Contracts.Images;
 using CinemaBooking.Application.Products;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
@@ -158,6 +159,43 @@ public sealed class ProductController : ControllerBase
         }
 
         return NoContent();
+    }
+
+    [HttpPut("{id:int}/image")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> UpdateProductImage(
+        int id,
+        [FromForm] ImageUploadRequest request,
+        CancellationToken cancellationToken)
+    {
+        var cinemaId = await GetManagerCinemaIdAsync(cancellationToken);
+        if (!cinemaId.HasValue) return CinemaScopeForbidden();
+
+        if (request.File is null)
+            return BadRequest(new { success = false, message = "Product image file is required" });
+
+        await using var stream = request.File.OpenReadStream();
+        var result = await _productService.UpdateProductImageAsync(
+            id,
+            cinemaId.Value,
+            stream,
+            request.File.FileName,
+            request.File.ContentType,
+            request.File.Length,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            if (result.ErrorMessage == "Product not found")
+                return NotFound(new { success = false, message = result.ErrorMessage });
+
+            if (result.ErrorMessage == CinemaScopeMessages.AccessDenied)
+                return CinemaScopeForbidden();
+
+            return BadRequest(new { success = false, message = result.ErrorMessage });
+        }
+
+        return Ok(ToResponse(result.Product!));
     }
 
     private static ProductResponse ToResponse(Product product)

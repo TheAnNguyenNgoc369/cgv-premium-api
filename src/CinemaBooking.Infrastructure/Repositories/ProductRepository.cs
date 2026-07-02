@@ -103,6 +103,29 @@ public sealed class ProductRepository : IProductRepository
         return existingProduct;
     }
 
+    public async Task<Product?> UpdateImageAsync(
+        int itemId,
+        string imageUrl,
+        string imagePublicId,
+        CancellationToken cancellationToken = default)
+    {
+        var product = await _dbContext.Products
+            .FirstOrDefaultAsync(p => p.ItemID == itemId, cancellationToken);
+
+        if (product is null)
+        {
+            return null;
+        }
+
+        product.ImageURL = imageUrl;
+        product.ImagePublicId = imagePublicId;
+        product.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return product;
+    }
+
     public Task<bool> IsUsedInBookingsAsync(
         int itemId,
         CancellationToken cancellationToken = default)

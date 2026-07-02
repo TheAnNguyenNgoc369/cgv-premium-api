@@ -40,7 +40,7 @@ public sealed class ProductCinemaScopeTests
     public async Task CreateProduct_AssignsManagerCinema()
     {
         var repository = new StubProductRepository();
-        var service = new ProductService(repository);
+        var service = new ProductService(repository, new StubImageStorageService());
 
         var result = await service.CreateProductAsync(
             2, "Popcorn", "snack", null, 50_000, 10, null, true, false);
@@ -57,7 +57,7 @@ public sealed class ProductCinemaScopeTests
         {
             ExistingProduct = new Product { ItemID = 1, CinemaID = 1, ItemName = "Popcorn" }
         };
-        var service = new ProductService(repository);
+        var service = new ProductService(repository, new StubImageStorageService());
 
         var result = await service.UpdateProductAsync(
             1, 2, "Popcorn", "snack", null, 50_000, 10, null, true, false, "in_stock");
@@ -65,6 +65,45 @@ public sealed class ProductCinemaScopeTests
         Assert.False(result.Succeeded);
         Assert.Equal(CinemaScopeMessages.AccessDenied, result.ErrorMessage);
         Assert.False(repository.UpdateCalled);
+    }
+
+    [Fact]
+    public async Task UpdateProductImage_ValidImage_StoresCloudinaryDetails()
+    {
+        var repository = new StubProductRepository
+        {
+            ExistingProduct = new Product { ItemID = 1, CinemaID = 2, ItemName = "Popcorn" }
+        };
+        var imageStorage = new StubImageStorageService();
+        var service = new ProductService(repository, imageStorage);
+
+        await using var stream = new MemoryStream([1, 2, 3]);
+        var result = await service.UpdateProductImageAsync(
+            1, 2, stream, "popcorn.png", "image/png", stream.Length);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("https://example.com/products/popcorn.png", result.Product!.ImageURL);
+        Assert.Equal("products/popcorn", result.Product.ImagePublicId);
+        Assert.Equal("products", imageStorage.UploadFolder);
+    }
+
+    [Fact]
+    public async Task UpdateProductImage_FromAnotherCinema_ReturnsForbidden()
+    {
+        var repository = new StubProductRepository
+        {
+            ExistingProduct = new Product { ItemID = 1, CinemaID = 1, ItemName = "Popcorn" }
+        };
+        var imageStorage = new StubImageStorageService();
+        var service = new ProductService(repository, imageStorage);
+
+        await using var stream = new MemoryStream([1]);
+        var result = await service.UpdateProductImageAsync(
+            1, 2, stream, "popcorn.png", "image/png", stream.Length);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(CinemaScopeMessages.AccessDenied, result.ErrorMessage);
+        Assert.Null(imageStorage.UploadFolder);
     }
 
     private sealed class StubProductRepository : IProductRepository
@@ -98,9 +137,41 @@ public sealed class ProductCinemaScopeTests
             UpdateCalled = true;
             return Task.FromResult<Product?>(product);
         }
+        public Task<Product?> UpdateImageAsync(
+            int itemId, string imageUrl, string imagePublicId,
+            CancellationToken cancellationToken = default)
+        {
+            if (ExistingProduct is null || ExistingProduct.ItemID != itemId)
+                return Task.FromResult<Product?>(null);
+
+            ExistingProduct.ImageURL = imageUrl;
+            ExistingProduct.ImagePublicId = imagePublicId;
+            return Task.FromResult<Product?>(ExistingProduct);
+        }
         public Task<bool> IsUsedInBookingsAsync(
             int itemId, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task<bool> DeleteAsync(
             int itemId, CancellationToken cancellationToken = default) => Task.FromResult(true);
+    }
+
+    private sealed class StubImageStorageService : IImageStorageService
+    {
+        public string? UploadFolder { get; private set; }
+
+        public Task<StoredImageResult> UploadImageAsync(
+            Stream imageStream,
+            string fileName,
+            string folder,
+            CancellationToken cancellationToken = default)
+        {
+            UploadFolder = folder;
+            return Task.FromResult(new StoredImageResult(
+                "https://example.com/products/popcorn.png",
+                "products/popcorn"));
+        }
+
+        public Task DeleteImageAsync(
+            string publicId,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

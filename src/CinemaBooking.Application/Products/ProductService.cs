@@ -1,4 +1,5 @@
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Common.ImageFiles;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Application.Common.Security;
 
@@ -6,14 +7,22 @@ namespace CinemaBooking.Application.Products;
 
 public sealed class ProductService : IProductService
 {
+    private const string ImageFolder = "products";
+    private const string ImageUploadFailedMessage = "Unable to upload product image. Please try again later.";
+    private const string ImageDeleteFailedMessage = "Unable to replace the existing product image. Please try again later.";
+
     private readonly IProductRepository _productRepository;
+    private readonly IImageStorageService _imageStorageService;
 
     private static readonly string[] ValidItemTypes = ["combo", "snack", "beverage", "dessert"];
     private static readonly string[] ValidStatuses = ["in_stock", "low_stock", "out_of_stock", "inactive"];
 
-    public ProductService(IProductRepository productRepository)
+    public ProductService(
+        IProductRepository productRepository,
+        IImageStorageService imageStorageService)
     {
         _productRepository = productRepository;
+        _imageStorageService = imageStorageService;
     }
 
     public Task<List<Product>> GetProductsAsync(
@@ -192,6 +201,70 @@ public sealed class ProductService : IProductService
             : (true, null, updatedProduct);
     }
 
+    public async Task<(bool Succeeded, string? ErrorMessage, Product? Product)> UpdateProductImageAsync(
+        int itemId,
+        int managerCinemaId,
+        Stream imageStream,
+        string fileName,
+        string? contentType,
+        long fileSize,
+        CancellationToken cancellationToken = default)
+    {
+        var existingProduct = await _productRepository.GetByIdAsync(itemId, cancellationToken);
+        if (existingProduct is null)
+            return (false, "Product not found", null);
+
+        if (existingProduct.CinemaID != managerCinemaId)
+            return (false, CinemaScopeMessages.AccessDenied, null);
+
+        var validationError = ImageFileValidator.Validate(fileName, contentType, fileSize);
+        if (validationError is not null)
+            return (false, validationError, null);
+
+        StoredImageResult newImage;
+        try
+        {
+            newImage = await _imageStorageService.UploadImageAsync(
+                imageStream, fileName, ImageFolder, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return (false, ImageUploadFailedMessage, null);
+        }
+
+        if (!string.IsNullOrWhiteSpace(existingProduct.ImagePublicId))
+        {
+            try
+            {
+                await _imageStorageService.DeleteImageAsync(
+                    existingProduct.ImagePublicId, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                await TryDeleteImageAsync(newImage.PublicId);
+                return (false, ImageDeleteFailedMessage, null);
+            }
+        }
+
+        try
+        {
+            var updatedProduct = await _productRepository.UpdateImageAsync(
+                itemId,
+                newImage.SecureUrl,
+                newImage.PublicId,
+                cancellationToken);
+
+            return updatedProduct is null
+                ? (false, "Product not found", null)
+                : (true, null, updatedProduct);
+        }
+        catch
+        {
+            await TryDeleteImageAsync(newImage.PublicId);
+            throw;
+        }
+    }
+
     public async Task<(bool Succeeded, string? ErrorMessage)> DeleteProductAsync(
         int itemId,
         int managerCinemaId,
@@ -236,5 +309,16 @@ public sealed class ProductService : IProductService
         return string.IsNullOrWhiteSpace(status)
             ? null
             : status.Trim().ToLowerInvariant();
+    }
+
+    private async Task TryDeleteImageAsync(string publicId)
+    {
+        try
+        {
+            await _imageStorageService.DeleteImageAsync(publicId, CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+        }
     }
 }

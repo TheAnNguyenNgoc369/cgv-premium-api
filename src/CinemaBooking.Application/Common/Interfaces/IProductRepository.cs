@@ -24,6 +24,12 @@ public interface IProductRepository
 
     Task<Product?> UpdateAsync(Product product, CancellationToken cancellationToken = default);
 
+    Task<Product?> UpdateImageAsync(
+        int itemId,
+        string imageUrl,
+        string imagePublicId,
+        CancellationToken cancellationToken = default);
+
     Task<bool> IsUsedInBookingsAsync(int itemId, CancellationToken cancellationToken = default);
 
     Task<bool> DeleteAsync(int itemId, CancellationToken cancellationToken = default);
