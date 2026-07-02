@@ -60,7 +60,8 @@ public sealed class ShowtimeController : ControllerBase
         var scope = await GetRequiredManagerCinemaIdAsync(cancellationToken);
         if (!scope.HasValue) return CinemaScopeForbidden();
         var result = await _showtimeService.CreateShowtimeAsync(
-            request.MovieId, request.RoomId, request.StartTime, request.BasePrice, scope, cancellationToken);
+            request.MovieId, request.RoomId, request.StartTime.UtcDateTime,
+            request.BasePrice, scope, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
         var response = await ToManagementResponseAsync(result.Showtime!, cancellationToken);
         return CreatedAtAction(nameof(GetShowtimeById), new { id = response.ShowtimeId }, response);
@@ -74,7 +75,8 @@ public sealed class ShowtimeController : ControllerBase
         var scope = await GetRequiredManagerCinemaIdAsync(cancellationToken);
         if (!scope.HasValue) return CinemaScopeForbidden();
         var result = await _showtimeService.UpdateShowtimeAsync(
-            id, request.MovieId, request.RoomId, request.StartTime, request.BasePrice, request.Status, scope, cancellationToken);
+            id, request.MovieId, request.RoomId, request.StartTime.UtcDateTime,
+            request.BasePrice, request.Status, scope, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
         return Ok(await ToManagementResponseAsync(result.Showtime!, cancellationToken));
     }
@@ -122,12 +124,14 @@ public sealed class ShowtimeController : ControllerBase
         int showtimeId,
         CancellationToken cancellationToken)
     {
-        var seatMap = await _showtimeService.GetSeatMapAsync(showtimeId, cancellationToken);
+        var result = await _showtimeService.GetSeatMapAsync(showtimeId, cancellationToken);
 
-        if (seatMap is null)
-            return NotFound(new { success = false, message = "Showtime not found or not available for booking." });
+        if (result.SeatMap is null)
+            return result.ErrorMessage == "Showtime not found."
+                ? NotFound(new { success = false, message = result.ErrorMessage })
+                : BadRequest(new { success = false, message = result.ErrorMessage });
 
-        return Ok(seatMap);
+        return Ok(result.SeatMap);
     }
 
     private async Task<ShowtimeManagementResponse> ToManagementResponseAsync(
@@ -156,9 +160,10 @@ public sealed class ShowtimeController : ControllerBase
 
     private IActionResult MapWriteError(string? message) => message switch
     {
-        "Showtime not found" or "Movie not found" or "Room not found" =>
+        "Showtime not found" or "Movie not found" or "Room not found" or "Cinema not found" =>
             NotFound(new { success = false, message }),
         "Showtime conflicts with another showtime in the same room"
+            or "Another showtime with the same room type already starts at this time in the cinema"
             or "Showtime has active bookings or seat holds"
             or "Showtime has booking or seat hold history" =>
             Conflict(new { success = false, message }),

@@ -4,6 +4,7 @@ using System.Text;
 using CinemaBooking.API.Configuration;
 using CinemaBooking.API.OpenApi;
 using CinemaBooking.API.Services;
+using CinemaBooking.API.Serialization;
 using CinemaBooking.Application;
 using CinemaBooking.Application.Payments.VNPay;
 using CinemaBooking.Shared.Constants;
@@ -22,13 +23,17 @@ public static class DependencyInjection
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        services.AddControllers();
+        services.AddControllers()
+            .AddJsonOptions(options =>
+                options.JsonSerializerOptions.Converters.Add(
+                    new VietnamDateTimeJsonConverter()));
 
         //Add Swagger
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen(options =>
         {
             options.SchemaFilter<AuthRequestSchemaFilter>();
+            options.SchemaFilter<ShowtimeRequestSchemaFilter>();
 
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {

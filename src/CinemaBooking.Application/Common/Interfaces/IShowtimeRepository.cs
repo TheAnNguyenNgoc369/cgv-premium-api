@@ -21,6 +21,9 @@ public interface IShowtimeRepository
     Task<Room?> GetRoomAsync(int roomId, CancellationToken cancellationToken = default);
     Task<bool> HasConflictAsync(int roomId, DateTime startTime, DateTime endTime,
         int? excludingShowtimeId = null, CancellationToken cancellationToken = default);
+    Task<bool> HasRoomTypeStartConflictAsync(
+        int cinemaId, string roomType, DateTime startTime,
+        int? excludingShowtimeId = null, CancellationToken cancellationToken = default);
     Task<bool> HasActiveBookingOrHoldAsync(int showtimeId, DateTime now,
         CancellationToken cancellationToken = default);
     Task<bool> HasAnyBookingOrHoldAsync(int showtimeId,
@@ -30,6 +33,8 @@ public interface IShowtimeRepository
         CancellationToken cancellationToken = default);
     Task<bool> AcquireRoomScheduleLockAsync(
         int roomId, CancellationToken cancellationToken = default);
+    Task<bool> AcquireCinemaScheduleLockAsync(
+        int cinemaId, CancellationToken cancellationToken = default);
     Task<Showtime> AddAsync(Showtime showtime, CancellationToken cancellationToken = default);
     Task<Showtime?> UpdateAsync(Showtime showtime, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(int showtimeId, CancellationToken cancellationToken = default);

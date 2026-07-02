@@ -33,6 +33,16 @@ public interface IBookingRepository
         List<int> seatIds,
         CancellationToken cancellationToken = default);
 
+    Task<List<SeatHold>> GetMyActiveHoldsForUpdateAsync(
+        int userId,
+        int showtimeId,
+        DateTime now,
+        CancellationToken cancellationToken = default);
+
+    Task ReleaseSeatHoldsAsync(
+        IEnumerable<SeatHold> seatHolds,
+        CancellationToken cancellationToken = default);
+
     Task AddBookingAsync(
         Booking booking,
         CancellationToken cancellationToken = default);

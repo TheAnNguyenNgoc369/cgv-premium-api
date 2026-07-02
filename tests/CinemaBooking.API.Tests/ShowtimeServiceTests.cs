@@ -40,7 +40,7 @@ public sealed class ShowtimeServiceTests
     }
 
     [Fact]
-    public async Task CreateShowtimeAsync_StartTimeWithoutUtcOffset_ReturnsValidationError()
+    public async Task CreateShowtimeAsync_StartTimeNotNormalizedToUtc_ReturnsValidationError()
     {
         var repository = new StubShowtimeRepository
         {
@@ -52,7 +52,7 @@ public sealed class ShowtimeServiceTests
             1, 1, DateTime.SpecifyKind(DateTime.Now.AddDays(1), DateTimeKind.Unspecified), 100_000);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("StartTime must be a UTC ISO 8601 value ending in Z", result.ErrorMessage);
+        Assert.Equal("StartTime must be normalized to UTC", result.ErrorMessage);
     }
 
     [Fact]
@@ -105,6 +105,26 @@ public sealed class ShowtimeServiceTests
 
         Assert.True(result.Succeeded);
         Assert.Equal("completed", result.Showtime!.Status);
+    }
+
+    [Fact]
+    public async Task CreateShowtimeAsync_SameCinemaStartAndRoomType_ReturnsConflict()
+    {
+        var repository = new StubShowtimeRepository
+        {
+            ActiveSeats = [new Seat { SeatID = 1, RoomID = 1, Status = "active" }],
+            HasRoomTypeStartConflict = true
+        };
+        var service = new ShowtimeService(repository);
+
+        var result = await service.CreateShowtimeAsync(
+            1, 1, DateTime.UtcNow.AddDays(1), 100_000);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+            "Another showtime with the same room type already starts at this time in the cinema",
+            result.ErrorMessage);
+        Assert.Equal(0, repository.AddCallCount);
     }
 
     [Fact]
@@ -291,6 +311,7 @@ public sealed class ShowtimeServiceTests
         public Showtime? ExistingShowtime { get; init; }
         public bool HasActiveBookingOrHold { get; init; }
         public bool HasAnyBookingOrHold { get; init; }
+        public bool HasRoomTypeStartConflict { get; init; }
         public int AddCallCount { get; private set; }
         public int UpdateCallCount { get; private set; }
 
@@ -301,6 +322,7 @@ public sealed class ShowtimeServiceTests
             {
                 RoomID = roomId,
                 CinemaID = 1,
+                RoomType = "Standard",
                 Status = "active",
                 Cinema = new Cinema { CinemaID = 1, Status = "active" }
             });
@@ -308,6 +330,10 @@ public sealed class ShowtimeServiceTests
             Task.FromResult(ActiveSeats);
         public Task<bool> HasConflictAsync(int roomId, DateTime startTime, DateTime endTime,
             int? excludingShowtimeId = null, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task<bool> HasRoomTypeStartConflictAsync(
+            int cinemaId, string roomType, DateTime startTime,
+            int? excludingShowtimeId = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult(HasRoomTypeStartConflict);
         public Task<Showtime> AddAsync(Showtime showtime, CancellationToken cancellationToken = default)
         {
             AddCallCount++;
@@ -328,6 +354,8 @@ public sealed class ShowtimeServiceTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
         public Task<bool> AcquireRoomScheduleLockAsync(int roomId,
+            CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<bool> AcquireCinemaScheduleLockAsync(int cinemaId,
             CancellationToken cancellationToken = default) => Task.FromResult(true);
         public Task<Showtime?> UpdateAsync(Showtime showtime, CancellationToken cancellationToken = default)
         {
