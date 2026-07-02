@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
+using CinemaBooking.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
 
 namespace CinemaBooking.Infrastructure.Repositories;
@@ -96,6 +97,31 @@ public sealed class BookingRepository : IBookingRepository
                       && h.Status == "holding"
                       && h.ExpiresAt > DateTime.UtcNow)
             .ToListAsync(cancellationToken);
+    }
+
+    public Task<List<SeatHold>> GetMyActiveHoldsForUpdateAsync(
+        int userId,
+        int showtimeId,
+        DateTime now,
+        CancellationToken cancellationToken = default) =>
+        _db.SeatHolds
+            .FromSqlInterpolated($"""
+                SELECT * FROM [SeatHold] WITH (UPDLOCK, HOLDLOCK)
+                WHERE [UserID] = {userId}
+                  AND [ShowtimeID] = {showtimeId}
+                  AND [Status] = {SeatHoldStatus.Holding}
+                  AND [ExpiresAt] > {now}
+                """)
+            .ToListAsync(cancellationToken);
+
+    public async Task ReleaseSeatHoldsAsync(
+        IEnumerable<SeatHold> seatHolds,
+        CancellationToken cancellationToken = default)
+    {
+        foreach (var seatHold in seatHolds)
+            seatHold.Status = SeatHoldStatus.Released;
+
+        await _db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task AddBookingAsync(

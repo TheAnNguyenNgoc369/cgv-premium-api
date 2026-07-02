@@ -160,9 +160,10 @@ public sealed class ShowtimeController : ControllerBase
 
     private IActionResult MapWriteError(string? message) => message switch
     {
-        "Showtime not found" or "Movie not found" or "Room not found" =>
+        "Showtime not found" or "Movie not found" or "Room not found" or "Cinema not found" =>
             NotFound(new { success = false, message }),
         "Showtime conflicts with another showtime in the same room"
+            or "Another showtime with the same room type already starts at this time in the cinema"
             or "Showtime has active bookings or seat holds"
             or "Showtime has booking or seat hold history" =>
             Conflict(new { success = false, message }),

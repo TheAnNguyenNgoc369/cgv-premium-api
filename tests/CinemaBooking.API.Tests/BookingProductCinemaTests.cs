@@ -20,8 +20,51 @@ public sealed class BookingProductCinemaTests
         Assert.Equal("Product 'Popcorn' is not available at this cinema.", result.ErrorMessage);
     }
 
+    [Fact]
+    public async Task ReleaseSeatHolds_AllSeatsAreOwnedAndActive_ReleasesEverySeat()
+    {
+        var repository = new StubBookingRepository
+        {
+            ActiveHoldsForUpdate =
+            [
+                new SeatHold { HoldID = 1, SeatID = 101, Status = "holding" },
+                new SeatHold { HoldID = 2, SeatID = 102, Status = "holding" }
+            ]
+        };
+        var service = new BookingService(repository, null!, new StubUnitOfWork());
+
+        var result = await service.ReleaseSeatHoldsAsync(7, 12, [101, 102]);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal([101, 102], repository.ReleasedSeatIds);
+    }
+
+    [Fact]
+    public async Task ReleaseSeatHolds_AnySeatIsNotOwnedAndActive_ReleasesNothing()
+    {
+        var repository = new StubBookingRepository
+        {
+            ActiveHoldsForUpdate =
+            [
+                new SeatHold { HoldID = 1, SeatID = 101, Status = "holding" }
+            ]
+        };
+        var service = new BookingService(repository, null!, new StubUnitOfWork());
+
+        var result = await service.ReleaseSeatHoldsAsync(7, 12, [101, 102]);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+            "One or more seats are not actively held by the current user.",
+            result.ErrorMessage);
+        Assert.Empty(repository.ReleasedSeatIds);
+    }
+
     private sealed class StubBookingRepository : IBookingRepository
     {
+        public List<SeatHold> ActiveHoldsForUpdate { get; init; } = [];
+        public List<int> ReleasedSeatIds { get; } = [];
+
         public Task<Showtime?> GetShowtimeAsync(int showtimeId, CancellationToken cancellationToken = default) =>
             Task.FromResult<Showtime?>(new Showtime
             {
@@ -50,6 +93,17 @@ public sealed class BookingProductCinemaTests
             int userId, int showtimeId, List<int> seatIds,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new List<SeatHold> { new() { HoldID = 1, SeatID = 1 } });
+        public Task<List<SeatHold>> GetMyActiveHoldsForUpdateAsync(
+            int userId, int showtimeId, DateTime now,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(ActiveHoldsForUpdate);
+        public Task ReleaseSeatHoldsAsync(
+            IEnumerable<SeatHold> seatHolds,
+            CancellationToken cancellationToken = default)
+        {
+            ReleasedSeatIds.AddRange(seatHolds.Select(hold => hold.SeatID));
+            return Task.CompletedTask;
+        }
         public Task<List<Product>> GetProductsByIdsAsync(
             List<int> productIds, CancellationToken cancellationToken = default) =>
             Task.FromResult(new List<Product>
@@ -97,5 +151,12 @@ public sealed class BookingProductCinemaTests
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IDbContextTransaction> BeginTransactionAsync(
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class StubUnitOfWork : IUnitOfWork
+    {
+        public Task<T> ExecuteInTransactionAsync<T>(
+            Func<Task<T>> operation,
+            CancellationToken cancellationToken = default) => operation();
     }
 }

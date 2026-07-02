@@ -10,6 +10,12 @@ public interface IBookingService
         List<int> seatIds,
         CancellationToken cancellationToken = default);
 
+    Task<(bool Succeeded, string? ErrorMessage)> ReleaseSeatHoldsAsync(
+        int userId,
+        int showtimeId,
+        List<int> seatIds,
+        CancellationToken cancellationToken = default);
+
     Task<(bool Succeeded, string? ErrorMessage, Booking? Booking, SeatValidationErrors? SeatErrors)> CreateBookingAsync(
         int actorUserId,
         int? customerId,

@@ -172,6 +172,15 @@ public sealed class ShowtimeService : IShowtimeService
 
         return await ExecuteInTransactionAsync(async () =>
         {
+            var cinemaIds = existing is null || existing.RoomID == roomId
+                ? [room.CinemaID]
+                : new[] { existing.Room.CinemaID, room.CinemaID }.Distinct().Order().ToArray();
+            foreach (var cinemaId in cinemaIds)
+            {
+                if (!await _showtimeRepository.AcquireCinemaScheduleLockAsync(cinemaId, cancellationToken))
+                    return (false, "Cinema not found", (Showtime?)null);
+            }
+
             var roomIds = existing is null ? [roomId] : new[] { existing.RoomID, roomId }.Distinct().Order().ToArray();
             foreach (var id in roomIds)
             {
@@ -183,6 +192,13 @@ public sealed class ShowtimeService : IShowtimeService
                 && await _showtimeRepository.HasConflictAsync(
                     roomId, startTime, endTime, existing?.ShowtimeID, cancellationToken))
                 return (false, "Showtime conflicts with another showtime in the same room", (Showtime?)null);
+
+            if (normalizedStatus != "cancelled"
+                && await _showtimeRepository.HasRoomTypeStartConflictAsync(
+                    room.CinemaID, room.RoomType, startTime, existing?.ShowtimeID, cancellationToken))
+                return (false,
+                    "Another showtime with the same room type already starts at this time in the cinema",
+                    (Showtime?)null);
 
             var showtime = existing ?? new Showtime { CreatedAt = DateTime.UtcNow };
             showtime.MovieID = movieId;

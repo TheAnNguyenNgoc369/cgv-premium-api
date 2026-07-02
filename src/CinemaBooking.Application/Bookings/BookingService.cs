@@ -83,6 +83,32 @@ public sealed class BookingService : IBookingService
         return (true, null, holds.Select(h => h.HoldID).ToList(), expiresAt, null);
     }
 
+    public async Task<(bool Succeeded, string? ErrorMessage)> ReleaseSeatHoldsAsync(
+        int userId,
+        int showtimeId,
+        List<int> seatIds,
+        CancellationToken cancellationToken = default)
+    {
+        var requestedSeatIds = seatIds.Distinct().ToHashSet();
+        if (requestedSeatIds.Count == 0)
+            return (false, "Please select at least one seat.");
+
+        return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            var activeHolds = await _bookingRepository.GetMyActiveHoldsForUpdateAsync(
+                userId, showtimeId, DateTime.UtcNow, cancellationToken);
+            var requestedHolds = activeHolds
+                .Where(hold => requestedSeatIds.Contains(hold.SeatID))
+                .ToList();
+
+            if (requestedHolds.Count != requestedSeatIds.Count)
+                return (false, "One or more seats are not actively held by the current user.");
+
+            await _bookingRepository.ReleaseSeatHoldsAsync(requestedHolds, cancellationToken);
+            return (true, (string?)null);
+        }, cancellationToken);
+    }
+
     public async Task<(bool Succeeded, string? ErrorMessage, Booking? Booking, SeatValidationErrors? SeatErrors)> CreateBookingAsync(
         int actorUserId,
         int? customerId,

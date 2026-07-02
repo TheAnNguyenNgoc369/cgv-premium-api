@@ -51,6 +51,23 @@ public sealed class BookingController : ControllerBase
         return Ok(new HoldSeatsResponse(result.HoldIds!, result.ExpiresAt!.Value));
     }
 
+    [HttpDelete("seat-holds")]
+    [Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
+    public async Task<IActionResult> ReleaseSeatHolds(
+        [FromBody] ReleaseSeatHoldsRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result = await _bookingService.ReleaseSeatHoldsAsync(
+            GetCurrentUserId(), request.ShowtimeId, request.SeatIds, cancellationToken);
+        if (!result.Succeeded)
+            return BadRequest(new { success = false, message = result.ErrorMessage });
+
+        return Ok(new { success = true, message = "Seat holds released successfully." });
+    }
+
     [HttpPost("bookings")]
     [Authorize]
     public async Task<IActionResult> CreateBooking(
