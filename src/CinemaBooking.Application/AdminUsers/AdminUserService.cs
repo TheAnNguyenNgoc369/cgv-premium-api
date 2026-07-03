@@ -63,6 +63,8 @@ public sealed class AdminUserService : IAdminUserService
 
         var roleResult = NormalizeRequired(command.Role, DatabaseEnumMappings.UserRoles, "Invalid role");
         if (!roleResult.Succeeded) return Validation<User>(roleResult.Error!);
+        if (roleResult.Value == Roles.Customer)
+            return Validation<User>("Customer accounts cannot be created by admin");
         var statusResult = string.IsNullOrWhiteSpace(command.Status)
             ? (true, (string?)UserStatuses.Active, (string?)null)
             : NormalizeRequired(command.Status, DatabaseEnumMappings.UserStatuses, "Invalid status");

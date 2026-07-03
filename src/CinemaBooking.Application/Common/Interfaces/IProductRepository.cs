@@ -4,18 +4,13 @@ namespace CinemaBooking.Application.Common.Interfaces;
 
 public interface IProductRepository
 {
-    Task<List<Product>> GetProductsAsync(
-        int cinemaId,
-        CancellationToken cancellationToken = default);
+    Task<List<Product>> GetProductsAsync(CancellationToken cancellationToken = default);
 
-    Task<List<Product>> GetAvailableProductsAsync(
-        int cinemaId,
-        CancellationToken cancellationToken = default);
+    Task<List<Product>> GetAvailableProductsAsync(CancellationToken cancellationToken = default);
 
     Task<Product?> GetByIdAsync(int itemId, CancellationToken cancellationToken = default);
 
     Task<bool> NameExistsAsync(
-        int cinemaId,
         string itemName,
         int? excludingItemId = null,
         CancellationToken cancellationToken = default);

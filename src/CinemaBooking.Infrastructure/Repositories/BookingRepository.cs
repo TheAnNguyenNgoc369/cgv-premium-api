@@ -189,7 +189,7 @@ public sealed class BookingRepository : IBookingRepository
         CancellationToken cancellationToken = default)
     {
         return await _db.Products
-            .Where(p => p.IsOnMenu && p.Status == "in_stock")
+            .Where(p => p.Status == "active")
             .OrderBy(p => p.ItemType)
             .ThenBy(p => p.ItemName)
             .ToListAsync(cancellationToken);
@@ -213,31 +213,6 @@ public sealed class BookingRepository : IBookingRepository
             voucher.UsedCount++;
             await _db.SaveChangesAsync(cancellationToken);
         }
-    }
-
-    public async Task DeductProductStockAsync(
-        IReadOnlyDictionary<int, int> productQuantities,
-        CancellationToken cancellationToken = default)
-    {
-        var productIds = productQuantities.Keys.ToList();
-        var products = await _db.Products
-            .Where(product => productIds.Contains(product.ItemID))
-            .ToListAsync(cancellationToken);
-
-        foreach (var product in products)
-        {
-            var quantity = productQuantities[product.ItemID];
-            if (product.StockQuantity < quantity)
-                throw new InvalidOperationException($"Insufficient stock for product {product.ItemID}");
-
-            product.StockQuantity -= quantity;
-            product.UpdatedAt = DateTime.UtcNow;
-            product.Status = product.StockQuantity == 0
-                ? "out_of_stock"
-                : product.StockQuantity <= 10 ? "low_stock" : "in_stock";
-        }
-
-        await _db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task ExtendBookingHoldsAsync(
@@ -278,86 +253,6 @@ public sealed class BookingRepository : IBookingRepository
         await _db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task DeductProductStockAsync(
-        Dictionary<int, int> productQuantities,
-        CancellationToken cancellationToken = default)
-    {
-        var productIds = productQuantities.Keys.ToList();
-        var products = await _db.Products
-            .Where(p => productIds.Contains(p.ItemID))
-            .ToListAsync(cancellationToken);
-
-        foreach (var product in products)
-        {
-            if (productQuantities.TryGetValue(product.ItemID, out var quantity))
-            {
-                if (product.StockQuantity < quantity)
-                {
-                    throw new InvalidOperationException(
-                        $"Insufficient stock for product '{product.ItemName}'. Available: {product.StockQuantity}, Requested: {quantity}");
-                }
-
-                product.StockQuantity -= quantity;
-                product.UpdatedAt = DateTime.UtcNow;
-
-                if (product.StockQuantity <= 0)
-                {
-                    product.Status = "out_of_stock";
-                }
-                else if (product.StockQuantity <= 10)
-                {
-                    product.Status = "low_stock";
-                }
-            }
-        }
-
-        await _db.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task RestoreProductStockAsync(
-        Dictionary<int, int> productQuantities,
-        CancellationToken cancellationToken = default)
-    {
-        var productIds = productQuantities.Keys.ToList();
-        var products = await _db.Products
-            .Where(p => productIds.Contains(p.ItemID))
-            .ToListAsync(cancellationToken);
-
-        foreach (var product in products)
-        {
-            if (productQuantities.TryGetValue(product.ItemID, out var quantity))
-            {
-                product.StockQuantity += quantity;
-                product.UpdatedAt = DateTime.UtcNow;
-
-                if (product.StockQuantity > 10)
-                {
-                    product.Status = "in_stock";
-                }
-                else if (product.StockQuantity > 0)
-                {
-                    product.Status = "low_stock";
-                }
-            }
-        }
-
-        await _db.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task<List<Product>> GetProductsByIdsWithLockAsync(
-        List<int> productIds,
-        CancellationToken cancellationToken = default)
-    {
-        if (!productIds.Any())
-            return new List<Product>();
-
-        var idsParam = string.Join(",", productIds);
-        var sql = $"SELECT * FROM Product WITH (UPDLOCK, ROWLOCK) WHERE ItemID IN ({idsParam})";
-
-        return await _db.Products
-            .FromSqlRaw(sql)
-            .ToListAsync(cancellationToken);
-    }
 
     public async Task<Voucher?> GetVoucherByCodeWithLockAsync(
         string voucherCode,

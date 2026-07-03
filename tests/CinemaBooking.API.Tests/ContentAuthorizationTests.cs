@@ -19,12 +19,12 @@ public sealed class ContentAuthorizationTests
     [InlineData(nameof(GenreController.CreateGenre))]
     [InlineData(nameof(GenreController.UpdateGenre))]
     [InlineData(nameof(GenreController.DeleteGenre))]
-    public void GenreWrites_RequireManager(string methodName)
+    public void GenreWrites_RequireAdmin(string methodName)
     {
         var method = typeof(GenreController).GetMethod(methodName)!;
         var attribute = Assert.Single(method.GetCustomAttributes(typeof(AuthorizeAttribute), true)
             .Cast<AuthorizeAttribute>());
-        Assert.Equal(Roles.Manager, attribute.Roles);
+        Assert.Equal(Roles.Admin, attribute.Roles);
     }
 
     [Fact]

@@ -14,25 +14,19 @@ public sealed class ProductRepository : IProductRepository
         _dbContext = dbContext;
     }
 
-    public Task<List<Product>> GetProductsAsync(
-        int cinemaId,
-        CancellationToken cancellationToken = default)
+    public Task<List<Product>> GetProductsAsync(CancellationToken cancellationToken = default)
     {
         return _dbContext.Products
             .AsNoTracking()
-            .Where(p => p.CinemaID == cinemaId)
             .OrderBy(p => p.ItemName)
             .ToListAsync(cancellationToken);
     }
 
-    public Task<List<Product>> GetAvailableProductsAsync(
-        int cinemaId,
-        CancellationToken cancellationToken = default)
+    public Task<List<Product>> GetAvailableProductsAsync(CancellationToken cancellationToken = default)
     {
         return _dbContext.Products
             .AsNoTracking()
-            .Where(p => p.CinemaID == cinemaId
-                && p.IsOnMenu && p.Status == "in_stock" && p.StockQuantity > 0)
+            .Where(p => p.Status == "active")
             .OrderBy(p => p.ItemName)
             .ToListAsync(cancellationToken);
     }
@@ -47,14 +41,13 @@ public sealed class ProductRepository : IProductRepository
     }
 
     public Task<bool> NameExistsAsync(
-        int cinemaId,
         string itemName,
         int? excludingItemId = null,
         CancellationToken cancellationToken = default)
     {
         var query = _dbContext.Products
             .AsNoTracking()
-            .Where(p => p.CinemaID == cinemaId && p.ItemName == itemName);
+            .Where(p => p.ItemName == itemName);
 
         if (excludingItemId.HasValue)
         {
@@ -91,9 +84,7 @@ public sealed class ProductRepository : IProductRepository
         existingProduct.ItemType = product.ItemType;
         existingProduct.Description = product.Description;
         existingProduct.Price = product.Price;
-        existingProduct.StockQuantity = product.StockQuantity;
         existingProduct.ImageURL = product.ImageURL;
-        existingProduct.IsOnMenu = product.IsOnMenu;
         existingProduct.IsLoyaltyEligible = product.IsLoyaltyEligible;
         existingProduct.Status = product.Status;
         existingProduct.UpdatedAt = DateTime.UtcNow;

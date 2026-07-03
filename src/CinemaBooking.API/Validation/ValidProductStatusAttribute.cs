@@ -4,7 +4,7 @@ namespace CinemaBooking.API.Validation;
 
 public sealed class ValidProductStatusAttribute : ValidationAttribute
 {
-    private static readonly string[] ValidValues = ["in_stock", "low_stock", "out_of_stock", "inactive"];
+    private static readonly string[] ValidValues = ["active", "inactive"];
 
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
     {

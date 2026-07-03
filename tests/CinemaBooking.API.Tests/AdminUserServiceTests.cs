@@ -10,7 +10,7 @@ namespace CinemaBooking.API.Tests;
 public sealed class AdminUserServiceTests
 {
     [Fact]
-    public async Task CreateAsync_ValidCustomer_HashesPasswordCreatesWalletAndLog()
+    public async Task CreateAsync_ValidStaff_HashesPasswordCreatesWalletAndLog()
     {
         var repository = new StubAdminUserRepository();
         var service = CreateService(repository);
@@ -19,7 +19,7 @@ public sealed class AdminUserServiceTests
             1,
             new AdminUserCreateCommand(
                 "New User", "new@example.com", "0901234567", "Password@123",
-                Roles.Customer, null, null),
+                Roles.Staff, null, 1),
             "127.0.0.1");
 
         Assert.True(result.Succeeded);
@@ -31,6 +31,24 @@ public sealed class AdminUserServiceTests
         Assert.NotNull(repository.AddedUser.EmailVerifiedAt);
         Assert.Equal(0m, repository.AddedWallet!.Balance);
         Assert.Equal(AdminActionTypes.CreateUser, repository.AddedLog!.ActionType);
+    }
+
+    [Fact]
+    public async Task CreateAsync_CustomerRole_ReturnsValidationError()
+    {
+        var repository = new StubAdminUserRepository();
+        var service = CreateService(repository);
+
+        var result = await service.CreateAsync(
+            1,
+            new AdminUserCreateCommand(
+                "New Customer", "customer@example.com", "0901234567", "Password@123",
+                Roles.Customer, null, null),
+            "127.0.0.1");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Customer accounts cannot be created by admin", result.ErrorMessage);
+        Assert.Null(repository.AddedUser);
     }
 
     [Fact]
