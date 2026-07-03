@@ -5,6 +5,7 @@ using CinemaBooking.Application.Invoices;
 using CinemaBooking.Application.Membership;
 using CinemaBooking.Application.Payments.VNPay;
 using CinemaBooking.Application.Payments.PayOS;
+using CinemaBooking.Application.Tickets;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 
@@ -24,6 +25,7 @@ public sealed class PaymentService : IPaymentService
     private readonly IPayOSService _payOSService;
     private readonly IInvoiceService _invoiceService;
     private readonly IMembershipService _membershipService;
+    private readonly ITicketService _ticketService;
     private readonly IUnitOfWork _unitOfWork;
 
     public PaymentService(
@@ -35,6 +37,7 @@ public sealed class PaymentService : IPaymentService
         IPayOSService payOSService,
         IInvoiceService invoiceService,
         IMembershipService membershipService,
+        ITicketService ticketService,
         IUnitOfWork unitOfWork)
     {
         _paymentRepository = paymentRepository;
@@ -45,6 +48,7 @@ public sealed class PaymentService : IPaymentService
         _payOSService = payOSService;
         _invoiceService = invoiceService;
         _membershipService = membershipService;
+        _ticketService = ticketService;
         _unitOfWork = unitOfWork;
     }
 
@@ -492,6 +496,8 @@ public sealed class PaymentService : IPaymentService
                     booking.UserID.Value, booking.BookingID, booking.FinalAmount, cancellationToken);
             }
         }
+
+        await _ticketService.CreateTicketsForBookingAsync(booking.BookingID, cancellationToken);
     }
 
     private static PaymentOperationResult? ValidateBookingForPayment(
