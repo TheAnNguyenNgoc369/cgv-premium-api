@@ -216,7 +216,7 @@ public sealed class BookingService : IBookingService
         {
             if (productQuantities.Count > 0)
             {
-                var lockedProducts = await _bookingRepository.GetProductsByIdsWithLockAsync(
+                var lockedProducts = await _bookingRepository.GetProductsByIdsAsync(
                     productQuantities.Keys.ToList(), cancellationToken);
 
                 foreach (var item in productQuantities)
@@ -225,19 +225,8 @@ public sealed class BookingService : IBookingService
                     if (product is null)
                         throw new InvalidOperationException($"Product with ID {item.Key} not found.");
 
-                    if (product.CinemaID != showtime.Room.CinemaID)
-                        throw new InvalidOperationException(
-                            $"Product '{product.ItemName}' is not available at this cinema.");
-
-                    if (!product.IsOnMenu)
-                        throw new InvalidOperationException($"Product '{product.ItemName}' is no longer available.");
-
-                    if (product.Status != "in_stock" && product.Status != "low_stock")
-                        throw new InvalidOperationException($"Product '{product.ItemName}' is out of stock.");
-
-                    if (product.StockQuantity < item.Value)
-                        throw new InvalidOperationException(
-                            $"Insufficient stock for '{product.ItemName}'. Available: {product.StockQuantity}, Requested: {item.Value}");
+                    if (product.Status != "active")
+                        throw new InvalidOperationException($"Product '{product.ItemName}' is inactive.");
                 }
             }
 
@@ -268,9 +257,6 @@ public sealed class BookingService : IBookingService
 
             if (bookingVoucher is not null)
                 await _bookingRepository.IncrementVoucherUsageAsync(bookingVoucher.VoucherID, cancellationToken);
-
-            if (productQuantities.Count > 0)
-                await _bookingRepository.DeductProductStockAsync(productQuantities, cancellationToken);
 
             return true;
         }, cancellationToken);
@@ -360,17 +346,8 @@ public sealed class BookingService : IBookingService
             {
                 var product = products.First(p => p.ItemID == fnbItem.ItemId);
 
-                if (product.CinemaID != showtime.Room.CinemaID)
-                    return (false, $"Product '{product.ItemName}' is not available at this cinema.", null);
-
-                if (!product.IsOnMenu)
-                    return (false, $"Product '{product.ItemName}' is no longer available.", null);
-
-                if (product.Status != "in_stock" && product.Status != "low_stock")
-                    return (false, $"Product '{product.ItemName}' is out of stock.", null);
-
-                if (product.StockQuantity < fnbItem.Quantity)
-                    return (false, $"Only {product.StockQuantity} units of '{product.ItemName}' are available.", null);
+                if (product.Status != "active")
+                    return (false, $"Product '{product.ItemName}' is inactive.", null);
 
                 var itemSubTotal = product.Price * fnbItem.Quantity;
                 fnbSubTotal += itemSubTotal;

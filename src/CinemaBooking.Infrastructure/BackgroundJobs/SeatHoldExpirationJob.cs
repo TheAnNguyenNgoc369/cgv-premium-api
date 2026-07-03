@@ -72,18 +72,6 @@ public sealed class SeatHoldExpirationJob : BackgroundService
             booking.Status = BookingStatus.Expired;
             booking.UpdatedAt = now;
 
-            foreach (var item in booking.BookingFnBs)
-            {
-                var product = await dbContext.Products.FindAsync(
-                    new object[] { item.ItemID }, cancellationToken);
-                if (product is null)
-                    continue;
-
-                product.StockQuantity += item.Quantity;
-                product.UpdatedAt = now;
-                product.Status = product.StockQuantity > 10 ? "in_stock" : "low_stock";
-            }
-
             if (booking.BookingVoucher is not null)
             {
                 var voucher = await dbContext.Vouchers.FindAsync(
