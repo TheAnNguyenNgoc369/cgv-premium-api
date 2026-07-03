@@ -19,4 +19,8 @@ public interface ITicketRepository
     Task<Ticket?> GetTicketByQRCodeAsync(
         string qrCode,
         CancellationToken cancellationToken = default);
+
+    Task<List<Ticket>> GetTicketsByUserIdAsync(
+        int userId,
+        CancellationToken cancellationToken = default);
 }

@@ -8,7 +8,13 @@ public interface ITicketService
         int bookingId,
         CancellationToken cancellationToken = default);
 
-    Task<List<Ticket>> GetTicketsByBookingIdAsync(
+    Task<List<Ticket>?> GetTicketsByBookingIdAsync(
         int bookingId,
+        int actorUserId,
+        bool isStaff,
+        CancellationToken cancellationToken = default);
+
+    Task<List<Ticket>> GetMyTicketsAsync(
+        int userId,
         CancellationToken cancellationToken = default);
 }
