@@ -1,3 +1,4 @@
+using CinemaBooking.API.Contracts.Tickets;
 using CinemaBooking.Application.Tickets;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -28,6 +29,16 @@ public sealed class TicketController : ControllerBase
         if (!tickets.Any())
             return NotFound(new { success = false, message = "No tickets found for this booking." });
 
-        return Ok(new { success = true, tickets });
+        var response = tickets.Select(t => new TicketResponse(
+            t.TicketID,
+            t.QRCode,
+            t.Status,
+            t.BookingSeatID,
+            t.BookingSeat.Seat.SeatID,
+            t.BookingSeat.Seat.SeatRow,
+            t.BookingSeat.Seat.SeatCol
+        )).ToList();
+
+        return Ok(new { success = true, tickets = response });
     }
 }
