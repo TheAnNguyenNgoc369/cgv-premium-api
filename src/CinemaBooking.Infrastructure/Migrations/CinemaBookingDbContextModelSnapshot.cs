@@ -70,7 +70,7 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.ToTable("AdminActionLog", null, t =>
                         {
-                            t.HasCheckConstraint("CK_AdminActionLog_ActionType", "[ActionType] IN ('lock_user','unlock_user','change_role','cancel_booking','refund_processed','payment_viewed','booking_created','account_status_changed','create_user','update_user','delete_user','deactivate_user')");
+                            t.HasCheckConstraint("CK_AdminActionLog_ActionType", "[ActionType] IN ('lock_user','unlock_user','change_role','cancel_booking','refund_processed','payment_viewed','booking_created','account_status_changed','create_user','update_user','delete_user','deactivate_user','create_voucher','update_voucher','delete_voucher','view_revenue_report','export_report')");
                         });
                 });
 
@@ -1475,6 +1475,10 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Property<string>("ImageURL")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ImagePublicId")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()

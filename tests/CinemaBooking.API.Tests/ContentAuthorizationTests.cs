@@ -35,4 +35,30 @@ public sealed class ContentAuthorizationTests
             .Cast<AuthorizeAttribute>());
         Assert.Equal(Roles.Manager, attribute.Roles);
     }
+
+    [Fact]
+    public void VoucherGet_AllowsAnonymous()
+    {
+        var method = typeof(VoucherController).GetMethod(nameof(VoucherController.Get))!;
+        Assert.Single(method.GetCustomAttributes(typeof(AllowAnonymousAttribute), true));
+    }
+
+    [Theory]
+    [InlineData(nameof(VoucherController.Create))]
+    [InlineData(nameof(VoucherController.Update))]
+    [InlineData(nameof(VoucherController.Delete))]
+    public void VoucherWrites_RequireAdmin(string methodName)
+    {
+        var method = typeof(VoucherController).GetMethods().Single(method => method.Name == methodName);
+        var attribute = Assert.Single(method.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>());
+        Assert.Equal(Roles.Admin, attribute.Roles);
+    }
+
+    [Fact]
+    public void Reports_RequireAdminOrManager()
+    {
+        var attribute = Assert.Single(typeof(ReportsController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>());
+        Assert.Equal($"{Roles.Admin},{Roles.Manager}", attribute.Roles);
+    }
 }

@@ -13,6 +13,7 @@ public class Voucher
     public DateTime ValidFrom { get; set; }
     public DateTime ValidUntil { get; set; }
     public string? ImageURL { get; set; }
+    public string? ImagePublicId { get; set; }
     public string? Description { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }

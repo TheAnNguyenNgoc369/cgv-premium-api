@@ -411,6 +411,7 @@ public sealed class BookingService : IBookingService
             voucherDiscount = voucher.DiscountType == "percent"
                 ? Math.Round(totalBeforeDiscount * voucher.DiscountValue / 100, 0)
                 : voucher.DiscountValue;
+            voucherDiscount = Math.Min(voucherDiscount, totalBeforeDiscount);
 
             voucherDetails = new VoucherPricingDetail
             {

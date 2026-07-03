@@ -19,6 +19,7 @@ public class VoucherConfiguration : IEntityTypeConfiguration<Voucher>
         builder.Property(v => v.MinOrderValue).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
         builder.Property(v => v.UsedCount).HasDefaultValue(0);
         builder.Property(v => v.ImageURL).HasMaxLength(500);
+        builder.Property(v => v.ImagePublicId).HasMaxLength(255);
         builder.Property(v => v.Description).HasMaxLength(500);
         builder.Property(v => v.IsActive).HasDefaultValue(true);
         builder.Property(v => v.CreatedAt).HasDefaultValueSql("GETDATE()");
