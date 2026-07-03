@@ -33,6 +33,7 @@ public sealed class UserRepository : IUserRepository
     public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         return _dbContext.Users
+            .Include(user => user.Cinema)
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
     }

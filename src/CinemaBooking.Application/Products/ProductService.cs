@@ -1,7 +1,6 @@
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.ImageFiles;
 using CinemaBooking.Domain.Entities;
-using CinemaBooking.Application.Common.Security;
 
 namespace CinemaBooking.Application.Products;
 
@@ -15,7 +14,7 @@ public sealed class ProductService : IProductService
     private readonly IImageStorageService _imageStorageService;
 
     private static readonly string[] ValidItemTypes = ["combo", "snack", "beverage", "dessert"];
-    private static readonly string[] ValidStatuses = ["in_stock", "low_stock", "out_of_stock", "inactive"];
+    private static readonly string[] ValidStatuses = ["active", "inactive"];
 
     public ProductService(
         IProductRepository productRepository,
@@ -25,18 +24,14 @@ public sealed class ProductService : IProductService
         _imageStorageService = imageStorageService;
     }
 
-    public Task<List<Product>> GetProductsAsync(
-        int cinemaId,
-        CancellationToken cancellationToken = default)
+    public Task<List<Product>> GetProductsAsync(CancellationToken cancellationToken = default)
     {
-        return _productRepository.GetProductsAsync(cinemaId, cancellationToken);
+        return _productRepository.GetProductsAsync(cancellationToken);
     }
 
-    public Task<List<Product>> GetAvailableProductsAsync(
-        int cinemaId,
-        CancellationToken cancellationToken = default)
+    public Task<List<Product>> GetAvailableProductsAsync(CancellationToken cancellationToken = default)
     {
-        return _productRepository.GetAvailableProductsAsync(cinemaId, cancellationToken);
+        return _productRepository.GetAvailableProductsAsync(cancellationToken);
     }
 
     public Task<Product?> GetProductByIdAsync(
@@ -47,14 +42,11 @@ public sealed class ProductService : IProductService
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, Product? Product)> CreateProductAsync(
-        int cinemaId,
         string itemName,
         string itemType,
         string? description,
         decimal price,
-        int stockQuantity,
         string? imageUrl,
-        bool isOnMenu,
         bool isLoyaltyEligible,
         CancellationToken cancellationToken = default)
     {
@@ -80,29 +72,21 @@ public sealed class ProductService : IProductService
             return (false, "Price must be greater than or equal to 0", null);
         }
 
-        if (stockQuantity < 0)
-        {
-            return (false, "StockQuantity must be greater than or equal to 0", null);
-        }
-
         if (await _productRepository.NameExistsAsync(
-                cinemaId, normalizedName, cancellationToken: cancellationToken))
+                normalizedName, cancellationToken: cancellationToken))
         {
             return (false, "ItemName must be unique", null);
         }
 
         var product = new Product
         {
-            CinemaID = cinemaId,
             ItemName = normalizedName,
             ItemType = normalizedType,
             Description = description?.Trim(),
             Price = price,
-            StockQuantity = stockQuantity,
             ImageURL = imageUrl?.Trim(),
-            IsOnMenu = isOnMenu,
             IsLoyaltyEligible = isLoyaltyEligible,
-            Status = "in_stock"
+            Status = "active"
         };
 
         var createdProduct = await _productRepository.AddAsync(product, cancellationToken);
@@ -112,14 +96,11 @@ public sealed class ProductService : IProductService
 
     public async Task<(bool Succeeded, string? ErrorMessage, Product? Product)> UpdateProductAsync(
         int itemId,
-        int managerCinemaId,
         string itemName,
         string itemType,
         string? description,
         decimal price,
-        int stockQuantity,
         string? imageUrl,
-        bool isOnMenu,
         bool isLoyaltyEligible,
         string status,
         CancellationToken cancellationToken = default)
@@ -129,9 +110,6 @@ public sealed class ProductService : IProductService
         {
             return (false, "Product not found", null);
         }
-        if (existingProduct.CinemaID != managerCinemaId)
-            return (false, CinemaScopeMessages.AccessDenied, null);
-
         var normalizedName = NormalizeName(itemName);
         if (normalizedName is null)
         {
@@ -152,11 +130,6 @@ public sealed class ProductService : IProductService
         if (price < 0)
         {
             return (false, "Price must be greater than or equal to 0", null);
-        }
-
-        if (stockQuantity < 0)
-        {
-            return (false, "StockQuantity must be greater than or equal to 0", null);
         }
 
         var normalizedStatus = NormalizeStatus(status);
@@ -171,7 +144,6 @@ public sealed class ProductService : IProductService
         }
 
         if (await _productRepository.NameExistsAsync(
-                managerCinemaId,
                 normalizedName,
                 itemId,
                 cancellationToken))
@@ -182,14 +154,11 @@ public sealed class ProductService : IProductService
         var productToUpdate = new Product
         {
             ItemID = itemId,
-            CinemaID = managerCinemaId,
             ItemName = normalizedName,
             ItemType = normalizedType,
             Description = description?.Trim(),
             Price = price,
-            StockQuantity = stockQuantity,
             ImageURL = imageUrl?.Trim(),
-            IsOnMenu = isOnMenu,
             IsLoyaltyEligible = isLoyaltyEligible,
             Status = normalizedStatus
         };
@@ -203,7 +172,6 @@ public sealed class ProductService : IProductService
 
     public async Task<(bool Succeeded, string? ErrorMessage, Product? Product)> UpdateProductImageAsync(
         int itemId,
-        int managerCinemaId,
         Stream imageStream,
         string fileName,
         string? contentType,
@@ -213,9 +181,6 @@ public sealed class ProductService : IProductService
         var existingProduct = await _productRepository.GetByIdAsync(itemId, cancellationToken);
         if (existingProduct is null)
             return (false, "Product not found", null);
-
-        if (existingProduct.CinemaID != managerCinemaId)
-            return (false, CinemaScopeMessages.AccessDenied, null);
 
         var validationError = ImageFileValidator.Validate(fileName, contentType, fileSize);
         if (validationError is not null)
@@ -267,7 +232,6 @@ public sealed class ProductService : IProductService
 
     public async Task<(bool Succeeded, string? ErrorMessage)> DeleteProductAsync(
         int itemId,
-        int managerCinemaId,
         CancellationToken cancellationToken = default)
     {
         var existingProduct = await _productRepository.GetByIdAsync(itemId, cancellationToken);
@@ -275,9 +239,6 @@ public sealed class ProductService : IProductService
         {
             return (false, "Product not found");
         }
-        if (existingProduct.CinemaID != managerCinemaId)
-            return (false, CinemaScopeMessages.AccessDenied);
-
         if (await _productRepository.IsUsedInBookingsAsync(itemId, cancellationToken))
         {
             return (false, "Product is used in existing bookings");

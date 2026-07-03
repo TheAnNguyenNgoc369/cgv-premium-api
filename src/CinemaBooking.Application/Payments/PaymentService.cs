@@ -2,7 +2,6 @@ using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Contracts.Payment;
 using CinemaBooking.Application.Invoices;
-using CinemaBooking.Application.Membership;
 using CinemaBooking.Application.Payments.VNPay;
 using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Application.Tickets;

@@ -41,6 +41,7 @@ public static class CinemaBookingDbSeeder
                 Phone = "0900000003",
                 PasswordHash = PasswordHasher.Hash("Password@123"),
                 Role = "manager",
+                CinemaID = 1,
                 Status = "active",
                 EmailVerifiedAt = now,
                 TotalPoints = 0,
@@ -55,6 +56,7 @@ public static class CinemaBookingDbSeeder
                 Phone = "0900000023",
                 PasswordHash = PasswordHasher.Hash("Password@123"),
                 Role = "staff",
+                CinemaID = 1,
                 Status = "active",
                 EmailVerifiedAt = now,
                 TotalPoints = 0,
@@ -68,6 +70,7 @@ public static class CinemaBookingDbSeeder
                 Phone = "0900000024",
                 PasswordHash = PasswordHasher.Hash("Password@123"),
                 Role = "staff",
+                CinemaID = 1,
                 Status = "active",
                 EmailVerifiedAt = now,
                 TotalPoints = 0,
@@ -122,6 +125,15 @@ public static class CinemaBookingDbSeeder
             .ToListAsync(cancellationToken);
 
         var existingEmailSet = existingEmails.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        await dbContext.Users
+            .Where(user => (user.Email == "manager@cinema.com"
+                    || user.Email == "staff1@cinema.com"
+                    || user.Email == "staff2@cinema.com")
+                && user.CinemaID != 1)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(user => user.CinemaID, 1),
+                cancellationToken);
+
         var missingUsers = users
             .Where(user => !existingEmailSet.Contains(user.Email))
             .ToArray();

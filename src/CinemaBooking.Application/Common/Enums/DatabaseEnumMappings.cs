@@ -54,7 +54,7 @@ public static class DatabaseEnumMappings
     public static readonly IReadOnlyDictionary<string, string> ProductTypes =
         EnumValueMapper.CreateMappings("combo", "snack", "beverage", "dessert");
     public static readonly IReadOnlyDictionary<string, string> ProductStatuses =
-        EnumValueMapper.CreateMappings("in_stock", "low_stock", "out_of_stock", "inactive");
+        EnumValueMapper.CreateMappings("active", "inactive");
     public static readonly IReadOnlyDictionary<string, string> VoucherDiscountTypes =
         EnumValueMapper.CreateMappings("percent", "fixed");
     public static readonly IReadOnlyDictionary<string, string> VoucherCategories =

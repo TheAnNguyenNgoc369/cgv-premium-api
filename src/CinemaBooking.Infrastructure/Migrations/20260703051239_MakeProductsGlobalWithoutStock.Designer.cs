@@ -4,6 +4,7 @@ using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CinemaBooking.Infrastructure.Migrations
 {
     [DbContext(typeof(CinemaBookingDbContext))]
-    partial class CinemaBookingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260703051239_MakeProductsGlobalWithoutStock")]
+    partial class MakeProductsGlobalWithoutStock
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -506,10 +509,7 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.HasKey("PointID");
 
-                    b.HasIndex("BookingID")
-                        .IsUnique()
-                        .HasDatabaseName("UQ_LoyaltyPoints_BookingID_Earned")
-                        .HasFilter("[TransactionType] = 'earn' AND [BookingID] IS NOT NULL");
+                    b.HasIndex("BookingID");
 
                     b.HasIndex("UserID")
                         .HasDatabaseName("IX_LoyaltyPoints_UserID");

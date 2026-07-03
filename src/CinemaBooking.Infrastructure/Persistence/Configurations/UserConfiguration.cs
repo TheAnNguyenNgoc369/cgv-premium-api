@@ -41,6 +41,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.ToTable(t =>
         {
+            t.HasTrigger("TR_Users_TotalPoints_Adjustment");
             t.HasCheckConstraint("CK_Users_Role", "[Role] IN ('customer', 'staff', 'admin', 'manager')");
             t.HasCheckConstraint("CK_Users_Status", "[Status] IN ('unverified', 'active', 'locked', 'inactive')");
             t.HasCheckConstraint("CK_Users_TotalPoints", "[TotalPoints] >= 0");

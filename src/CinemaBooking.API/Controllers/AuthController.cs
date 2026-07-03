@@ -1,8 +1,11 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Diagnostics;
 using CinemaBooking.API.Contracts.Auth;
+using CinemaBooking.API.Contracts.Cinemas;
 using CinemaBooking.API.Services;
 using CinemaBooking.Application.Authentication;
+using CinemaBooking.Application.Common.Enums;
+using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -185,7 +188,14 @@ public sealed class AuthController : ControllerBase
                 result.User.Email,
                 result.User.Role,
                 result.User.Status,
-                result.User.AvatarURL
+                result.User.AvatarURL,
+                cinema = result.User.Role is Roles.Manager or Roles.Staff && result.User.Cinema is not null
+                    ? new CinemaSummaryResponse(
+                        result.User.Cinema.CinemaID,
+                        result.User.Cinema.CinemaName,
+                        result.User.Cinema.Address,
+                        EnumValueMapper.ToApiValue(result.User.Cinema.Status))
+                    : null
             }
         });
     }

@@ -1,70 +1,67 @@
 using CinemaBooking.API.Controllers;
-using CinemaBooking.Application.Common.Security;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Products;
 
 namespace CinemaBooking.API.Tests;
 
-public sealed class ProductCinemaScopeTests
+public sealed class ProductGlobalTests
 {
     [Fact]
-    public void Product_HasRequiredCinemaId()
+    public void Product_DoesNotHaveCinemaOrStockFields()
     {
         var property = typeof(Product).GetProperty("CinemaID");
 
-        Assert.NotNull(property);
-        Assert.Equal(typeof(int), property!.PropertyType);
+        Assert.Null(property);
+        Assert.Null(typeof(Product).GetProperty("StockQuantity"));
+        Assert.Null(typeof(Product).GetProperty("IsOnMenu"));
     }
 
     [Fact]
-    public void AvailableProducts_RequiresCinemaId()
+    public void AvailableProducts_DoesNotRequireCinemaId()
     {
         var method = typeof(ProductController).GetMethod(
             nameof(ProductController.GetAvailableProducts))!;
 
-        Assert.Contains(method.GetParameters(), parameter =>
-            parameter.Name == "cinemaId" && parameter.ParameterType == typeof(int));
+        Assert.DoesNotContain(method.GetParameters(), parameter => parameter.Name == "cinemaId");
     }
 
     [Fact]
-    public void ProductController_UsesManagerCinemaScopeService()
+    public void ProductController_OnlyRequiresProductService()
     {
         var constructor = Assert.Single(typeof(ProductController).GetConstructors());
 
-        Assert.Contains(constructor.GetParameters(), parameter =>
-            parameter.ParameterType == typeof(IManagerCinemaScopeService));
+        Assert.Equal(typeof(IProductService), Assert.Single(constructor.GetParameters()).ParameterType);
     }
 
     [Fact]
-    public async Task CreateProduct_AssignsManagerCinema()
+    public async Task CreateProduct_DefaultsToActive()
     {
         var repository = new StubProductRepository();
         var service = new ProductService(repository, new StubImageStorageService());
 
         var result = await service.CreateProductAsync(
-            2, "Popcorn", "snack", null, 50_000, 10, null, true, false);
+            "Popcorn", "snack", null, 50_000, null, false);
 
         Assert.True(result.Succeeded);
-        Assert.Equal(2, result.Product!.CinemaID);
-        Assert.Equal(2, repository.NameCheckCinemaId);
+        Assert.Equal("active", result.Product!.Status);
     }
 
     [Fact]
-    public async Task UpdateProduct_FromAnotherCinema_ReturnsForbidden()
+    public async Task UpdateProduct_InactiveStatus_IsAccepted()
     {
         var repository = new StubProductRepository
         {
-            ExistingProduct = new Product { ItemID = 1, CinemaID = 1, ItemName = "Popcorn" }
+            ExistingProduct = new Product { ItemID = 1, ItemName = "Popcorn" }
         };
         var service = new ProductService(repository, new StubImageStorageService());
 
         var result = await service.UpdateProductAsync(
-            1, 2, "Popcorn", "snack", null, 50_000, 10, null, true, false, "in_stock");
+            1, "Popcorn", "snack", null, 50_000, null, false, "inactive");
 
-        Assert.False(result.Succeeded);
-        Assert.Equal(CinemaScopeMessages.AccessDenied, result.ErrorMessage);
-        Assert.False(repository.UpdateCalled);
+        Assert.True(result.Succeeded);
+        Assert.Equal("inactive", result.Product!.Status);
+        Assert.True(repository.UpdateCalled);
     }
 
     [Fact]
@@ -72,14 +69,14 @@ public sealed class ProductCinemaScopeTests
     {
         var repository = new StubProductRepository
         {
-            ExistingProduct = new Product { ItemID = 1, CinemaID = 2, ItemName = "Popcorn" }
+            ExistingProduct = new Product { ItemID = 1, ItemName = "Popcorn" }
         };
         var imageStorage = new StubImageStorageService();
         var service = new ProductService(repository, imageStorage);
 
         await using var stream = new MemoryStream([1, 2, 3]);
         var result = await service.UpdateProductImageAsync(
-            1, 2, stream, "popcorn.png", "image/png", stream.Length);
+            1, stream, "popcorn.png", "image/png", stream.Length);
 
         Assert.True(result.Succeeded);
         Assert.Equal("https://example.com/products/popcorn.png", result.Product!.ImageURL);
@@ -87,45 +84,22 @@ public sealed class ProductCinemaScopeTests
         Assert.Equal("products", imageStorage.UploadFolder);
     }
 
-    [Fact]
-    public async Task UpdateProductImage_FromAnotherCinema_ReturnsForbidden()
-    {
-        var repository = new StubProductRepository
-        {
-            ExistingProduct = new Product { ItemID = 1, CinemaID = 1, ItemName = "Popcorn" }
-        };
-        var imageStorage = new StubImageStorageService();
-        var service = new ProductService(repository, imageStorage);
-
-        await using var stream = new MemoryStream([1]);
-        var result = await service.UpdateProductImageAsync(
-            1, 2, stream, "popcorn.png", "image/png", stream.Length);
-
-        Assert.False(result.Succeeded);
-        Assert.Equal(CinemaScopeMessages.AccessDenied, result.ErrorMessage);
-        Assert.Null(imageStorage.UploadFolder);
-    }
-
     private sealed class StubProductRepository : IProductRepository
     {
         public Product? ExistingProduct { get; init; }
-        public int? NameCheckCinemaId { get; private set; }
         public bool UpdateCalled { get; private set; }
 
-        public Task<List<Product>> GetProductsAsync(
-            int cinemaId, CancellationToken cancellationToken = default) =>
+        public Task<List<Product>> GetProductsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new List<Product>());
-        public Task<List<Product>> GetAvailableProductsAsync(
-            int cinemaId, CancellationToken cancellationToken = default) =>
+        public Task<List<Product>> GetAvailableProductsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new List<Product>());
         public Task<Product?> GetByIdAsync(
             int itemId, CancellationToken cancellationToken = default) =>
             Task.FromResult(ExistingProduct);
         public Task<bool> NameExistsAsync(
-            int cinemaId, string itemName, int? excludingItemId = null,
+            string itemName, int? excludingItemId = null,
             CancellationToken cancellationToken = default)
         {
-            NameCheckCinemaId = cinemaId;
             return Task.FromResult(false);
         }
         public Task<Product> AddAsync(

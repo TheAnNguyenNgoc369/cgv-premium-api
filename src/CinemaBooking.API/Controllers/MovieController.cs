@@ -101,7 +101,7 @@ public sealed class MovieController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = Roles.Manager)]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> CreateMovie(
         [FromBody] CreateMovieRequest request,
         CancellationToken cancellationToken)
@@ -135,7 +135,7 @@ public sealed class MovieController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    [Authorize(Roles = Roles.Manager)]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> UpdateMovie(
         int id,
         [FromBody] UpdateMovieRequest request,
@@ -172,7 +172,7 @@ public sealed class MovieController : ControllerBase
     }
 
     [HttpPut("{id:int}/poster")]
-    [Authorize(Roles = Roles.Manager)]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> UpdatePoster(
         int id,
         [FromForm] CinemaBooking.API.Contracts.Images.ImageUploadRequest request,
@@ -199,7 +199,7 @@ public sealed class MovieController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = Roles.Manager)]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> DeleteMovie(
         int id,
         CancellationToken cancellationToken)
