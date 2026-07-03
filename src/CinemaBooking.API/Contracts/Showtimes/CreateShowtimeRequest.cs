@@ -5,5 +5,5 @@ namespace CinemaBooking.API.Contracts.Showtimes;
 public sealed record CreateShowtimeRequest(
     int MovieId,
     int RoomId,
-    [VietnamDateTimeOffset] DateTimeOffset StartTime,
+    [property: VietnamDateTimeOffset] DateTimeOffset StartTime,
     decimal BasePrice);
