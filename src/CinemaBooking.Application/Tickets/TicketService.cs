@@ -37,10 +37,26 @@ public sealed class TicketService : ITicketService
         }
     }
 
-    public async Task<List<Ticket>> GetTicketsByBookingIdAsync(
+    public async Task<List<Ticket>?> GetTicketsByBookingIdAsync(
         int bookingId,
+        int actorUserId,
+        bool isStaff,
         CancellationToken cancellationToken = default)
     {
+        var booking = await _bookingRepository.GetBookingByIdAsync(bookingId, cancellationToken);
+        if (booking is null)
+            return null;
+
+        if (!isStaff && booking.UserID != actorUserId)
+            return null;
+
         return await _ticketRepository.GetTicketsByBookingIdAsync(bookingId, cancellationToken);
+    }
+
+    public async Task<List<Ticket>> GetMyTicketsAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _ticketRepository.GetTicketsByUserIdAsync(userId, cancellationToken);
     }
 }

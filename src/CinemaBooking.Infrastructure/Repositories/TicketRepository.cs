@@ -55,4 +55,20 @@ public sealed class TicketRepository : ITicketRepository
                 .ThenInclude(bs => bs.Seat)
             .FirstOrDefaultAsync(t => t.QRCode == qrCode, cancellationToken);
     }
+
+    public async Task<List<Ticket>> GetTicketsByUserIdAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Tickets
+            .Include(t => t.BookingSeat)
+                .ThenInclude(bs => bs.Seat)
+            .Include(t => t.BookingSeat)
+                .ThenInclude(bs => bs.Booking)
+            .Where(t => t.BookingSeat.Booking.UserID == userId)
+            .OrderByDescending(t => t.BookingSeat.Booking.BookingDate)
+                .ThenBy(t => t.BookingSeat.Seat.SeatRow)
+                .ThenBy(t => t.BookingSeat.Seat.SeatCol)
+            .ToListAsync(cancellationToken);
+    }
 }

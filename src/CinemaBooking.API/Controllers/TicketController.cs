@@ -24,7 +24,14 @@ public sealed class TicketController : ControllerBase
         int bookingId,
         CancellationToken cancellationToken)
     {
-        var tickets = await _ticketService.GetTicketsByBookingIdAsync(bookingId, cancellationToken);
+        var userId = int.Parse(User.FindFirst("userId")!.Value);
+        var isStaff = User.IsInRole(Roles.Staff);
+
+        var tickets = await _ticketService.GetTicketsByBookingIdAsync(
+            bookingId, userId, isStaff, cancellationToken);
+
+        if (tickets is null)
+            return NotFound(new { success = false, message = "Booking not found or you don't have permission to view these tickets." });
 
         if (!tickets.Any())
             return NotFound(new { success = false, message = "No tickets found for this booking." });
@@ -40,5 +47,15 @@ public sealed class TicketController : ControllerBase
         )).ToList();
 
         return Ok(new { success = true, tickets = response });
+    }
+
+    [HttpGet("my")]
+    [Authorize(Roles = Roles.Customer)]
+    public async Task<IActionResult> GetMyTickets(CancellationToken cancellationToken)
+    {
+        var userId = int.Parse(User.FindFirst("userId")!.Value);
+        var tickets = await _ticketService.GetMyTicketsAsync(userId, cancellationToken);
+
+        return Ok(new { success = true, tickets, count = tickets.Count });
     }
 }
