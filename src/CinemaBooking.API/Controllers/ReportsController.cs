@@ -37,7 +37,9 @@ public sealed class ReportsController : ControllerBase
     private async Task<IActionResult> Run(DateOnly? start, DateOnly? end, int? requestedCinema,
         Func<DateTime,DateTime,int?,int,string?,Task<IActionResult>> action)
     {
-        if (!start.HasValue || !end.HasValue || start > end) return BadRequest(new { success=false,message="StartDate and EndDate are required and StartDate must not be after EndDate" });
+        if (!start.HasValue) return BadRequest(new { success = false, message = "startDate is required. Expected format: yyyy-MM-dd." });
+        if (!end.HasValue) return BadRequest(new { success = false, message = "endDate is required. Expected format: yyyy-MM-dd." });
+        if (start > end) return BadRequest(new { success = false, message = "StartDate must not be after EndDate" });
         if (!int.TryParse(User.FindFirst("userId")?.Value,out var userId)) return Unauthorized();
         int? cinema = requestedCinema;
         if (User.IsInRole(Roles.Manager)) { var assigned=await _scope.GetAssignedCinemaIdAsync(userId); if (!assigned.HasValue) return StatusCode(403,new { success=false,message="Manager is not assigned to a cinema" });

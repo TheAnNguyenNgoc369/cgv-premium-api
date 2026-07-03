@@ -34,14 +34,18 @@ public sealed class VoucherService : IVoucherService
         string? fileName, string? contentType, long fileSize, string? ip, CancellationToken ct)
     {
         var code = c.VoucherCode?.Trim().ToUpperInvariant();
-        if (string.IsNullOrWhiteSpace(code) || code.Length > 50) return Fail("VoucherCode is required and must not exceed 50 characters");
+        if (string.IsNullOrWhiteSpace(code)) return Fail("voucherCode is required and cannot be null.");
+        if (code.Length > 50) return Fail("voucherCode is invalid. Maximum length is 50 characters.");
         var type = c.DiscountType?.Trim().ToLowerInvariant();
-        if (type is not ("percent" or "fixed")) return Fail("DiscountType must be percent or fixed");
-        if (c.DiscountValue < 0 || type == "percent" && c.DiscountValue > 100) return Fail("DiscountValue is invalid");
-        if (c.Category is not null && !Categories.Contains(c.Category)) return Fail("Category is invalid");
-        if (c.MinOrderValue < 0 || c.MaxUses <= 0) return Fail("MinOrderValue and MaxUses are invalid");
-        if (c.ValidFrom.Offset != TimeSpan.FromHours(7) || c.ValidUntil.Offset != TimeSpan.FromHours(7)) return Fail("Voucher dates must use +07:00 offset");
-        if (c.ValidFrom >= c.ValidUntil) return Fail("ValidFrom must be before ValidUntil");
+        if (string.IsNullOrWhiteSpace(type)) return Fail("discountType is required and cannot be null.");
+        if (type is not ("percent" or "fixed")) return Fail("discountType is invalid. Allowed values: percent, fixed.");
+        if (c.DiscountValue < 0 || type == "percent" && c.DiscountValue > 100) return Fail("discountValue must be between 0-100 for percent or >= 0 for fixed.");
+        if (c.Category is not null && !Categories.Contains(c.Category)) return Fail("category is invalid. Allowed values: Discount, Combo, Cashback.");
+        if (c.MinOrderValue < 0) return Fail("MinOrderValue must be greater than or equal to 0.");
+        if (c.MaxUses <= 0) return Fail("maxUses must be greater than 0.");
+        if (c.ValidFrom.Offset != TimeSpan.FromHours(7)) return Fail("validFrom is invalid. Use ISO 8601 format with +07:00.");
+        if (c.ValidUntil.Offset != TimeSpan.FromHours(7)) return Fail("validUntil is invalid. Use ISO 8601 format with +07:00.");
+        if (c.ValidFrom >= c.ValidUntil) return Fail("validUntil must be a date after validFrom (ISO 8601 format with +07:00).");
         Voucher? existing = null;
         if (id.HasValue) { existing = await _repository.GetByIdAsync(id.Value, ct); if (existing is null) return new(false, "Voucher not found", null, "not_found"); }
         if (existing is not null && !string.Equals(existing.VoucherCode, code, StringComparison.OrdinalIgnoreCase)

@@ -11,6 +11,7 @@ using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -27,7 +28,61 @@ public static class DependencyInjection
         services.AddControllers()
             .AddJsonOptions(options =>
                 options.JsonSerializerOptions.Converters.Add(
-                    new VietnamDateTimeJsonConverter()));
+                    new VietnamDateTimeJsonConverter()))
+            .ConfigureApiBehaviorOptions(options =>
+            {
+                options.InvalidModelStateResponseFactory = context =>
+                {
+                    var errorEntry = context.ModelState
+                        .Where(kvp => kvp.Value?.Errors.Count > 0)
+                        .Select(kvp => new { Key = kvp.Key, Error = kvp.Value?.Errors.First().ErrorMessage })
+                        .FirstOrDefault();
+
+                    string GetFieldName(string key)
+                    {
+                        var lastDot = key.LastIndexOf('.');
+                        return lastDot >= 0 ? key[(lastDot + 1)..] : key;
+                    }
+
+                    if (errorEntry?.Key is not null)
+                    {
+                        var fieldName = GetFieldName(errorEntry.Key);
+                        var errorText = errorEntry.Error ?? string.Empty;
+
+                        if (context.HttpContext?.Request.Path.StartsWithSegments("/api/v1/reports", StringComparison.OrdinalIgnoreCase) == true
+                            && (fieldName == "startDate" || fieldName == "endDate"))
+                        {
+                            return new BadRequestObjectResult(new { success = false, message = $"{fieldName} is required. Expected format: yyyy-MM-dd." });
+                        }
+
+                        if (context.HttpContext?.Request.Path.StartsWithSegments("/api/vouchers", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            var isRequiredError = errorText.Contains("required", StringComparison.OrdinalIgnoreCase)
+                                || errorText.Contains("cannot be null", StringComparison.OrdinalIgnoreCase)
+                                || errorText.Contains("required value", StringComparison.OrdinalIgnoreCase);
+
+                            if (isRequiredError)
+                            {
+                                return new BadRequestObjectResult(new { success = false, message = $"{fieldName} is required and cannot be null." });
+                            }
+
+                            var detail = fieldName switch
+                            {
+                                "category" => "Allowed values: Discount, Combo, Cashback.",
+                                "discountType" => "Allowed values: percent, fixed.",
+                                "discountValue" => "Must be between 0-100 for percent or >= 0 for fixed.",
+                                "validFrom" or "validUntil" => "Use ISO 8601 format (e.g. 2026-07-01T00:00:00+07:00).",
+                                "maxUses" => "maxUses must be greater than 0.",
+                                _ => "Please check the data constraints."
+                            };
+
+                            return new BadRequestObjectResult(new { success = false, message = $"{fieldName} is invalid. {detail}" });
+                        }
+                    }
+
+                    return new BadRequestObjectResult(new ValidationProblemDetails(context.ModelState));
+                };
+            });
 
         //Add Swagger
         services.AddEndpointsApiExplorer();
