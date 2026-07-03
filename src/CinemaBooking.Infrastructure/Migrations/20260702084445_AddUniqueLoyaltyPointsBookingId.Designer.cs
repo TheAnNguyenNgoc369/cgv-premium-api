@@ -4,6 +4,7 @@ using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CinemaBooking.Infrastructure.Migrations
 {
     [DbContext(typeof(CinemaBookingDbContext))]
-    partial class CinemaBookingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260702084445_AddUniqueLoyaltyPointsBookingId")]
+    partial class AddUniqueLoyaltyPointsBookingId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -70,7 +73,7 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.ToTable("AdminActionLog", null, t =>
                         {
-                            t.HasCheckConstraint("CK_AdminActionLog_ActionType", "[ActionType] IN ('lock_user','unlock_user','change_role','cancel_booking','refund_processed','payment_viewed','booking_created','account_status_changed','create_user','update_user','delete_user','deactivate_user','create_voucher','update_voucher','delete_voucher','view_revenue_report','export_report')");
+                            t.HasCheckConstraint("CK_AdminActionLog_ActionType", "[ActionType] IN ('lock_user','unlock_user','change_role','cancel_booking','refund_processed','payment_viewed','booking_created','account_status_changed','create_user','update_user','delete_user','deactivate_user')");
                         });
                 });
 
@@ -902,6 +905,9 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ItemID"));
 
+                    b.Property<int>("CinemaID")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -918,6 +924,11 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
+
+                    b.Property<bool>("IsOnMenu")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("ItemName")
                         .IsRequired()
@@ -937,7 +948,12 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)")
-                        .HasDefaultValue("active");
+                        .HasDefaultValue("in_stock");
+
+                    b.Property<int>("StockQuantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -946,9 +962,12 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.HasKey("ItemID");
 
-                    b.HasIndex("ItemName")
+                    b.HasIndex("CinemaID")
+                        .HasDatabaseName("IX_Product_CinemaID");
+
+                    b.HasIndex("CinemaID", "ItemName")
                         .IsUnique()
-                        .HasDatabaseName("UQ_Product_ItemName");
+                        .HasDatabaseName("UQ_Product_CinemaID_ItemName");
 
                     b.ToTable("Product", null, t =>
                         {
@@ -956,7 +975,9 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                             t.HasCheckConstraint("CK_Product_Price", "[Price] >= 0");
 
-                            t.HasCheckConstraint("CK_Product_Status", "[Status] IN ('active', 'inactive')");
+                            t.HasCheckConstraint("CK_Product_Status", "[Status] IN ('in_stock', 'low_stock', 'out_of_stock', 'inactive')");
+
+                            t.HasCheckConstraint("CK_Product_StockQuantity", "[StockQuantity] >= 0");
                         });
                 });
 
@@ -1479,10 +1500,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("ImagePublicId")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -1853,6 +1870,18 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Navigation("Payment");
                 });
 
+            modelBuilder.Entity("CinemaBooking.Domain.Entities.Product", b =>
+                {
+                    b.HasOne("CinemaBooking.Domain.Entities.Cinema", "Cinema")
+                        .WithMany("Products")
+                        .HasForeignKey("CinemaID")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("FK_Product_Cinema");
+
+                    b.Navigation("Cinema");
+                });
+
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Refund", b =>
                 {
                     b.HasOne("CinemaBooking.Domain.Entities.Booking", "Booking")
@@ -2080,6 +2109,8 @@ namespace CinemaBooking.Infrastructure.Migrations
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Cinema", b =>
                 {
+                    b.Navigation("Products");
+
                     b.Navigation("Rooms");
 
                     b.Navigation("Users");

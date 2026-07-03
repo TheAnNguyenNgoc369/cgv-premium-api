@@ -82,6 +82,9 @@ public sealed class MembershipService : IMembershipService
         decimal finalAmount,
         CancellationToken cancellationToken = default)
     {
+        if (await _loyaltyRepository.HasPointsForBookingAsync(bookingId, cancellationToken))
+            return;
+
         var pointsEarned = (int)(finalAmount * MembershipTiers.PointsPerVnd);
 
         if (pointsEarned <= 0)
