@@ -13,10 +13,12 @@ namespace CinemaBooking.API.Controllers;
 public sealed class MovieController : ControllerBase
 {
     private readonly IMovieService _movieService;
+    private readonly CinemaBooking.Application.Genres.IGenreService _genreService;
 
-    public MovieController(IMovieService movieService)
+    public MovieController(IMovieService movieService, CinemaBooking.Application.Genres.IGenreService genreService)
     {
         _movieService = movieService;
+        _genreService = genreService;
     }
 
     [HttpGet]
@@ -24,6 +26,9 @@ public sealed class MovieController : ControllerBase
     public async Task<IActionResult> GetMovies(
         [FromQuery] string? status = null,
         [FromQuery] string? genreId = null,
+        [FromQuery] string? genreName = null,
+        [FromQuery] int pageIndex = 1,
+        [FromQuery] int pageSize = 10,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseGenreIds(genreId, out var genreIds))
@@ -35,11 +40,74 @@ public sealed class MovieController : ControllerBase
             });
         }
 
+        if (pageIndex <= 0 || pageSize <= 0)
+        {
+            return BadRequest(new { success = false, message = "pageIndex and pageSize must be positive integers." });
+        }
+
+        if (string.IsNullOrWhiteSpace(genreId) && !string.IsNullOrWhiteSpace(genreName))
+        {
+            var names = TryParseGenreNames(genreName);
+            if (names.Count > 0)
+            {
+                var allGenres = await _genreService.GetGenresAsync(cancellationToken);
+                var matching = allGenres
+                    .Where(g => names.Contains(g.GenreName, StringComparer.OrdinalIgnoreCase))
+                    .Select(g => g.GenreID)
+                    .ToList();
+
+                genreIds = matching;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var statusNormalized = status.Trim();
+            if (!EnumValueMapper.Validate(statusNormalized, "Status", DatabaseEnumMappings.MovieStatuses).Succeeded)
+            {
+                var allowed = DatabaseEnumMappings.MovieStatuses.Values.ToList();
+                var message = FormatAllowedList("Status must be", allowed);
+                return BadRequest(new { success = false, message });
+            }
+        }
+
         var movies = await _movieService.GetMoviesAsync(status, genreIds, cancellationToken);
 
-        var response = movies.Select(ToListResponse);
+        var totalCount = movies.Count;
+        var items = movies
+            .Skip((pageIndex - 1) * pageSize)
+            .Take(pageSize)
+            .Select(ToListResponse)
+            .ToList();
 
-        return Ok(response);
+        return Ok(new
+        {
+            items,
+            totalCount,
+            pageIndex,
+            pageSize
+        });
+    }
+
+    private static List<string> TryParseGenreNames(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return new List<string>();
+
+        return value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static string FormatAllowedList(string prefix, List<string> allowed)
+    {
+        if (allowed == null || allowed.Count == 0) return prefix;
+        if (allowed.Count == 1) return $"{prefix} {allowed[0]}";
+        if (allowed.Count == 2) return $"{prefix} {allowed[0]} or {allowed[1]}";
+
+        var allButLast = string.Join(", ", allowed.Take(allowed.Count - 1));
+        return $"{prefix} {allButLast}, or {allowed.Last()}";
     }
 
     private static bool TryParseGenreIds(string? value, out IReadOnlyCollection<int> genreIds)
