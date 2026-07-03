@@ -4,6 +4,7 @@ using CinemaBooking.Application.Contracts.Payment;
 using CinemaBooking.Application.Invoices;
 using CinemaBooking.Application.Payments.VNPay;
 using CinemaBooking.Application.Payments.PayOS;
+using CinemaBooking.Application.Tickets;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 
@@ -18,26 +19,35 @@ public sealed class PaymentService : IPaymentService
     private readonly IPaymentRepository _paymentRepository;
     private readonly IWalletRepository _walletRepository;
     private readonly IBookingRepository _bookingRepository;
+    private readonly IUserRepository _userRepository;
     private readonly IVNPayService _vnpayService;
     private readonly IPayOSService _payOSService;
     private readonly IInvoiceService _invoiceService;
+    private readonly IMembershipService _membershipService;
+    private readonly ITicketService _ticketService;
     private readonly IUnitOfWork _unitOfWork;
 
     public PaymentService(
         IPaymentRepository paymentRepository,
         IWalletRepository walletRepository,
         IBookingRepository bookingRepository,
+        IUserRepository userRepository,
         IVNPayService vnpayService,
         IPayOSService payOSService,
         IInvoiceService invoiceService,
+        IMembershipService membershipService,
+        ITicketService ticketService,
         IUnitOfWork unitOfWork)
     {
         _paymentRepository = paymentRepository;
         _walletRepository = walletRepository;
         _bookingRepository = bookingRepository;
+        _userRepository = userRepository;
         _vnpayService = vnpayService;
         _payOSService = payOSService;
         _invoiceService = invoiceService;
+        _membershipService = membershipService;
+        _ticketService = ticketService;
         _unitOfWork = unitOfWork;
     }
 
@@ -475,6 +485,18 @@ public sealed class PaymentService : IPaymentService
     {
         await _bookingRepository.UpdateBookingStatusAsync(
             booking.BookingID, BookingStatus.Paid, cancellationToken);
+
+        if (booking.UserID.HasValue)
+        {
+            var user = await _userRepository.GetByIdAsync(booking.UserID.Value, cancellationToken);
+            if (user?.Role == Roles.Customer)
+            {
+                await _membershipService.AddPointsAfterPaymentSuccessAsync(
+                    booking.UserID.Value, booking.BookingID, booking.FinalAmount, cancellationToken);
+            }
+        }
+
+        await _ticketService.CreateTicketsForBookingAsync(booking.BookingID, cancellationToken);
     }
 
     private static PaymentOperationResult? ValidateBookingForPayment(

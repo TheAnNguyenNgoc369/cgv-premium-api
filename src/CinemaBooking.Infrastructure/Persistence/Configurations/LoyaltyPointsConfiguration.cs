@@ -18,6 +18,11 @@ public class LoyaltyPointsConfiguration : IEntityTypeConfiguration<LoyaltyPoints
 
         builder.HasIndex(p => p.UserID).HasDatabaseName("IX_LoyaltyPoints_UserID");
 
+        builder.HasIndex(p => p.BookingID)
+            .IsUnique()
+            .HasDatabaseName("UQ_LoyaltyPoints_BookingID_Earned")
+            .HasFilter("[TransactionType] = 'earn' AND [BookingID] IS NOT NULL");
+
         builder.HasOne(p => p.User)
             .WithMany(u => u.LoyaltyPoints)
             .HasForeignKey(p => p.UserID)

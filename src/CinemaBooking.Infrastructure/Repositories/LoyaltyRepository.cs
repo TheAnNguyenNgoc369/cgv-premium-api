@@ -126,4 +126,14 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
                 await connection.CloseAsync();
         }
     }
+
+    public async Task<bool> HasPointsForBookingAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.LoyaltyPoints
+            .AnyAsync(lp => lp.BookingID == bookingId
+                         && lp.TransactionType == LoyaltyTransactionTypes.Earned,
+                      cancellationToken);
+    }
 }
