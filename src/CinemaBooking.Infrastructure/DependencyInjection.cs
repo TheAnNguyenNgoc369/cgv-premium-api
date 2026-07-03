@@ -63,6 +63,7 @@ public static class DependencyInjection
         services.AddScoped<IImageStorageService, CloudinaryImageStorageService>();
         services.AddScoped<IPayOSService, PayOSService>();
         services.AddHostedService<SeatHoldExpirationJob>();
+        services.AddHostedService<ShowtimeCompletionJob>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScopedByConvention(typeof(DependencyInjection).Assembly, "Repository");
 
