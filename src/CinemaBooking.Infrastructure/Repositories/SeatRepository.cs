@@ -281,8 +281,7 @@ public sealed class SeatRepository : ISeatRepository
         {
             if (requestedSeats.Remove((existingSeat.SeatRow, existingSeat.SeatCol), out var requestedSeat))
             {
-                existingSeat.SeatTypeID = requestedSeat.SeatTypeID;
-                existingSeat.Status = requestedSeat.Status;
+                ApplyLayoutValues(existingSeat, requestedSeat);
                 continue;
             }
 
@@ -302,6 +301,13 @@ public sealed class SeatRepository : ISeatRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return await GetSeatsByRoomAsync(roomId, cancellationToken);
+    }
+
+    internal static void ApplyLayoutValues(Seat existingSeat, Seat requestedSeat)
+    {
+        existingSeat.SeatTypeID = requestedSeat.SeatTypeID;
+        existingSeat.Status = requestedSeat.Status;
+        existingSeat.IsGap = requestedSeat.IsGap;
     }
 
     private async Task<HashSet<int>> GetRelatedSeatIdsAsync(

@@ -60,6 +60,15 @@ public sealed class RoomController : ControllerBase
             return NotFound(new { success = false, message = "Room not found" });
         }
 
+        if (User.IsInRole(Roles.Manager))
+        {
+            var managerCinemaId = await GetManagerCinemaIdAsync(cancellationToken);
+            if (!managerCinemaId.HasValue || room.CinemaID != managerCinemaId.Value)
+            {
+                return CinemaScopeForbidden();
+            }
+        }
+
         return Ok(ToResponse(room));
     }
 

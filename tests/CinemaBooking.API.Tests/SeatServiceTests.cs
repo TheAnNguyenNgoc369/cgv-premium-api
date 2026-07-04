@@ -63,12 +63,37 @@ public sealed class SeatServiceTests
         Assert.Equal(0, repository.AddCallCount);
     }
 
+    [Fact]
+    public async Task BulkUpdate_WhenAnySeatHasRelations_DoesNotPartiallyUpdateEarlierSeats()
+    {
+        var repository = new StubSeatRepository
+        {
+            Room = new Room { RoomID = 1, CinemaID = 1 },
+            SelectedSeats =
+            [
+                new Seat { SeatID = 1, RoomID = 1, SeatTypeID = 1, Status = "active" },
+                new Seat { SeatID = 2, RoomID = 1, SeatTypeID = 1, Status = "active" }
+            ],
+            RelatedSeatIds = [2]
+        };
+        var service = new SeatService(repository);
+
+        var result = await service.BulkUpdateAsync(
+            1, new SeatSelector("ids", ["1", "2"]), null, "INACTIVE", null);
+
+        Assert.False(result.Succeeded);
+        Assert.Empty(repository.UpdatedSeatIds);
+    }
+
     private sealed class StubSeatRepository : ISeatRepository
     {
         public Room? Room { get; set; }
         public SeatType? SeatType { get; set; }
         public int AddCallCount { get; private set; }
         public int ReplaceLayoutCallCount { get; private set; }
+        public List<Seat> SelectedSeats { get; init; } = [];
+        public HashSet<int> RelatedSeatIds { get; init; } = [];
+        public List<int> UpdatedSeatIds { get; } = [];
 
         public Task<List<Seat>> GetSeatsByRoomAsync(
             int roomId,
@@ -144,7 +169,7 @@ public sealed class SeatServiceTests
             int seatId,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(false);
+            return Task.FromResult(RelatedSeatIds.Contains(seatId));
         }
 
         public Task<List<Seat>> GetSeatsBySelectorAsync(
@@ -152,7 +177,7 @@ public sealed class SeatServiceTests
             SeatSelector selector,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new List<Seat>());
+            return Task.FromResult(SelectedSeats);
         }
 
         public Task<Seat> AddAsync(
@@ -173,7 +198,12 @@ public sealed class SeatServiceTests
             bool isGap,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            UpdatedSeatIds.Add(seatId);
+            var seat = SelectedSeats.First(item => item.SeatID == seatId);
+            seat.SeatTypeID = seatTypeId;
+            seat.Status = status;
+            seat.IsGap = isGap;
+            return Task.FromResult<Seat?>(seat);
         }
 
         public Task<bool> DeleteAsync(

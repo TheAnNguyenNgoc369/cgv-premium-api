@@ -306,6 +306,12 @@ public sealed class SeatService : ISeatService
         if (seats.Count == 0)
             return (true, null, []);
 
+        foreach (var seat in seats)
+        {
+            if (await _seatRepository.HasSeatRelationsAsync(seat.SeatID, cancellationToken))
+                return (false, "One or more seats have related booking or hold records", []);
+        }
+
         var normalizedStatus = status is not null
             ? NormalizeSeatStatus(status)
             : null;
@@ -317,9 +323,6 @@ public sealed class SeatService : ISeatService
 
         foreach (var seat in seats)
         {
-            if (await _seatRepository.HasSeatRelationsAsync(seat.SeatID, cancellationToken))
-                return (false, "One or more seats have related booking or hold records", []);
-
             var targetIsGap = isGap ?? seat.IsGap;
             var targetSeatTypeId = seat.SeatTypeID;
             var targetStatus = seat.Status;
@@ -396,7 +399,10 @@ public sealed class SeatService : ISeatService
         {
             if (await _seatRepository.HasSeatRelationsAsync(seat.SeatID, cancellationToken))
                 return (false, "One or more seats have related booking or hold records");
+        }
 
+        foreach (var seat in seats)
+        {
             var updatedSeat = await _seatRepository.UpdateAsync(
                 roomId,
                 seat.SeatID,

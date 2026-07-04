@@ -27,6 +27,9 @@ public sealed class RoomServiceScopeTests
         public int AddCallCount { get; private set; }
         public Task<List<Room>> GetRoomsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new List<Room>());
+        public Task<List<Room>> GetRoomsByCinemaIdAsync(
+            int cinemaId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new List<Room>());
         public Task<Room?> GetByIdAsync(int roomId, CancellationToken cancellationToken = default) =>
             Task.FromResult<Room?>(null);
         public Task<bool> CinemaExistsAsync(int cinemaId, CancellationToken cancellationToken = default) =>
