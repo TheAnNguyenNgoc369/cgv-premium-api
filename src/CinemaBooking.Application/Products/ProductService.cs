@@ -150,6 +150,9 @@ public sealed class ProductService : IProductService
             return (false, "ItemName must be unique", null);
         }
 
+        var oldImagePublicId = existingProduct.ImagePublicId;
+        var imageUrlChanged = !string.Equals(
+            existingProduct.ImageURL, imageUrl?.Trim(), StringComparison.Ordinal);
         var productToUpdate = new Product
         {
             ItemID = itemId,
@@ -163,6 +166,9 @@ public sealed class ProductService : IProductService
         };
 
         var updatedProduct = await _productRepository.UpdateAsync(productToUpdate, cancellationToken);
+
+        if (updatedProduct is not null && imageUrlChanged && !string.IsNullOrWhiteSpace(oldImagePublicId))
+            await TryDeleteImageAsync(oldImagePublicId);
 
         return updatedProduct is null
             ? (false, "Product not found", null)
@@ -247,6 +253,9 @@ public sealed class ProductService : IProductService
         }
 
         var deleted = await _productRepository.DeleteAsync(itemId, cancellationToken);
+
+        if (deleted && !string.IsNullOrWhiteSpace(existingProduct.ImagePublicId))
+            await TryDeleteImageAsync(existingProduct.ImagePublicId);
 
         return deleted
             ? (true, null)

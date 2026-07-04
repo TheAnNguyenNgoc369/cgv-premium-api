@@ -110,6 +110,43 @@ public sealed class ProductGlobalTests
         Assert.Contains("products/popcorn", imageStorage.DeletedPublicIds);
     }
 
+    [Fact]
+    public async Task UpdateProduct_WhenImageUrlChanges_DeletesOldManagedImage()
+    {
+        var repository = new StubProductRepository
+        {
+            ExistingProduct = new Product
+            {
+                ItemID = 1, ItemName = "Popcorn", ImageURL = "old-url",
+                ImagePublicId = "products/old"
+            }
+        };
+        var storage = new StubImageStorageService();
+        var service = new ProductService(repository, storage);
+
+        var result = await service.UpdateProductAsync(
+            1, "Popcorn", "snack", null, 50_000, "new-url", false, "active");
+
+        Assert.True(result.Succeeded);
+        Assert.Contains("products/old", storage.DeletedPublicIds);
+    }
+
+    [Fact]
+    public async Task DeleteUnusedProduct_DeletesManagedImageAfterDatabaseDelete()
+    {
+        var repository = new StubProductRepository
+        {
+            ExistingProduct = new Product { ItemID = 1, ImagePublicId = "products/old" }
+        };
+        var storage = new StubImageStorageService();
+        var service = new ProductService(repository, storage);
+
+        var result = await service.DeleteProductAsync(1);
+
+        Assert.True(result.Succeeded);
+        Assert.Contains("products/old", storage.DeletedPublicIds);
+    }
+
     private sealed class StubProductRepository : IProductRepository
     {
         public Product? ExistingProduct { get; init; }

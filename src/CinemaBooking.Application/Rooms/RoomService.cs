@@ -137,6 +137,11 @@ public sealed class RoomService : IRoomService
             return (false, "Room has active or upcoming schedules");
         }
 
+        if (await _roomRepository.HasAnyShowtimesAsync(roomId, cancellationToken))
+        {
+            return (false, "Room has showtime history");
+        }
+
         var deleted = await _roomRepository.DeleteAsync(roomId, cancellationToken);
 
         return deleted

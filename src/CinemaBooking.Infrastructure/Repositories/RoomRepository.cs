@@ -123,6 +123,12 @@ public sealed class RoomRepository : IRoomRepository
                 && s.Status == "scheduled", cancellationToken);
     }
 
+    public Task<bool> HasAnyShowtimesAsync(
+        int roomId,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.Showtimes.AsNoTracking()
+            .AnyAsync(showtime => showtime.RoomID == roomId, cancellationToken);
+
     public async Task<bool> DeleteAsync(
         int roomId,
         CancellationToken cancellationToken = default)

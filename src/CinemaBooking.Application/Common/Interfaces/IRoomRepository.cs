@@ -35,6 +35,10 @@ public interface IRoomRepository
         int roomId,
         CancellationToken cancellationToken = default);
 
+    Task<bool> HasAnyShowtimesAsync(
+        int roomId,
+        CancellationToken cancellationToken = default);
+
     Task<bool> DeleteAsync(int roomId, CancellationToken cancellationToken = default);
 
     Task<List<Room>> GetRoomsByCinemaIdAsync(
