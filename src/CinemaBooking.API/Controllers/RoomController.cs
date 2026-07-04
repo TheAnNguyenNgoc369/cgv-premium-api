@@ -26,9 +26,25 @@ public sealed class RoomController : ControllerBase
     [Authorize(Roles = Roles.Customer + "," + Roles.Staff + "," + Roles.Admin + "," + Roles.Manager)]
     public async Task<IActionResult> GetRooms(CancellationToken cancellationToken)
     {
-        var rooms = await _roomService.GetRoomsAsync(cancellationToken);
+        if (User.IsInRole(Roles.Manager))
+        {
+            var managerCinemaId = await GetManagerCinemaIdAsync(cancellationToken);
 
-        return Ok(rooms.Select(ToResponse));
+            if (!managerCinemaId.HasValue)
+            {
+                return CinemaScopeForbidden();
+            }
+
+            var rooms = await _roomService.GetRoomsByCinemaIdAsync(
+                managerCinemaId.Value,
+                cancellationToken);
+
+            return Ok(rooms.Select(ToResponse));
+        }
+
+        var allRooms = await _roomService.GetRoomsAsync(cancellationToken);
+
+        return Ok(allRooms.Select(ToResponse));
     }
 
     [HttpGet("{id:int}")]

@@ -19,6 +19,13 @@ public sealed class RoomService : IRoomService
         return _roomRepository.GetRoomsAsync(cancellationToken);
     }
 
+    public Task<List<Room>> GetRoomsByCinemaIdAsync(
+    int cinemaId,
+    CancellationToken cancellationToken = default)
+{
+    return _roomRepository.GetRoomsByCinemaIdAsync(cinemaId, cancellationToken);
+}
+
     public Task<Room?> GetRoomByIdAsync(
         int roomId,
         CancellationToken cancellationToken = default)

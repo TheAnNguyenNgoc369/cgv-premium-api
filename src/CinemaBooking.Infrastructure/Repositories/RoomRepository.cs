@@ -23,6 +23,17 @@ public sealed class RoomRepository : IRoomRepository
             .ToListAsync(cancellationToken);
     }
 
+    public Task<List<Room>> GetRoomsByCinemaIdAsync(
+        int cinemaId,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Rooms
+            .AsNoTracking()
+            .Where(r => r.CinemaID == cinemaId)
+            .OrderBy(r => r.RoomName)
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<Room?> GetByIdAsync(
         int roomId,
         CancellationToken cancellationToken = default)
