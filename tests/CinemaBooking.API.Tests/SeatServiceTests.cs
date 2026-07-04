@@ -85,6 +85,42 @@ public sealed class SeatServiceTests
         Assert.Empty(repository.UpdatedSeatIds);
     }
 
+    [Fact]
+    public async Task GenerateSeats_AboveMaximumRows_ReturnsValidationErrorWithoutWriting()
+    {
+        var repository = new StubSeatRepository
+        {
+            Room = new Room { RoomID = 1 },
+            SeatType = new SeatType { SeatTypeID = 1 }
+        };
+        var service = new SeatService(repository);
+
+        var result = await service.GenerateSeatsAsync(1, 101, 1, 1, "ACTIVE");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Rows must not exceed 100", result.ErrorMessage);
+        Assert.Equal(0, repository.ReplaceLayoutCallCount);
+    }
+
+    [Fact]
+    public async Task BulkUpdate_ValidMutation_ExecutesInsideTransaction()
+    {
+        var repository = new StubSeatRepository
+        {
+            Room = new Room { RoomID = 1 },
+            SelectedSeats =
+            [new Seat { SeatID = 1, RoomID = 1, SeatTypeID = 1, Status = "active" }]
+        };
+        var unitOfWork = new RecordingUnitOfWork();
+        var service = new SeatService(repository, unitOfWork);
+
+        var result = await service.BulkUpdateAsync(
+            1, new SeatSelector("ids", ["1"]), null, "INACTIVE", null);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(1, unitOfWork.ExecutionCount);
+    }
+
     private sealed class StubSeatRepository : ISeatRepository
     {
         public Room? Room { get; set; }
@@ -180,14 +216,14 @@ public sealed class SeatServiceTests
             return Task.FromResult(SelectedSeats);
         }
 
-        public Task<Seat> AddAsync(
+        public Task<Seat?> AddAsync(
             Seat seat,
             CancellationToken cancellationToken = default)
         {
             AddCallCount++;
             seat.SeatID = 1;
             seat.SeatType = SeatType!;
-            return Task.FromResult(seat);
+            return Task.FromResult<Seat?>(seat);
         }
 
         public Task<Seat?> UpdateAsync(
@@ -220,6 +256,19 @@ public sealed class SeatServiceTests
         {
             ReplaceLayoutCallCount++;
             return Task.FromResult(seats.ToList());
+        }
+    }
+
+    private sealed class RecordingUnitOfWork : IUnitOfWork
+    {
+        public int ExecutionCount { get; private set; }
+
+        public async Task<T> ExecuteInTransactionAsync<T>(
+            Func<Task<T>> operation,
+            CancellationToken cancellationToken = default)
+        {
+            ExecutionCount++;
+            return await operation();
         }
     }
 }

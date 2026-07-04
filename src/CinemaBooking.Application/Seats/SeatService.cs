@@ -7,11 +7,16 @@ namespace CinemaBooking.Application.Seats;
 
 public sealed class SeatService : ISeatService
 {
+    private const int MaxRows = 100;
+    private const int MaxColumns = 100;
+    private const int MaxPositions = MaxRows * MaxColumns;
     private readonly ISeatRepository _seatRepository;
+    private readonly IUnitOfWork? _unitOfWork;
 
-    public SeatService(ISeatRepository seatRepository)
+    public SeatService(ISeatRepository seatRepository, IUnitOfWork? unitOfWork = null)
     {
         _seatRepository = seatRepository;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<List<Seat>?> GetSeatsByRoomAsync(
@@ -106,7 +111,11 @@ public sealed class SeatService : ISeatService
                 IsGap = true
             };
 
-            return (true, null, await _seatRepository.AddAsync(gapSeat, cancellationToken));
+            var createdGap = await ExecuteInTransactionAsync(
+                () => _seatRepository.AddAsync(gapSeat, cancellationToken), cancellationToken);
+            return createdGap is null
+                ? (false, "Seat already exists in this room position", null)
+                : (true, null, createdGap);
         }
 
         var validation = await ValidateSeatAsync(
@@ -131,7 +140,11 @@ public sealed class SeatService : ISeatService
             IsGap = false
         };
 
-        return (true, null, await _seatRepository.AddAsync(createdSeat, cancellationToken));
+        var savedSeat = await ExecuteInTransactionAsync(
+            () => _seatRepository.AddAsync(createdSeat, cancellationToken), cancellationToken);
+        return savedSeat is null
+            ? (false, "Seat already exists in this room position", null)
+            : (true, null, savedSeat);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, SeatGenerateResult? Result)> GenerateSeatsAsync(
@@ -152,8 +165,14 @@ public sealed class SeatService : ISeatService
             return (false, "Room has active or upcoming schedules", null);
         if (rows <= 0)
             return (false, "Rows must be greater than 0", null);
+        if (rows > MaxRows)
+            return (false, $"Rows must not exceed {MaxRows}", null);
         if (columns <= 0)
             return (false, "Columns must be greater than 0", null);
+        if (columns > MaxColumns)
+            return (false, $"Columns must not exceed {MaxColumns}", null);
+        if ((long)rows * columns > MaxPositions)
+            return (false, $"Total positions must not exceed {MaxPositions}", null);
         if (await _seatRepository.CountSeatsByRoomAsync(roomId, cancellationToken) > 0)
             return (false, "Room already has seats", null);
 
@@ -183,7 +202,8 @@ public sealed class SeatService : ISeatService
             }
         }
 
-        var createdSeats = await _seatRepository.ReplaceLayoutAsync(roomId, seats, cancellationToken);
+        var createdSeats = await ExecuteInTransactionAsync(
+            () => _seatRepository.ReplaceLayoutAsync(roomId, seats, cancellationToken), cancellationToken);
         return (true, null, new SeatGenerateResult(rows, columns, createdSeats));
     }
 
@@ -257,12 +277,9 @@ public sealed class SeatService : ISeatService
                 return (false, "SeatTypeId is required.", null);
         }
 
-        var updatedSeat = await _seatRepository.UpdateAsync(
-            roomId,
-            seatId,
-            targetSeatTypeId,
-            targetStatus!,
-            targetIsGap,
+        var updatedSeat = await ExecuteInTransactionAsync(
+            () => _seatRepository.UpdateAsync(
+                roomId, seatId, targetSeatTypeId, targetStatus!, targetIsGap, cancellationToken),
             cancellationToken);
 
         return updatedSeat is null
@@ -288,6 +305,9 @@ public sealed class SeatService : ISeatService
             return (false, "Room has active or upcoming schedules", []);
         if (selector is null)
             return (false, "Selector is required", []);
+        var selectorError = ValidateSelector(selector);
+        if (selectorError is not null)
+            return (false, selectorError, []);
         if (seatTypeId is null && status is null && isGap is null)
             return (false, "At least one update field is required", []);
 
@@ -319,8 +339,7 @@ public sealed class SeatService : ISeatService
         if (status is not null && normalizedStatus is null)
             return (false, "Status must be ACTIVE, DISABLED, MAINTENANCE, or INACTIVE", []);
 
-        var updatedSeats = new List<Seat>();
-
+        var plannedUpdates = new List<(Seat Seat, int? SeatTypeId, string Status, bool IsGap)>();
         foreach (var seat in seats)
         {
             var targetIsGap = isGap ?? seat.IsGap;
@@ -331,13 +350,12 @@ public sealed class SeatService : ISeatService
             {
                 if (seatTypeId is not null)
                     return (false, "Cannot set SeatTypeId for a gap seat", []);
-
                 targetSeatTypeId = null;
                 targetStatus = "inactive";
             }
             else
             {
-                if (seat.IsGap && !targetIsGap)
+                if (seat.IsGap)
                 {
                     if (seatTypeId is null)
                         return (false, "SeatTypeId is required when converting a gap into a seat.", []);
@@ -347,32 +365,32 @@ public sealed class SeatService : ISeatService
 
                 if (seatTypeId is not null)
                     targetSeatTypeId = seatType!.SeatTypeID;
-
                 if (normalizedStatus is not null)
                     targetStatus = normalizedStatus;
-
-                if (seat.IsGap && targetSeatTypeId is null)
+                if (targetSeatTypeId is null)
                     return (false, "SeatTypeId is required.", []);
             }
 
-            if (targetIsGap && targetStatus != "inactive")
-                return (false, "Gap seats must be inactive", []);
-
-            var updatedSeat = await _seatRepository.UpdateAsync(
-                roomId,
-                seat.SeatID,
-                targetSeatTypeId,
-                targetStatus,
-                targetIsGap,
-                cancellationToken);
-
-            if (updatedSeat is null)
-                return (false, "Seat not found", []);
-
-            updatedSeats.Add(updatedSeat);
+            plannedUpdates.Add((seat, targetSeatTypeId, targetStatus, targetIsGap));
         }
 
-        return (true, null, updatedSeats);
+        return await ExecuteInTransactionAsync(async () =>
+        {
+            var updatedSeats = new List<Seat>();
+            foreach (var update in plannedUpdates)
+            {
+                var updatedSeat = await _seatRepository.UpdateAsync(
+                    roomId, update.Seat.SeatID, update.SeatTypeId,
+                    update.Status, update.IsGap, cancellationToken);
+
+                if (updatedSeat is null)
+                    throw new InvalidOperationException("Seat disappeared during bulk update.");
+
+                updatedSeats.Add(updatedSeat);
+            }
+
+            return (true, (string?)null, updatedSeats);
+        }, cancellationToken);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> BulkDeleteAsync(
@@ -390,6 +408,9 @@ public sealed class SeatService : ISeatService
             return (false, "Room has active or upcoming schedules");
         if (selector is null)
             return (false, "Selector is required");
+        var selectorError = ValidateSelector(selector);
+        if (selectorError is not null)
+            return (false, selectorError);
 
         var seats = await _seatRepository.GetSeatsBySelectorAsync(roomId, selector, cancellationToken);
         if (seats.Count == 0)
@@ -401,21 +422,19 @@ public sealed class SeatService : ISeatService
                 return (false, "One or more seats have related booking or hold records");
         }
 
-        foreach (var seat in seats)
+        return await ExecuteInTransactionAsync(async () =>
         {
-            var updatedSeat = await _seatRepository.UpdateAsync(
-                roomId,
-                seat.SeatID,
-                seat.SeatTypeID,
-                "inactive",
-                seat.IsGap,
-                cancellationToken);
+            foreach (var seat in seats)
+            {
+                var updatedSeat = await _seatRepository.UpdateAsync(
+                    roomId, seat.SeatID, seat.SeatTypeID, "inactive", seat.IsGap, cancellationToken);
 
-            if (updatedSeat is null)
-                return (false, "Seat not found");
-        }
+                if (updatedSeat is null)
+                    throw new InvalidOperationException("Seat disappeared during bulk delete.");
+            }
 
-        return (true, null);
+            return (true, (string?)null);
+        }, cancellationToken);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> DeleteSeatAsync(
@@ -445,7 +464,9 @@ public sealed class SeatService : ISeatService
             return (false, "Seat has related booking or hold records");
         }
 
-        return await _seatRepository.DeleteAsync(seatId, cancellationToken)
+        var deleted = await ExecuteInTransactionAsync(
+            () => _seatRepository.DeleteAsync(seatId, cancellationToken), cancellationToken);
+        return deleted
             ? (true, null)
             : (false, "Seat not found");
     }
@@ -475,11 +496,17 @@ public sealed class SeatService : ISeatService
         {
             return (false, "TotalRows must be greater than 0", []);
         }
+        if (totalRows > MaxRows)
+            return (false, $"TotalRows must not exceed {MaxRows}", []);
 
         if (totalCols <= 0)
         {
             return (false, "TotalCols must be greater than 0", []);
         }
+        if (totalCols > MaxColumns)
+            return (false, $"TotalCols must not exceed {MaxColumns}", []);
+        if ((long)totalRows * totalCols > MaxPositions || seats.Count > MaxPositions)
+            return (false, $"Total positions must not exceed {MaxPositions}", []);
 
         if (seats is null)
         {
@@ -497,13 +524,28 @@ public sealed class SeatService : ISeatService
             return (false, validation.ErrorMessage, []);
         }
 
-        var updatedSeats = await _seatRepository.ReplaceLayoutAsync(
-            roomId,
-            validation.Seats,
+        var updatedSeats = await ExecuteInTransactionAsync(
+            () => _seatRepository.ReplaceLayoutAsync(roomId, validation.Seats, cancellationToken),
             cancellationToken);
 
         return (true, null, updatedSeats);
     }
+
+    private static string? ValidateSelector(SeatSelector selector)
+    {
+        var mode = selector.Mode?.Trim().ToUpperInvariant();
+        if (mode is not ("IDS" or "ROWS" or "COLS"))
+            return "Selector mode must be IDS, ROWS, or COLS";
+        return selector.Target is null || selector.Target.Count == 0
+            ? "Selector target must contain at least one value"
+            : null;
+    }
+
+    private Task<T> ExecuteInTransactionAsync<T>(
+        Func<Task<T>> operation, CancellationToken cancellationToken) =>
+        _unitOfWork is null
+            ? operation()
+            : _unitOfWork.ExecuteInTransactionAsync(operation, cancellationToken);
 
     private async Task<(bool Succeeded, string? ErrorMessage, Room? Room, SeatType? SeatType, string? RowLabel, string? Status)> ValidateSeatAsync(
         int roomId,

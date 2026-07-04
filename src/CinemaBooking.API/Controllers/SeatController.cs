@@ -295,7 +295,9 @@ public sealed class SeatController : ControllerBase
         }
 
         if (errorMessage is "Room has active or upcoming schedules"
-            or "Seat has related booking or hold records")
+            or "Seat has related booking or hold records"
+            or "One or more seats have related booking or hold records"
+            or "Seat already exists in this room position")
         {
             return Conflict(new { success = false, message = errorMessage });
         }

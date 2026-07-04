@@ -54,7 +54,7 @@ public interface ISeatRepository
         int seatId,
         CancellationToken cancellationToken = default);
 
-    Task<Seat> AddAsync(
+    Task<Seat?> AddAsync(
         Seat seat,
         CancellationToken cancellationToken = default);
 

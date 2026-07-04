@@ -3,6 +3,7 @@ using CinemaBooking.Application.Seats;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 
 namespace CinemaBooking.Infrastructure.Repositories;
 
@@ -189,12 +190,21 @@ public sealed class SeatRepository : ISeatRepository
                 .AnyAsync(hold => hold.SeatID == seatId, cancellationToken);
     }
 
-    public async Task<Seat> AddAsync(
+    public async Task<Seat?> AddAsync(
         Seat seat,
         CancellationToken cancellationToken = default)
     {
         _dbContext.Seats.Add(seat);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (
+            exception.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            _dbContext.ChangeTracker.Clear();
+            return null;
+        }
 
         await RecalculateRoomCapacityAsync(seat.RoomID, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
