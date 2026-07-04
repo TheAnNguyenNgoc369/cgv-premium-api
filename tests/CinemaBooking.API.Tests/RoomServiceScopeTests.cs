@@ -22,13 +22,36 @@ public sealed class RoomServiceScopeTests
         Assert.Equal(0, repository.AddCallCount);
     }
 
+    [Fact]
+    public async Task DeleteRoom_WithHistoricalShowtime_ReturnsConflictWithoutDeleting()
+    {
+        var repository = new StubRoomRepository
+        {
+            ExistingRoom = new Room { RoomID = 1, CinemaID = 1 },
+            HasAnyShowtimes = true
+        };
+        var service = new RoomService(repository);
+
+        var result = await service.DeleteRoomAsync(1, managerCinemaId: 1);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Room has showtime history", result.ErrorMessage);
+        Assert.Equal(0, repository.DeleteCallCount);
+    }
+
     private sealed class StubRoomRepository : IRoomRepository
     {
         public int AddCallCount { get; private set; }
+        public int DeleteCallCount { get; private set; }
+        public Room? ExistingRoom { get; init; }
+        public bool HasAnyShowtimes { get; init; }
         public Task<List<Room>> GetRoomsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new List<Room>());
+        public Task<List<Room>> GetRoomsByCinemaIdAsync(
+            int cinemaId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new List<Room>());
         public Task<Room?> GetByIdAsync(int roomId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<Room?>(null);
+            Task.FromResult(ExistingRoom);
         public Task<bool> CinemaExistsAsync(int cinemaId, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
         public Task<bool> NameExistsInCinemaAsync(int cinemaId, string roomName,
@@ -46,7 +69,13 @@ public sealed class RoomServiceScopeTests
             CancellationToken cancellationToken = default) => Task.FromResult<Room?>(null);
         public Task<bool> HasActiveOrUpcomingShowtimesAsync(
             int roomId, CancellationToken cancellationToken = default) => Task.FromResult(false);
-        public Task<bool> DeleteAsync(int roomId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(false);
+        public Task<bool> HasAnyShowtimesAsync(
+            int roomId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(HasAnyShowtimes);
+        public Task<bool> DeleteAsync(int roomId, CancellationToken cancellationToken = default)
+        {
+            DeleteCallCount++;
+            return Task.FromResult(true);
+        }
     }
 }

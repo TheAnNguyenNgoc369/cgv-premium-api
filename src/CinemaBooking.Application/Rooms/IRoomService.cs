@@ -6,6 +6,10 @@ public interface IRoomService
 {
     Task<List<Room>> GetRoomsAsync(CancellationToken cancellationToken = default);
 
+    Task<List<Room>> GetRoomsByCinemaIdAsync(
+    int cinemaId,
+    CancellationToken cancellationToken = default);
+
     Task<Room?> GetRoomByIdAsync(int roomId, CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, Room? Room)> CreateRoomAsync(

@@ -19,6 +19,13 @@ public sealed class RoomService : IRoomService
         return _roomRepository.GetRoomsAsync(cancellationToken);
     }
 
+    public Task<List<Room>> GetRoomsByCinemaIdAsync(
+    int cinemaId,
+    CancellationToken cancellationToken = default)
+{
+    return _roomRepository.GetRoomsByCinemaIdAsync(cinemaId, cancellationToken);
+}
+
     public Task<Room?> GetRoomByIdAsync(
         int roomId,
         CancellationToken cancellationToken = default)
@@ -128,6 +135,11 @@ public sealed class RoomService : IRoomService
         if (await _roomRepository.HasActiveOrUpcomingShowtimesAsync(roomId, cancellationToken))
         {
             return (false, "Room has active or upcoming schedules");
+        }
+
+        if (await _roomRepository.HasAnyShowtimesAsync(roomId, cancellationToken))
+        {
+            return (false, "Room has showtime history");
         }
 
         var deleted = await _roomRepository.DeleteAsync(roomId, cancellationToken);

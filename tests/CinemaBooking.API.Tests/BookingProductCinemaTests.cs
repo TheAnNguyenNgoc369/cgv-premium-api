@@ -60,10 +60,39 @@ public sealed class BookingProductAvailabilityTests
         Assert.Empty(repository.ReleasedSeatIds);
     }
 
+    [Fact]
+    public async Task CreateBooking_WhenHoldIsNoLongerActiveInsideTransaction_DoesNotCreateBooking()
+    {
+        var repository = new StubBookingRepository
+        {
+            ActiveHolds = [new SeatHold { HoldID = 1, SeatID = 1, Status = "holding" }],
+            ActiveHoldsForUpdate = []
+        };
+        var service = new BookingService(repository, null!, new StubUnitOfWork());
+
+        var result = await service.CreateBookingAsync(
+            actorUserId: 7,
+            customerId: null,
+            isStaff: true,
+            showtimeId: 1,
+            seatIds: [1],
+            fnbItems: [],
+            voucherCode: null);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+            "Some seats are not held or the holds have expired. Please select them again.",
+            result.ErrorMessage);
+        Assert.Equal(0, repository.AddBookingCallCount);
+    }
+
     private sealed class StubBookingRepository : IBookingRepository
     {
         public List<SeatHold> ActiveHoldsForUpdate { get; init; } = [];
+        public List<SeatHold> ActiveHolds { get; init; } =
+            [new SeatHold { HoldID = 1, SeatID = 1, Status = "holding" }];
         public List<int> ReleasedSeatIds { get; } = [];
+        public int AddBookingCallCount { get; private set; }
 
         public Task<Showtime?> GetShowtimeAsync(int showtimeId, CancellationToken cancellationToken = default) =>
             Task.FromResult<Showtime?>(new Showtime
@@ -92,7 +121,7 @@ public sealed class BookingProductAvailabilityTests
         public Task<List<SeatHold>> GetMyActiveHoldsAsync(
             int userId, int showtimeId, List<int> seatIds,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult(new List<SeatHold> { new() { HoldID = 1, SeatID = 1 } });
+            Task.FromResult(ActiveHolds);
         public Task<List<SeatHold>> GetMyActiveHoldsForUpdateAsync(
             int userId, int showtimeId, DateTime now,
             CancellationToken cancellationToken = default) =>
@@ -119,8 +148,12 @@ public sealed class BookingProductAvailabilityTests
             int currentUserId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> TryAddSeatHoldsAsync(IEnumerable<SeatHold> seatHolds,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task AddBookingAsync(Booking booking, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+        public Task AddBookingAsync(Booking booking, CancellationToken cancellationToken = default)
+        {
+            AddBookingCallCount++;
+            booking.BookingID = 1;
+            return Task.CompletedTask;
+        }
         public Task MarkHoldsAsConfirmedAsync(IEnumerable<SeatHold> seatHolds, int bookingId,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Booking?> GetBookingByIdAsync(int bookingId,

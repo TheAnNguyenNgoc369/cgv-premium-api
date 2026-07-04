@@ -13,6 +13,8 @@ public class SeatConfiguration : IEntityTypeConfiguration<Seat>
         builder.HasKey(s => s.SeatID);
 
         builder.Property(s => s.SeatRow).HasMaxLength(5).IsRequired();
+        builder.Property(s => s.SeatTypeID).IsRequired(false);
+        builder.Property(s => s.IsGap).IsRequired().HasDefaultValue(false);
         builder.Property(s => s.Status).HasMaxLength(20).IsRequired().HasDefaultValue("active");
 
         builder.HasIndex(s => s.RoomID).HasDatabaseName("IX_Seat_RoomID");
@@ -33,7 +35,7 @@ public class SeatConfiguration : IEntityTypeConfiguration<Seat>
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_Seat_SeatCol", "[SeatCol] > 0");
-            t.HasCheckConstraint("CK_Seat_Status", "[Status] IN ('active', 'inactive')");
+            t.HasCheckConstraint("CK_Seat_Status", "[Status] IN ('active', 'inactive', 'maintenance')");
         });
     }
 }

@@ -1,7 +1,9 @@
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Seats;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 
 namespace CinemaBooking.Infrastructure.Repositories;
 
@@ -107,6 +109,62 @@ public sealed class SeatRepository : ISeatRepository
         return query.AnyAsync(cancellationToken);
     }
 
+    public Task<List<Seat>> GetSeatsBySelectorAsync(
+        int roomId,
+        SeatSelector selector,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedMode = selector.Mode?.Trim().ToUpperInvariant();
+        if (normalizedMode is null)
+        {
+            return Task.FromResult(new List<Seat>());
+        }
+
+        IQueryable<Seat> query = _dbContext.Seats
+            .AsNoTracking()
+            .Include(seat => seat.SeatType)
+            .Where(seat => seat.RoomID == roomId);
+
+        if (normalizedMode == "IDS")
+        {
+            var ids = selector.Target
+                .Select(value => int.TryParse(value, out var id) ? id : (int?)null)
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .ToArray();
+
+            query = query.Where(seat => ids.Contains(seat.SeatID));
+        }
+        else if (normalizedMode == "ROWS")
+        {
+            var rows = selector.Target
+                .Select(value => string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant())
+                .Where(value => value is not null)
+                .ToArray();
+
+            query = query.Where(seat => rows.Contains(seat.SeatRow));
+        }
+        else if (normalizedMode == "COLS")
+        {
+            var cols = selector.Target
+                .Select(value => int.TryParse(value, out var col) ? col : (int?)null)
+                .Where(col => col.HasValue)
+                .Select(col => col!.Value)
+                .ToArray();
+
+            query = query.Where(seat => cols.Contains(seat.SeatCol));
+        }
+        else
+        {
+            return Task.FromResult(new List<Seat>());
+        }
+
+        return query
+            .OrderBy(seat => seat.SeatRow)
+            .ThenBy(seat => seat.SeatCol)
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<bool> HasActiveOrUpcomingShowtimesAsync(
         int roomId,
         CancellationToken cancellationToken = default)
@@ -132,12 +190,21 @@ public sealed class SeatRepository : ISeatRepository
                 .AnyAsync(hold => hold.SeatID == seatId, cancellationToken);
     }
 
-    public async Task<Seat> AddAsync(
+    public async Task<Seat?> AddAsync(
         Seat seat,
         CancellationToken cancellationToken = default)
     {
         _dbContext.Seats.Add(seat);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (
+            exception.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            _dbContext.ChangeTracker.Clear();
+            return null;
+        }
 
         await RecalculateRoomCapacityAsync(seat.RoomID, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -152,8 +219,9 @@ public sealed class SeatRepository : ISeatRepository
     public async Task<Seat?> UpdateAsync(
         int roomId,
         int seatId,
-        int seatTypeId,
+        int? seatTypeId,
         string status,
+        bool isGap,
         CancellationToken cancellationToken = default)
     {
         var seat = await _dbContext.Seats
@@ -169,6 +237,7 @@ public sealed class SeatRepository : ISeatRepository
 
         seat.SeatTypeID = seatTypeId;
         seat.Status = status;
+        seat.IsGap = isGap;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -222,8 +291,7 @@ public sealed class SeatRepository : ISeatRepository
         {
             if (requestedSeats.Remove((existingSeat.SeatRow, existingSeat.SeatCol), out var requestedSeat))
             {
-                existingSeat.SeatTypeID = requestedSeat.SeatTypeID;
-                existingSeat.Status = requestedSeat.Status;
+                ApplyLayoutValues(existingSeat, requestedSeat);
                 continue;
             }
 
@@ -243,6 +311,13 @@ public sealed class SeatRepository : ISeatRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return await GetSeatsByRoomAsync(roomId, cancellationToken);
+    }
+
+    internal static void ApplyLayoutValues(Seat existingSeat, Seat requestedSeat)
+    {
+        existingSeat.SeatTypeID = requestedSeat.SeatTypeID;
+        existingSeat.Status = requestedSeat.Status;
+        existingSeat.IsGap = requestedSeat.IsGap;
     }
 
     private async Task<HashSet<int>> GetRelatedSeatIdsAsync(

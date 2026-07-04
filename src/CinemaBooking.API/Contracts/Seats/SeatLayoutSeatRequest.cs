@@ -6,5 +6,5 @@ public sealed record SeatLayoutSeatRequest(
     string? SeatName,
     int? SeatTypeId,
     string? Status,
-    bool IsWalkway
+    bool IsGap
 );

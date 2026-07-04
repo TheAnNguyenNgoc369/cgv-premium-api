@@ -1,3 +1,4 @@
+using CinemaBooking.Application.Seats;
 using CinemaBooking.Domain.Entities;
 
 namespace CinemaBooking.Application.Common.Interfaces;
@@ -40,6 +41,11 @@ public interface ISeatRepository
         int? excludingSeatId = null,
         CancellationToken cancellationToken = default);
 
+    Task<List<Seat>> GetSeatsBySelectorAsync(
+        int roomId,
+        SeatSelector selector,
+        CancellationToken cancellationToken = default);
+
     Task<bool> HasActiveOrUpcomingShowtimesAsync(
         int roomId,
         CancellationToken cancellationToken = default);
@@ -48,15 +54,16 @@ public interface ISeatRepository
         int seatId,
         CancellationToken cancellationToken = default);
 
-    Task<Seat> AddAsync(
+    Task<Seat?> AddAsync(
         Seat seat,
         CancellationToken cancellationToken = default);
 
     Task<Seat?> UpdateAsync(
         int roomId,
         int seatId,
-        int seatTypeId,
+        int? seatTypeId,
         string status,
+        bool isGap,
         CancellationToken cancellationToken = default);
 
     Task<bool> DeleteAsync(

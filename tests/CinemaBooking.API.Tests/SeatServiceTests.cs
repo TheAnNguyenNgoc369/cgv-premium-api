@@ -16,7 +16,7 @@ public sealed class SeatServiceTests
         };
         var service = new SeatService(repository);
 
-        var result = await service.CreateSeatAsync(1, "A", 1, 1, "ACTIVE");
+        var result = await service.CreateSeatAsync(1, "A", 1, 1, "ACTIVE", false);
 
         Assert.True(result.Succeeded);
         Assert.NotNull(result.Seat);
@@ -54,7 +54,7 @@ public sealed class SeatServiceTests
         var service = new SeatService(repository);
 
         var result = await service.CreateSeatAsync(
-            1, "A", 1, 1, "ACTIVE", managerCinemaId: 2);
+            1, "A", 1, 1, "ACTIVE", false, managerCinemaId: 2);
 
         Assert.False(result.Succeeded);
         Assert.Equal(
@@ -63,12 +63,73 @@ public sealed class SeatServiceTests
         Assert.Equal(0, repository.AddCallCount);
     }
 
+    [Fact]
+    public async Task BulkUpdate_WhenAnySeatHasRelations_DoesNotPartiallyUpdateEarlierSeats()
+    {
+        var repository = new StubSeatRepository
+        {
+            Room = new Room { RoomID = 1, CinemaID = 1 },
+            SelectedSeats =
+            [
+                new Seat { SeatID = 1, RoomID = 1, SeatTypeID = 1, Status = "active" },
+                new Seat { SeatID = 2, RoomID = 1, SeatTypeID = 1, Status = "active" }
+            ],
+            RelatedSeatIds = [2]
+        };
+        var service = new SeatService(repository);
+
+        var result = await service.BulkUpdateAsync(
+            1, new SeatSelector("ids", ["1", "2"]), null, "INACTIVE", null);
+
+        Assert.False(result.Succeeded);
+        Assert.Empty(repository.UpdatedSeatIds);
+    }
+
+    [Fact]
+    public async Task GenerateSeats_AboveMaximumRows_ReturnsValidationErrorWithoutWriting()
+    {
+        var repository = new StubSeatRepository
+        {
+            Room = new Room { RoomID = 1 },
+            SeatType = new SeatType { SeatTypeID = 1 }
+        };
+        var service = new SeatService(repository);
+
+        var result = await service.GenerateSeatsAsync(1, 101, 1, 1, "ACTIVE");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Rows must not exceed 100", result.ErrorMessage);
+        Assert.Equal(0, repository.ReplaceLayoutCallCount);
+    }
+
+    [Fact]
+    public async Task BulkUpdate_ValidMutation_ExecutesInsideTransaction()
+    {
+        var repository = new StubSeatRepository
+        {
+            Room = new Room { RoomID = 1 },
+            SelectedSeats =
+            [new Seat { SeatID = 1, RoomID = 1, SeatTypeID = 1, Status = "active" }]
+        };
+        var unitOfWork = new RecordingUnitOfWork();
+        var service = new SeatService(repository, unitOfWork);
+
+        var result = await service.BulkUpdateAsync(
+            1, new SeatSelector("ids", ["1"]), null, "INACTIVE", null);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(1, unitOfWork.ExecutionCount);
+    }
+
     private sealed class StubSeatRepository : ISeatRepository
     {
         public Room? Room { get; set; }
         public SeatType? SeatType { get; set; }
         public int AddCallCount { get; private set; }
         public int ReplaceLayoutCallCount { get; private set; }
+        public List<Seat> SelectedSeats { get; init; } = [];
+        public HashSet<int> RelatedSeatIds { get; init; } = [];
+        public List<int> UpdatedSeatIds { get; } = [];
 
         public Task<List<Seat>> GetSeatsByRoomAsync(
             int roomId,
@@ -144,27 +205,41 @@ public sealed class SeatServiceTests
             int seatId,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(false);
+            return Task.FromResult(RelatedSeatIds.Contains(seatId));
         }
 
-        public Task<Seat> AddAsync(
+        public Task<List<Seat>> GetSeatsBySelectorAsync(
+            int roomId,
+            SeatSelector selector,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(SelectedSeats);
+        }
+
+        public Task<Seat?> AddAsync(
             Seat seat,
             CancellationToken cancellationToken = default)
         {
             AddCallCount++;
             seat.SeatID = 1;
             seat.SeatType = SeatType!;
-            return Task.FromResult(seat);
+            return Task.FromResult<Seat?>(seat);
         }
 
         public Task<Seat?> UpdateAsync(
             int roomId,
             int seatId,
-            int seatTypeId,
+            int? seatTypeId,
             string status,
+            bool isGap,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            UpdatedSeatIds.Add(seatId);
+            var seat = SelectedSeats.First(item => item.SeatID == seatId);
+            seat.SeatTypeID = seatTypeId;
+            seat.Status = status;
+            seat.IsGap = isGap;
+            return Task.FromResult<Seat?>(seat);
         }
 
         public Task<bool> DeleteAsync(
@@ -181,6 +256,19 @@ public sealed class SeatServiceTests
         {
             ReplaceLayoutCallCount++;
             return Task.FromResult(seats.ToList());
+        }
+    }
+
+    private sealed class RecordingUnitOfWork : IUnitOfWork
+    {
+        public int ExecutionCount { get; private set; }
+
+        public async Task<T> ExecuteInTransactionAsync<T>(
+            Func<Task<T>> operation,
+            CancellationToken cancellationToken = default)
+        {
+            ExecutionCount++;
+            return await operation();
         }
     }
 }

@@ -27,11 +27,12 @@ public sealed class ReportService : IReportService
     public async Task<RevenueSummary> RevenueSummaryAsync(DateTime from, DateTime to, int? cinemaId, int actorId, string? ip, CancellationToken ct)
     {
         var payments = await Payments(from, to, cinemaId).Include(p => p.Booking).ThenInclude(b => b.BookingSeats)
+            .ThenInclude(bookingSeat => bookingSeat.Seat).ThenInclude(seat => seat.SeatType)
             .Include(p => p.Booking).ThenInclude(b => b.BookingFnBs).ToListAsync(ct);
         var gross = payments.Sum(p => p.Amount); var bookings = payments.Select(p => p.Booking).DistinctBy(b => b.BookingID).ToList();
         var result = new RevenueSummary(gross, bookings.Sum(b => b.BookingSeats.Sum(s => s.TicketPrice)),
             bookings.Sum(b => b.BookingFnBs.Sum(f => f.SubTotal)), bookings.Sum(b => b.DiscountAmount),
-            bookings.Count, bookings.Sum(b => b.BookingSeats.Count), bookings.Count == 0 ? 0 : gross / bookings.Count);
+            bookings.Count, CountTicketsSold(bookings), bookings.Count == 0 ? 0 : gross / bookings.Count);
         await Audit(actorId, AdminActionTypes.ViewRevenueReport, "Viewed revenue summary", ip, ct); return result;
     }
 
@@ -39,17 +40,85 @@ public sealed class ReportService : IReportService
         int? cinemaId, int actorId, string? ip, CancellationToken ct)
     {
         IQueryable<Payment> payments = Payments(from, to, cinemaId).Include(p => p.Booking).ThenInclude(b => b.BookingSeats)
+            .ThenInclude(bookingSeat => bookingSeat.Seat).ThenInclude(seat => seat.SeatType)
             .Include(p => p.Booking).ThenInclude(b => b.Showtime).ThenInclude(s => s.Movie)
             .Include(p => p.Booking).ThenInclude(b => b.Showtime).ThenInclude(s => s.Room);
         if (!string.IsNullOrWhiteSpace(search)) payments = payments.Where(p => p.Booking.Showtime.Movie.Title.Contains(search));
         var rows = await payments.ToListAsync(ct);
         var result = rows.GroupBy(p => new { p.Booking.Showtime.MovieID, p.Booking.Showtime.Movie.Title })
             .Select(g => { var bookings = g.Select(x => x.Booking).DistinctBy(x => x.BookingID).ToList();
-                var shows = bookings.Select(x => x.Showtime).DistinctBy(x => x.ShowtimeID).ToList(); var sold = bookings.Sum(x => x.BookingSeats.Count);
+                var shows = bookings.Select(x => x.Showtime).DistinctBy(x => x.ShowtimeID).ToList(); var sold = CountTicketsSold(bookings);
                 var capacity = shows.Sum(x => x.Room.Capacity); return new MoviePerformance(g.Key.MovieID, g.Key.Title,
                     shows.Count, bookings.Count, sold, capacity == 0 ? 0 : Math.Round(sold * 100m / capacity, 2), g.Sum(x => x.Amount)); })
             .OrderByDescending(x => x.Revenue).ToList();
         await Audit(actorId, AdminActionTypes.ViewRevenueReport, "Viewed movie performance report", ip, ct); return result;
+    }
+
+    public async Task<TopSellingReport> TopSellingAsync(
+        DateTime from, DateTime to, int? cinemaId, int actorId, string? ip, CancellationToken ct)
+    {
+        var paymentRows = await Payments(from, to, cinemaId)
+            .Include(payment => payment.Booking).ThenInclude(booking => booking.BookingSeats)
+                .ThenInclude(bookingSeat => bookingSeat.Seat).ThenInclude(seat => seat.SeatType)
+            .Include(payment => payment.Booking).ThenInclude(booking => booking.BookingFnBs)
+                .ThenInclude(item => item.Product)
+            .Include(payment => payment.Booking).ThenInclude(booking => booking.Showtime)
+                .ThenInclude(showtime => showtime.Movie)
+            .Include(payment => payment.Booking).ThenInclude(booking => booking.Showtime)
+                .ThenInclude(showtime => showtime.Room).ThenInclude(room => room.Cinema)
+            .AsSplitQuery()
+            .ToListAsync(ct);
+
+        var bookings = paymentRows
+            .Select(payment => payment.Booking)
+            .DistinctBy(booking => booking.BookingID)
+            .ToList();
+
+        var movies = bookings
+            .GroupBy(booking => new
+            {
+                booking.Showtime.MovieID,
+                booking.Showtime.Movie.Title
+            })
+            .Select(group => new TopSellingMovie(
+                group.Key.MovieID,
+                group.Key.Title,
+                CountTicketsSold(group)))
+            .OrderByDescending(movie => movie.TicketsSold)
+            .ThenBy(movie => movie.Title)
+            .ThenBy(movie => movie.MovieId)
+            .ToList();
+
+        var fnbProducts = bookings
+            .SelectMany(booking => booking.BookingFnBs)
+            .GroupBy(item => new { item.ItemID, item.Product.ItemName })
+            .Select(group => new TopSellingFnbProduct(
+                group.Key.ItemID,
+                group.Key.ItemName,
+                group.Sum(item => item.Quantity)))
+            .OrderByDescending(product => product.QuantitySold)
+            .ThenBy(product => product.ProductName)
+            .ThenBy(product => product.ProductId)
+            .ToList();
+
+        var cinemas = bookings
+            .GroupBy(booking => new
+            {
+                booking.Showtime.Room.CinemaID,
+                booking.Showtime.Room.Cinema.CinemaName
+            })
+            .Select(group => new TopCinema(
+                group.Key.CinemaID,
+                group.Key.CinemaName,
+                group.Count(),
+                CountTicketsSold(group)))
+            .OrderByDescending(cinema => cinema.TicketsSold)
+            .ThenBy(cinema => cinema.CinemaName)
+            .ThenBy(cinema => cinema.CinemaId)
+            .ToList();
+
+        await Audit(actorId, AdminActionTypes.ViewRevenueReport, "Viewed top-selling report", ip, ct);
+        return new TopSellingReport(movies, fnbProducts, cinemas);
     }
 
     public async Task<ReportFile> ExportAsync(string format, string type, DateTime from, DateTime to, int? cinemaId,
@@ -84,8 +153,12 @@ public sealed class ReportService : IReportService
             x.Product, x.Quantity, x.UnitPrice, x.SubTotal)).ToList();
     }
     private async Task<List<OccupancyDetail>> OccupancyRows(DateTime f, DateTime t, int? c, CancellationToken ct)
-    { var data = await Payments(f,t,c).Include(p=>p.Booking).ThenInclude(b=>b.BookingSeats).Include(p=>p.Booking).ThenInclude(b=>b.Showtime).ThenInclude(s=>s.Room).ThenInclude(r=>r.Cinema).Include(p=>p.Booking).ThenInclude(b=>b.Showtime).ThenInclude(s=>s.Movie).ToListAsync(ct);
-      return data.GroupBy(p=>p.Booking.ShowtimeID).Select(g=> { var sold=g.Select(x=>x.Booking).DistinctBy(x=>x.BookingID).Sum(x=>x.BookingSeats.Count); var s=g.First().Booking.Showtime; return new OccupancyDetail(s.ShowtimeID,s.Movie.Title,s.Room.Cinema.CinemaName,s.Room.RoomName,VietnamTime.FromUtc(s.StartTime),s.Room.Capacity,sold,s.Room.Capacity==0?0:Math.Round(sold*100m/s.Room.Capacity,2));}).ToList(); }
+    { var data = await Payments(f,t,c).Include(p=>p.Booking).ThenInclude(b=>b.BookingSeats).ThenInclude(bs=>bs.Seat).ThenInclude(s=>s.SeatType).Include(p=>p.Booking).ThenInclude(b=>b.Showtime).ThenInclude(s=>s.Room).ThenInclude(r=>r.Cinema).Include(p=>p.Booking).ThenInclude(b=>b.Showtime).ThenInclude(s=>s.Movie).ToListAsync(ct);
+      return data.GroupBy(p=>p.Booking.ShowtimeID).Select(g=> { var sold=CountTicketsSold(g.Select(x=>x.Booking).DistinctBy(x=>x.BookingID)); var s=g.First().Booking.Showtime; return new OccupancyDetail(s.ShowtimeID,s.Movie.Title,s.Room.Cinema.CinemaName,s.Room.RoomName,VietnamTime.FromUtc(s.StartTime),s.Room.Capacity,sold,s.Room.Capacity==0?0:Math.Round(sold*100m/s.Room.Capacity,2));}).ToList(); }
+
+    internal static int CountTicketsSold(IEnumerable<Booking> bookings) =>
+        bookings.Sum(booking => booking.BookingSeats.Sum(bookingSeat =>
+            bookingSeat.Seat.SeatType?.Capacity ?? 1));
 
     private static byte[] Excel(string[] headers, List<string[]> rows) { using var wb=new XLWorkbook(); var ws=wb.Worksheets.Add("Report");
       for(int c=0;c<headers.Length;c++) ws.Cell(1,c+1).Value=headers[c]; for(int r=0;r<rows.Count;r++) for(int c=0;c<headers.Length;c++) ws.Cell(r+2,c+1).Value=rows[r][c]; ws.Row(1).Style.Font.Bold=true; ws.Columns().AdjustToContents(); using var ms=new MemoryStream(); wb.SaveAs(ms); return ms.ToArray(); }

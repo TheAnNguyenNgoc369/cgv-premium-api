@@ -84,10 +84,74 @@ public sealed class ProductGlobalTests
         Assert.Equal("products", imageStorage.UploadFolder);
     }
 
+    [Fact]
+    public async Task UpdateProductImage_WhenDatabaseUpdateFails_PreservesExistingImage()
+    {
+        var repository = new StubProductRepository
+        {
+            ExistingProduct = new Product
+            {
+                ItemID = 1,
+                ItemName = "Popcorn",
+                ImageURL = "https://example.com/products/old.png",
+                ImagePublicId = "products/old"
+            },
+            ThrowOnImageUpdate = true
+        };
+        var imageStorage = new StubImageStorageService();
+        var service = new ProductService(repository, imageStorage);
+
+        await using var stream = new MemoryStream([1, 2, 3]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.UpdateProductImageAsync(
+            1, stream, "popcorn.png", "image/png", stream.Length));
+
+        Assert.DoesNotContain("products/old", imageStorage.DeletedPublicIds);
+        Assert.Contains("products/popcorn", imageStorage.DeletedPublicIds);
+    }
+
+    [Fact]
+    public async Task UpdateProduct_WhenImageUrlChanges_DeletesOldManagedImage()
+    {
+        var repository = new StubProductRepository
+        {
+            ExistingProduct = new Product
+            {
+                ItemID = 1, ItemName = "Popcorn", ImageURL = "old-url",
+                ImagePublicId = "products/old"
+            }
+        };
+        var storage = new StubImageStorageService();
+        var service = new ProductService(repository, storage);
+
+        var result = await service.UpdateProductAsync(
+            1, "Popcorn", "snack", null, 50_000, "new-url", false, "active");
+
+        Assert.True(result.Succeeded);
+        Assert.Contains("products/old", storage.DeletedPublicIds);
+    }
+
+    [Fact]
+    public async Task DeleteUnusedProduct_DeletesManagedImageAfterDatabaseDelete()
+    {
+        var repository = new StubProductRepository
+        {
+            ExistingProduct = new Product { ItemID = 1, ImagePublicId = "products/old" }
+        };
+        var storage = new StubImageStorageService();
+        var service = new ProductService(repository, storage);
+
+        var result = await service.DeleteProductAsync(1);
+
+        Assert.True(result.Succeeded);
+        Assert.Contains("products/old", storage.DeletedPublicIds);
+    }
+
     private sealed class StubProductRepository : IProductRepository
     {
         public Product? ExistingProduct { get; init; }
         public bool UpdateCalled { get; private set; }
+        public bool ThrowOnImageUpdate { get; init; }
 
         public Task<List<Product>> GetProductsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new List<Product>());
@@ -115,6 +179,9 @@ public sealed class ProductGlobalTests
             int itemId, string imageUrl, string imagePublicId,
             CancellationToken cancellationToken = default)
         {
+            if (ThrowOnImageUpdate)
+                throw new InvalidOperationException("Database update failed.");
+
             if (ExistingProduct is null || ExistingProduct.ItemID != itemId)
                 return Task.FromResult<Product?>(null);
 
@@ -131,6 +198,7 @@ public sealed class ProductGlobalTests
     private sealed class StubImageStorageService : IImageStorageService
     {
         public string? UploadFolder { get; private set; }
+        public List<string> DeletedPublicIds { get; } = [];
 
         public Task<StoredImageResult> UploadImageAsync(
             Stream imageStream,
@@ -146,6 +214,10 @@ public sealed class ProductGlobalTests
 
         public Task DeleteImageAsync(
             string publicId,
-            CancellationToken cancellationToken = default) => Task.CompletedTask;
+            CancellationToken cancellationToken = default)
+        {
+            DeletedPublicIds.Add(publicId);
+            return Task.CompletedTask;
+        }
     }
 }

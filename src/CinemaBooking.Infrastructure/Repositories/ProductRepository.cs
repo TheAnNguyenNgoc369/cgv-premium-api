@@ -84,6 +84,8 @@ public sealed class ProductRepository : IProductRepository
         existingProduct.ItemType = product.ItemType;
         existingProduct.Description = product.Description;
         existingProduct.Price = product.Price;
+        if (!string.Equals(existingProduct.ImageURL, product.ImageURL, StringComparison.Ordinal))
+            existingProduct.ImagePublicId = null;
         existingProduct.ImageURL = product.ImageURL;
         existingProduct.IsLoyaltyEligible = product.IsLoyaltyEligible;
         existingProduct.Status = product.Status;

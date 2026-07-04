@@ -212,8 +212,17 @@ public sealed class BookingService : IBookingService
             booking.BookingVoucher = bookingVoucher;
         }
 
-        await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        var bookingCreated = await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
+            var lockedHolds = await _bookingRepository.GetMyActiveHoldsForUpdateAsync(
+                actorUserId, showtimeId, DateTime.UtcNow, cancellationToken);
+            var lockedRequestedHolds = lockedHolds
+                .Where(hold => seatIds.Contains(hold.SeatID))
+                .ToList();
+
+            if (lockedRequestedHolds.Count != seatIds.Count)
+                return false;
+
             if (productQuantities.Count > 0)
             {
                 var lockedProducts = await _bookingRepository.GetProductsByIdsAsync(
@@ -253,13 +262,17 @@ public sealed class BookingService : IBookingService
             }
 
             await _bookingRepository.AddBookingAsync(booking, cancellationToken);
-            await _bookingRepository.MarkHoldsAsConfirmedAsync(myHolds, booking.BookingID, cancellationToken);
+            await _bookingRepository.MarkHoldsAsConfirmedAsync(
+                lockedRequestedHolds, booking.BookingID, cancellationToken);
 
             if (bookingVoucher is not null)
                 await _bookingRepository.IncrementVoucherUsageAsync(bookingVoucher.VoucherID, cancellationToken);
 
             return true;
         }, cancellationToken);
+
+        if (!bookingCreated)
+            return (false, "Some seats are not held or the holds have expired. Please select them again.", null, null);
 
         var savedBooking = await _bookingRepository.GetBookingByIdAsync(booking.BookingID, cancellationToken);
 
@@ -309,7 +322,8 @@ public sealed class BookingService : IBookingService
         var seats = await _bookingRepository.GetSeatsByIdsAsync(seatIds, cancellationToken);
 
         if (seats.Count != seatIds.Count || seats.Any(seat =>
-                seat.RoomID != showtime.RoomID || seat.Status != "active"))
+                seat.RoomID != showtime.RoomID || seat.Status != "active"
+                || seat.IsGap || seat.SeatType is null))
             return (false, "One or more seats do not belong to the showtime room or are inactive.", null);
 
         var seatDetails = seats.Select(seat => new SeatPricingDetail
@@ -317,7 +331,7 @@ public sealed class BookingService : IBookingService
             SeatId = seat.SeatID,
             SeatRow = seat.SeatRow,
             SeatCol = seat.SeatCol,
-            SeatTypeName = seat.SeatType.TypeName,
+            SeatTypeName = seat.SeatType!.TypeName,
             Price = showtime.BasePrice + seat.SeatType.ExtraPrice
         }).ToList();
 

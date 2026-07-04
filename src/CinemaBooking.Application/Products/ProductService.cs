@@ -8,7 +8,6 @@ public sealed class ProductService : IProductService
 {
     private const string ImageFolder = "products";
     private const string ImageUploadFailedMessage = "Unable to upload product image. Please try again later.";
-    private const string ImageDeleteFailedMessage = "Unable to replace the existing product image. Please try again later.";
 
     private readonly IProductRepository _productRepository;
     private readonly IImageStorageService _imageStorageService;
@@ -151,6 +150,9 @@ public sealed class ProductService : IProductService
             return (false, "ItemName must be unique", null);
         }
 
+        var oldImagePublicId = existingProduct.ImagePublicId;
+        var imageUrlChanged = !string.Equals(
+            existingProduct.ImageURL, imageUrl?.Trim(), StringComparison.Ordinal);
         var productToUpdate = new Product
         {
             ItemID = itemId,
@@ -164,6 +166,9 @@ public sealed class ProductService : IProductService
         };
 
         var updatedProduct = await _productRepository.UpdateAsync(productToUpdate, cancellationToken);
+
+        if (updatedProduct is not null && imageUrlChanged && !string.IsNullOrWhiteSpace(oldImagePublicId))
+            await TryDeleteImageAsync(oldImagePublicId);
 
         return updatedProduct is null
             ? (false, "Product not found", null)
@@ -197,6 +202,27 @@ public sealed class ProductService : IProductService
             return (false, ImageUploadFailedMessage, null);
         }
 
+        Product? updatedProduct;
+        try
+        {
+            updatedProduct = await _productRepository.UpdateImageAsync(
+                itemId,
+                newImage.SecureUrl,
+                newImage.PublicId,
+                cancellationToken);
+        }
+        catch
+        {
+            await TryDeleteImageAsync(newImage.PublicId);
+            throw;
+        }
+
+        if (updatedProduct is null)
+        {
+            await TryDeleteImageAsync(newImage.PublicId);
+            return (false, "Product not found", null);
+        }
+
         if (!string.IsNullOrWhiteSpace(existingProduct.ImagePublicId))
         {
             try
@@ -206,28 +232,10 @@ public sealed class ProductService : IProductService
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                await TryDeleteImageAsync(newImage.PublicId);
-                return (false, ImageDeleteFailedMessage, null);
             }
         }
 
-        try
-        {
-            var updatedProduct = await _productRepository.UpdateImageAsync(
-                itemId,
-                newImage.SecureUrl,
-                newImage.PublicId,
-                cancellationToken);
-
-            return updatedProduct is null
-                ? (false, "Product not found", null)
-                : (true, null, updatedProduct);
-        }
-        catch
-        {
-            await TryDeleteImageAsync(newImage.PublicId);
-            throw;
-        }
+        return (true, null, updatedProduct);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> DeleteProductAsync(
@@ -245,6 +253,9 @@ public sealed class ProductService : IProductService
         }
 
         var deleted = await _productRepository.DeleteAsync(itemId, cancellationToken);
+
+        if (deleted && !string.IsNullOrWhiteSpace(existingProduct.ImagePublicId))
+            await TryDeleteImageAsync(existingProduct.ImagePublicId);
 
         return deleted
             ? (true, null)

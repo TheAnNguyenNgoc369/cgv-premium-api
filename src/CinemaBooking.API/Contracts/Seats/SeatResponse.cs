@@ -6,7 +6,8 @@ public sealed record SeatResponse(
     string RowLabel,
     int SeatNumber,
     string SeatCode,
-    int SeatTypeId,
-    string Type,
-    string Status
+    int? SeatTypeId,
+    string? Type,
+    string Status,
+    bool IsGap
 );
