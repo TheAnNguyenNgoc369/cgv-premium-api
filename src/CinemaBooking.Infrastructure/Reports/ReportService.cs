@@ -52,6 +52,72 @@ public sealed class ReportService : IReportService
         await Audit(actorId, AdminActionTypes.ViewRevenueReport, "Viewed movie performance report", ip, ct); return result;
     }
 
+    public async Task<TopSellingReport> TopSellingAsync(
+        DateTime from, DateTime to, int? cinemaId, int actorId, string? ip, CancellationToken ct)
+    {
+        var paymentRows = await Payments(from, to, cinemaId)
+            .Include(payment => payment.Booking).ThenInclude(booking => booking.BookingSeats)
+            .Include(payment => payment.Booking).ThenInclude(booking => booking.BookingFnBs)
+                .ThenInclude(item => item.Product)
+            .Include(payment => payment.Booking).ThenInclude(booking => booking.Showtime)
+                .ThenInclude(showtime => showtime.Movie)
+            .Include(payment => payment.Booking).ThenInclude(booking => booking.Showtime)
+                .ThenInclude(showtime => showtime.Room).ThenInclude(room => room.Cinema)
+            .AsSplitQuery()
+            .ToListAsync(ct);
+
+        var bookings = paymentRows
+            .Select(payment => payment.Booking)
+            .DistinctBy(booking => booking.BookingID)
+            .ToList();
+
+        var movies = bookings
+            .GroupBy(booking => new
+            {
+                booking.Showtime.MovieID,
+                booking.Showtime.Movie.Title
+            })
+            .Select(group => new TopSellingMovie(
+                group.Key.MovieID,
+                group.Key.Title,
+                group.Sum(booking => booking.BookingSeats.Count)))
+            .OrderByDescending(movie => movie.TicketsSold)
+            .ThenBy(movie => movie.Title)
+            .ThenBy(movie => movie.MovieId)
+            .ToList();
+
+        var fnbProducts = bookings
+            .SelectMany(booking => booking.BookingFnBs)
+            .GroupBy(item => new { item.ItemID, item.Product.ItemName })
+            .Select(group => new TopSellingFnbProduct(
+                group.Key.ItemID,
+                group.Key.ItemName,
+                group.Sum(item => item.Quantity)))
+            .OrderByDescending(product => product.QuantitySold)
+            .ThenBy(product => product.ProductName)
+            .ThenBy(product => product.ProductId)
+            .ToList();
+
+        var cinemas = bookings
+            .GroupBy(booking => new
+            {
+                booking.Showtime.Room.CinemaID,
+                booking.Showtime.Room.Cinema.CinemaName
+            })
+            .Select(group => new TopCinema(
+                group.Key.CinemaID,
+                group.Key.CinemaName,
+                group.Count(),
+                group.Sum(booking => booking.BookingSeats.Count)))
+            .OrderByDescending(cinema => cinema.TicketsSold)
+            .ThenBy(cinema => cinema.CinemaName)
+            .ThenBy(cinema => cinema.CinemaId)
+            .ToList();
+
+        await Audit(actorId, AdminActionTypes.ViewRevenueReport, "Viewed top-selling report", ip, ct);
+        return new TopSellingReport(movies, fnbProducts, cinemas);
+    }
+
     public async Task<ReportFile> ExportAsync(string format, string type, DateTime from, DateTime to, int? cinemaId,
         int actorId, string? ip, CancellationToken ct)
     {

@@ -24,6 +24,11 @@ public sealed class ReportsController : ControllerBase
         [FromQuery] string? searchMovie, [FromQuery] int? cinemaId, CancellationToken ct) => await Run(startDate,endDate,cinemaId,
             async (f,t,c,u,ip) => Ok(await _reports.MoviePerformanceAsync(f,t,searchMovie?.Trim(),c,u,ip,ct)));
 
+    [HttpGet("top-selling")]
+    public async Task<IActionResult> TopSelling([FromQuery] DateOnly? startDate, [FromQuery] DateOnly? endDate,
+        [FromQuery] int? cinemaId, CancellationToken ct) => await Run(startDate, endDate, cinemaId,
+            async (f, t, c, u, ip) => Ok(await _reports.TopSellingAsync(f, t, c, u, ip, ct)));
+
     [HttpGet("export")]
     public async Task<IActionResult> Export([FromQuery] string format, [FromQuery] string reportType,
         [FromQuery] DateOnly? startDate, [FromQuery] DateOnly? endDate, [FromQuery] int? cinemaId, CancellationToken ct)
