@@ -16,7 +16,7 @@ public sealed class SeatServiceTests
         };
         var service = new SeatService(repository);
 
-        var result = await service.CreateSeatAsync(1, "A", 1, 1, "ACTIVE");
+        var result = await service.CreateSeatAsync(1, "A", 1, 1, "ACTIVE", false);
 
         Assert.True(result.Succeeded);
         Assert.NotNull(result.Seat);
@@ -54,7 +54,7 @@ public sealed class SeatServiceTests
         var service = new SeatService(repository);
 
         var result = await service.CreateSeatAsync(
-            1, "A", 1, 1, "ACTIVE", managerCinemaId: 2);
+            1, "A", 1, 1, "ACTIVE", false, managerCinemaId: 2);
 
         Assert.False(result.Succeeded);
         Assert.Equal(
@@ -147,6 +147,14 @@ public sealed class SeatServiceTests
             return Task.FromResult(false);
         }
 
+        public Task<List<Seat>> GetSeatsBySelectorAsync(
+            int roomId,
+            SeatSelector selector,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new List<Seat>());
+        }
+
         public Task<Seat> AddAsync(
             Seat seat,
             CancellationToken cancellationToken = default)
@@ -160,8 +168,9 @@ public sealed class SeatServiceTests
         public Task<Seat?> UpdateAsync(
             int roomId,
             int seatId,
-            int seatTypeId,
+            int? seatTypeId,
             string status,
+            bool isGap,
             CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
