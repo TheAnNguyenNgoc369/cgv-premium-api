@@ -4,6 +4,7 @@ using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CinemaBooking.Infrastructure.Migrations
 {
     [DbContext(typeof(CinemaBookingDbContext))]
-    partial class CinemaBookingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260705132721_AddCinemaCoordinates")]
+    partial class AddCinemaCoordinates
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1091,15 +1094,15 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SeatID"));
 
-                    b.Property<bool>("IsGap")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false);
-
                     b.Property<bool>("IsCurrentLayout")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
+
+                    b.Property<bool>("IsGap")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<int>("RoomID")
                         .HasColumnType("int");
@@ -1131,8 +1134,8 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.HasIndex("RoomID", "SeatRow", "SeatCol")
                         .IsUnique()
-                        .HasFilter("[IsCurrentLayout] = 1")
-                        .HasDatabaseName("UQ_Seat_RoomID_SeatRow_SeatCol");
+                        .HasDatabaseName("UQ_Seat_RoomID_SeatRow_SeatCol")
+                        .HasFilter("[IsCurrentLayout] = 1");
 
                     b.ToTable("Seat", null, t =>
                         {

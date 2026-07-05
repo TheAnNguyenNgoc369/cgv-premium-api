@@ -231,6 +231,8 @@ public sealed class UserController : ControllerBase
                     user.Cinema.CinemaID,
                     user.Cinema.CinemaName,
                     user.Cinema.Address,
+                    user.Cinema.Latitude.HasValue ? decimal.ToDouble(user.Cinema.Latitude.Value) : null,
+                    user.Cinema.Longitude.HasValue ? decimal.ToDouble(user.Cinema.Longitude.Value) : null,
                     EnumValueMapper.ToApiValue(user.Cinema.Status))
                 : null
         };
