@@ -1,4 +1,5 @@
 using MovieEntity = CinemaBooking.Domain.Entities.Movie;
+using CinemaBooking.Application.Movie;
 
 namespace CinemaBooking.Application.Common.Interfaces;
 
@@ -9,6 +10,9 @@ public interface IMovieRepository
     Task<List<MovieEntity>> GetMoviesAsync(
         string? status,
         IReadOnlyCollection<int> genreIds,
+        CancellationToken cancellationToken = default);
+
+    Task<List<MovieTicketSales>> GetMovieTicketSalesAsync(
         CancellationToken cancellationToken = default);
 
     Task<MovieEntity?> GetMovieByIdAsync(

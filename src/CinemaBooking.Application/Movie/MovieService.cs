@@ -35,6 +35,29 @@ public sealed class MovieService : IMovieService
             : _movieRepository.GetMoviesAsync(normalizedStatus, genreIds, cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<int, MovieSalesInfo>> GetMovieSalesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var sales = await _movieRepository.GetMovieTicketSalesAsync(cancellationToken);
+        var rankedSales = sales
+            .Where(movie => movie.TicketsSold > 0)
+            .OrderByDescending(movie => movie.TicketsSold)
+            .ThenBy(movie => movie.Title)
+            .ThenBy(movie => movie.MovieId)
+            .ToList();
+
+        return rankedSales
+            .Select((movie, index) => new
+            {
+                movie.MovieId,
+                Sales = new MovieSalesInfo(
+                    movie.TicketsSold,
+                    index < 5,
+                    index + 1)
+            })
+            .ToDictionary(item => item.MovieId, item => item.Sales);
+    }
+
     public Task<MovieEntity?> GetMovieByIdAsync(
         int id,
         CancellationToken cancellationToken = default)

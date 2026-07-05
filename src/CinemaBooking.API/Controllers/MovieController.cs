@@ -72,12 +72,15 @@ public sealed class MovieController : ControllerBase
         }
 
         var movies = await _movieService.GetMoviesAsync(status, genreIds, cancellationToken);
+        var movieSales = await _movieService.GetMovieSalesAsync(cancellationToken);
 
         var totalCount = movies.Count;
         var items = movies
             .Skip((pageIndex - 1) * pageSize)
             .Take(pageSize)
-            .Select(ToListResponse)
+            .Select(movie => ToListWithSalesResponse(
+                movie,
+                movieSales.GetValueOrDefault(movie.MovieID)))
             .ToList();
 
         return Ok(new
@@ -297,6 +300,23 @@ public sealed class MovieController : ControllerBase
             movie.PosterURL,
             movie.DurationMin,
             EnumValueMapper.ToApiValue(movie.Status));
+    }
+
+    private static MovieListWithSalesResponse ToListWithSalesResponse(
+        MovieEntity movie,
+        MovieSalesInfo? sales)
+    {
+        return new MovieListWithSalesResponse(
+            movie.MovieID,
+            movie.Title,
+            movie.MovieGenres.Select(mg => mg.Genre.GenreName).ToList(),
+            EnumValueMapper.ToApiValue(movie.AgeRating),
+            movie.PosterURL,
+            movie.DurationMin,
+            EnumValueMapper.ToApiValue(movie.Status),
+            sales?.TicketsSold ?? 0,
+            sales?.IsTopSelling ?? false,
+            sales?.SalesRank);
     }
 
     private static MovieDetailResponse ToDetailResponse(MovieEntity movie)

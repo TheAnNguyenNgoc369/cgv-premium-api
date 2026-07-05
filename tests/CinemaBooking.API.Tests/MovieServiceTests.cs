@@ -81,12 +81,41 @@ public sealed class MovieServiceTests
         Assert.Equal(new[] { 1, 2 }, repository.GenreIds);
     }
 
+    [Fact]
+    public async Task GetMovieSalesAsync_RanksGloballyAndMarksOnlyTopFive()
+    {
+        var repository = new StubMovieRepository
+        {
+            TicketSales =
+            [
+                new(6, "Zulu", 10),
+                new(2, "Beta", 30),
+                new(1, "Alpha", 30),
+                new(3, "Gamma", 20),
+                new(4, "Delta", 15),
+                new(5, "Epsilon", 12),
+                new(7, "No Sales", 0)
+            ]
+        };
+        var service = new MovieService(repository, new StubImageStorageService());
+
+        var result = await service.GetMovieSalesAsync();
+
+        Assert.Equal(1, result[1].SalesRank);
+        Assert.Equal(2, result[2].SalesRank);
+        Assert.True(result[5].IsTopSelling);
+        Assert.False(result[6].IsTopSelling);
+        Assert.Equal(6, result[6].SalesRank);
+        Assert.False(result.ContainsKey(7));
+    }
+
     private sealed class StubMovieRepository : IMovieRepository
     {
         public string? Status { get; private set; }
         public IReadOnlyCollection<int> GenreIds { get; private set; } = Array.Empty<int>();
         public Movie? ExistingMovie { get; init; }
         public string? UpdatedStatus { get; private set; }
+        public List<MovieTicketSales> TicketSales { get; init; } = [];
 
         public Task<List<Movie>> GetMoviesAsync(
             string? status, IReadOnlyCollection<int> genreIds,
@@ -96,6 +125,9 @@ public sealed class MovieServiceTests
             GenreIds = genreIds;
             return Task.FromResult(new List<Movie>());
         }
+
+        public Task<List<MovieTicketSales>> GetMovieTicketSalesAsync(
+            CancellationToken cancellationToken = default) => Task.FromResult(TicketSales);
 
         public Task<Movie?> GetByIdAsync(int movieId, CancellationToken cancellationToken = default) =>
             Task.FromResult(ExistingMovie?.MovieID == movieId ? ExistingMovie : null);

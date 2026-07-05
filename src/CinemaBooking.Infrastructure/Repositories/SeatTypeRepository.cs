@@ -121,7 +121,7 @@ public sealed class SeatTypeRepository : ISeatTypeRepository
     {
         var roomIds = await _dbContext.Seats
             .AsNoTracking()
-            .Where(seat => seat.SeatTypeID == seatTypeId)
+            .Where(seat => seat.SeatTypeID == seatTypeId && seat.IsCurrentLayout)
             .Select(seat => seat.RoomID)
             .Distinct()
             .ToListAsync(cancellationToken);
@@ -129,7 +129,10 @@ public sealed class SeatTypeRepository : ISeatTypeRepository
         foreach (var roomId in roomIds)
         {
             var capacity = await _dbContext.Seats
-                .Where(seat => seat.RoomID == roomId)
+                .Where(seat => seat.RoomID == roomId
+                    && seat.IsCurrentLayout
+                    && seat.Status == "active"
+                    && !seat.IsGap)
                 .Join(
                     _dbContext.SeatTypes,
                     seat => seat.SeatTypeID,
