@@ -154,6 +154,8 @@ public sealed class ShowtimeController : ControllerBase
                 showtime.Room.CinemaID,
                 showtime.Room.Cinema.CinemaName,
                 showtime.Room.Cinema.Address,
+                showtime.Room.Cinema.Latitude.HasValue ? decimal.ToDouble(showtime.Room.Cinema.Latitude.Value) : null,
+                showtime.Room.Cinema.Longitude.HasValue ? decimal.ToDouble(showtime.Room.Cinema.Longitude.Value) : null,
                 EnumValueMapper.ToApiValue(showtime.Room.Cinema.Status)),
             AsUtc(showtime.StartTime), AsUtc(showtime.EndTime), showtime.BasePrice,
             EnumValueMapper.ToApiValue(showtime.Status), isSoldOut);

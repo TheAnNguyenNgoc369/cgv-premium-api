@@ -202,8 +202,8 @@ public sealed class ShowtimeRepository : IShowtimeRepository
     public Task<List<Seat>> GetSeatsByRoomAsync(
         int roomId, CancellationToken cancellationToken = default) =>
         _db.Seats.Include(seat => seat.SeatType)
-            .Where(seat => seat.RoomID == roomId && seat.IsCurrentLayout && seat.Status == "active"
-                && !seat.IsGap && seat.SeatTypeID.HasValue)
+            .Where(seat => seat.RoomID == roomId && seat.IsCurrentLayout
+                && (seat.IsGap || (seat.Status == "active" && seat.SeatTypeID.HasValue)))
             .OrderBy(seat => seat.SeatRow).ThenBy(seat => seat.SeatCol)
             .ToListAsync(cancellationToken);
 

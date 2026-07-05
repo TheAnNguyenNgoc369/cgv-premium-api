@@ -229,6 +229,11 @@ public sealed class PaymentService : IPaymentService
         CancellationToken cancellationToken = default)
     {
         var payment = await _paymentRepository.GetPaymentByIdAsync(paymentId, cancellationToken);
+        var accessResult = MapAccessiblePayment(payment, actorUserId, isStaff);
+        if (!accessResult.Succeeded)
+            return accessResult;
+
+        payment = await SynchronizePendingPayOSPaymentAsync(payment, cancellationToken);
         return MapAccessiblePayment(payment, actorUserId, isStaff);
     }
 
@@ -239,7 +244,56 @@ public sealed class PaymentService : IPaymentService
         CancellationToken cancellationToken = default)
     {
         var payment = await _paymentRepository.GetPaymentByBookingIdAsync(bookingId, cancellationToken);
+        var accessResult = MapAccessiblePayment(payment, actorUserId, isStaff);
+        if (!accessResult.Succeeded)
+            return accessResult;
+
+        payment = await SynchronizePendingPayOSPaymentAsync(payment, cancellationToken);
         return MapAccessiblePayment(payment, actorUserId, isStaff);
+    }
+
+    private async Task<Payment?> SynchronizePendingPayOSPaymentAsync(
+        Payment? payment,
+        CancellationToken cancellationToken)
+    {
+        if (payment is null
+            || payment.PaymentMethod != PaymentMethod.PayOS
+            || payment.Status != PaymentStatus.Pending)
+            return payment;
+
+        var session = await _paymentRepository.GetLatestPaymentSessionAsync(
+            payment.PaymentID, cancellationToken);
+        if (session?.GatewayOrderNo is null
+            || !long.TryParse(session.GatewayOrderNo, out var orderCode))
+            return payment;
+
+        PayOSPaymentLinkStatusResult paymentLink;
+        try
+        {
+            paymentLink = await _payOSService.GetPaymentLinkStatusAsync(orderCode, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return payment;
+        }
+
+        if (!string.Equals(paymentLink.Status, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+            return payment;
+
+        await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            if (!await _paymentRepository.TryCancelPendingPaymentAsync(
+                    payment.PaymentID, cancellationToken))
+                return false;
+
+            await _bookingRepository.UpdateBookingStatusAsync(
+                payment.BookingID, BookingStatus.Cancelled, cancellationToken);
+            await _paymentRepository.UpdatePaymentSessionsForPaymentAsync(
+                payment.PaymentID, "cancelled", cancellationToken);
+            return true;
+        }, cancellationToken);
+
+        return await _paymentRepository.GetPaymentByIdAsync(payment.PaymentID, cancellationToken);
     }
 
     private async Task<PaymentOperationResult> ProcessWalletPaymentAsync(

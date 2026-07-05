@@ -254,10 +254,12 @@ public sealed class ShowtimeService : IShowtimeService
         var bookedSeatIds = await _showtimeRepository.GetBookedSeatIdsAsync(showtimeId, cancellationToken);
         var heldSeatIds = await _showtimeRepository.GetHeldSeatIdsAsync(showtimeId, now, cancellationToken);
         var seatResults = seats.Select(seat => new SeatMapSeatResult(
-            seat.SeatID, seat.SeatRow, seat.SeatCol, seat.SeatType!.TypeName,
-            seat.SeatType.ExtraPrice, showtime.BasePrice + seat.SeatType.ExtraPrice,
-            bookedSeatIds.Contains(seat.SeatID) ? SeatStatus.Booked
-                : heldSeatIds.Contains(seat.SeatID) ? SeatStatus.Held : SeatStatus.Available)).ToList();
+            seat.SeatID, seat.SeatRow, seat.SeatCol, seat.SeatType?.TypeName,
+            seat.SeatType?.ExtraPrice ?? 0,
+            seat.IsGap ? 0 : showtime.BasePrice + (seat.SeatType?.ExtraPrice ?? 0),
+            seat.IsGap ? seat.Status : bookedSeatIds.Contains(seat.SeatID) ? SeatStatus.Booked
+                : heldSeatIds.Contains(seat.SeatID) ? SeatStatus.Held : SeatStatus.Available,
+            seat.IsGap)).ToList();
         return (new SeatMapResult(showtime.ShowtimeID, showtime.Room.RoomName, showtime.Room.RoomType, seatResults), null);
     }
 }

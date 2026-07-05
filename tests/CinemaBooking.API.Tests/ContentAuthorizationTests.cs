@@ -27,13 +27,29 @@ public sealed class ContentAuthorizationTests
         Assert.Equal(Roles.Admin, attribute.Roles);
     }
 
-    [Fact]
-    public void SeatTypeModule_RequiresManagerOnly()
+    [Theory]
+    [InlineData(nameof(SeatTypeController.GetSeatTypes))]
+    [InlineData(nameof(SeatTypeController.GetSeatTypeById))]
+    public void SeatTypeReads_RequireManager(string methodName)
     {
-        var attribute = Assert.Single(typeof(SeatTypeController)
+        var method = typeof(SeatTypeController).GetMethod(methodName)!;
+        var attribute = Assert.Single(method
             .GetCustomAttributes(typeof(AuthorizeAttribute), true)
             .Cast<AuthorizeAttribute>());
         Assert.Equal(Roles.Manager, attribute.Roles);
+    }
+
+    [Theory]
+    [InlineData(nameof(SeatTypeController.CreateSeatType))]
+    [InlineData(nameof(SeatTypeController.UpdateSeatType))]
+    [InlineData(nameof(SeatTypeController.DeleteSeatType))]
+    public void SeatTypeWrites_RequireAdmin(string methodName)
+    {
+        var method = typeof(SeatTypeController).GetMethod(methodName)!;
+        var attribute = Assert.Single(method
+            .GetCustomAttributes(typeof(AuthorizeAttribute), true)
+            .Cast<AuthorizeAttribute>());
+        Assert.Equal(Roles.Admin, attribute.Roles);
     }
 
     [Fact]

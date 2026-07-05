@@ -194,6 +194,8 @@ public sealed class AuthController : ControllerBase
                         result.User.Cinema.CinemaID,
                         result.User.Cinema.CinemaName,
                         result.User.Cinema.Address,
+                        result.User.Cinema.Latitude.HasValue ? decimal.ToDouble(result.User.Cinema.Latitude.Value) : null,
+                        result.User.Cinema.Longitude.HasValue ? decimal.ToDouble(result.User.Cinema.Longitude.Value) : null,
                         EnumValueMapper.ToApiValue(result.User.Cinema.Status))
                     : null
             }
