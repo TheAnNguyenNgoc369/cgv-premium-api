@@ -10,6 +10,9 @@ public interface IMovieService
         IReadOnlyCollection<int> genreIds,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyDictionary<int, MovieSalesInfo>> GetMovieSalesAsync(
+        CancellationToken cancellationToken = default);
+
     Task<MovieEntity?> GetMovieByIdAsync(
         int id,
         CancellationToken cancellationToken = default);

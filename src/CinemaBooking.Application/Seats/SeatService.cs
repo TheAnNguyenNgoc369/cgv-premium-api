@@ -79,6 +79,8 @@ public sealed class SeatService : ISeatService
             return (false, "Room not found", null);
         if (managerCinemaId.HasValue && room.CinemaID != managerCinemaId)
             return (false, CinemaScopeMessages.AccessDenied, null);
+        if (!CanManageSeats(room))
+            return (false, "Seats can only be managed when the room is INACTIVE", null);
         if (await _seatRepository.HasActiveOrUpcomingShowtimesAsync(roomId, cancellationToken))
             return (false, "Room has active or upcoming schedules", null);
 
@@ -161,6 +163,8 @@ public sealed class SeatService : ISeatService
             return (false, "Room not found", null);
         if (managerCinemaId.HasValue && room.CinemaID != managerCinemaId)
             return (false, CinemaScopeMessages.AccessDenied, null);
+        if (!CanManageSeats(room))
+            return (false, "Seats can only be managed when the room is INACTIVE", null);
         if (await _seatRepository.HasActiveOrUpcomingShowtimesAsync(roomId, cancellationToken))
             return (false, "Room has active or upcoming schedules", null);
         if (rows <= 0)
@@ -173,16 +177,13 @@ public sealed class SeatService : ISeatService
             return (false, $"Columns must not exceed {MaxColumns}", null);
         if ((long)rows * columns > MaxPositions)
             return (false, $"Total positions must not exceed {MaxPositions}", null);
-        if (await _seatRepository.CountSeatsByRoomAsync(roomId, cancellationToken) > 0)
-            return (false, "Room already has seats", null);
-
         var seatType = await _seatRepository.GetSeatTypeByIdAsync(seatTypeId, cancellationToken);
         if (seatType is null)
             return (false, "Seat type not found", null);
 
         var normalizedStatus = NormalizeSeatStatus(status);
         if (normalizedStatus is null)
-            return (false, "Status must be ACTIVE, DISABLED, MAINTENANCE, or INACTIVE", null);
+            return (false, "Status must be ACTIVE or INACTIVE", null);
 
         var seats = new List<Seat>();
         for (var row = 1; row <= rows; row++)
@@ -221,6 +222,8 @@ public sealed class SeatService : ISeatService
             return (false, "Room not found", null);
         if (managerCinemaId.HasValue && room.CinemaID != managerCinemaId)
             return (false, CinemaScopeMessages.AccessDenied, null);
+        if (!CanManageSeats(room))
+            return (false, "Seats can only be managed when the room is INACTIVE", null);
 
         var seat = await _seatRepository.GetSeatByIdAsync(roomId, seatId, cancellationToken);
         if (seat is null)
@@ -237,7 +240,7 @@ public sealed class SeatService : ISeatService
             : seat.Status;
 
         if (status is not null && normalizedStatus is null)
-            return (false, "Status must be ACTIVE, DISABLED, MAINTENANCE, or INACTIVE", null);
+            return (false, "Status must be ACTIVE or INACTIVE", null);
 
         var targetIsGap = isGap ?? seat.IsGap;
         var targetSeatTypeId = seat.SeatTypeID;
@@ -289,7 +292,7 @@ public sealed class SeatService : ISeatService
 
     public async Task<(bool Succeeded, string? ErrorMessage, List<Seat> Seats)> BulkUpdateAsync(
         int roomId,
-        SeatSelector selector,
+        IReadOnlyCollection<SeatSelector> selectors,
         int? seatTypeId,
         string? status,
         bool? isGap,
@@ -301,11 +304,11 @@ public sealed class SeatService : ISeatService
             return (false, "Room not found", []);
         if (managerCinemaId.HasValue && room.CinemaID != managerCinemaId)
             return (false, CinemaScopeMessages.AccessDenied, []);
+        if (!CanManageSeats(room))
+            return (false, "Seats can only be managed when the room is INACTIVE", []);
         if (await _seatRepository.HasActiveOrUpcomingShowtimesAsync(roomId, cancellationToken))
             return (false, "Room has active or upcoming schedules", []);
-        if (selector is null)
-            return (false, "Selector is required", []);
-        var selectorError = ValidateSelector(selector);
+        var selectorError = await ValidateSelectorsAsync(roomId, selectors, cancellationToken);
         if (selectorError is not null)
             return (false, selectorError, []);
         if (seatTypeId is null && status is null && isGap is null)
@@ -322,22 +325,18 @@ public sealed class SeatService : ISeatService
                 return (false, "Seat type not found", []);
         }
 
-        var seats = await _seatRepository.GetSeatsBySelectorAsync(roomId, selector, cancellationToken);
+        var seats = await _seatRepository.GetSeatsBySelectorAsync(roomId, selectors, cancellationToken);
         if (seats.Count == 0)
-            return (true, null, []);
-
-        foreach (var seat in seats)
-        {
-            if (await _seatRepository.HasSeatRelationsAsync(seat.SeatID, cancellationToken))
-                return (false, "One or more seats have related booking or hold records", []);
-        }
+            return selectors.Count == 0
+                ? (true, null, [])
+                : (false, "Selectors do not match any current seat", []);
 
         var normalizedStatus = status is not null
             ? NormalizeSeatStatus(status)
             : null;
 
         if (status is not null && normalizedStatus is null)
-            return (false, "Status must be ACTIVE, DISABLED, MAINTENANCE, or INACTIVE", []);
+            return (false, "Status must be ACTIVE or INACTIVE", []);
 
         var plannedUpdates = new List<(Seat Seat, int? SeatTypeId, string Status, bool IsGap)>();
         foreach (var seat in seats)
@@ -395,7 +394,7 @@ public sealed class SeatService : ISeatService
 
     public async Task<(bool Succeeded, string? ErrorMessage)> BulkDeleteAsync(
         int roomId,
-        SeatSelector selector,
+        IReadOnlyCollection<SeatSelector> selectors,
         int? managerCinemaId = null,
         CancellationToken cancellationToken = default)
     {
@@ -404,23 +403,19 @@ public sealed class SeatService : ISeatService
             return (false, "Room not found");
         if (managerCinemaId.HasValue && room.CinemaID != managerCinemaId)
             return (false, CinemaScopeMessages.AccessDenied);
+        if (!CanManageSeats(room))
+            return (false, "Seats can only be managed when the room is INACTIVE");
         if (await _seatRepository.HasActiveOrUpcomingShowtimesAsync(roomId, cancellationToken))
             return (false, "Room has active or upcoming schedules");
-        if (selector is null)
-            return (false, "Selector is required");
-        var selectorError = ValidateSelector(selector);
+        var selectorError = await ValidateSelectorsAsync(roomId, selectors, cancellationToken);
         if (selectorError is not null)
             return (false, selectorError);
 
-        var seats = await _seatRepository.GetSeatsBySelectorAsync(roomId, selector, cancellationToken);
+        var seats = await _seatRepository.GetSeatsBySelectorAsync(roomId, selectors, cancellationToken);
         if (seats.Count == 0)
-            return (true, null);
-
-        foreach (var seat in seats)
-        {
-            if (await _seatRepository.HasSeatRelationsAsync(seat.SeatID, cancellationToken))
-                return (false, "One or more seats have related booking or hold records");
-        }
+            return selectors.Count == 0
+                ? (true, null)
+                : (false, "Selectors do not match any current seat");
 
         return await ExecuteInTransactionAsync(async () =>
         {
@@ -448,6 +443,8 @@ public sealed class SeatService : ISeatService
             return (false, "Room not found");
         if (managerCinemaId.HasValue && room.CinemaID != managerCinemaId)
             return (false, CinemaScopeMessages.AccessDenied);
+        if (!CanManageSeats(room))
+            return (false, "Seats can only be managed when the room is INACTIVE");
         var seat = await _seatRepository.GetSeatByIdAsync(roomId, seatId, cancellationToken);
         if (seat is null)
         {
@@ -459,14 +456,11 @@ public sealed class SeatService : ISeatService
             return (false, "Room has active or upcoming schedules");
         }
 
-        if (await _seatRepository.HasSeatRelationsAsync(seatId, cancellationToken))
-        {
-            return (false, "Seat has related booking or hold records");
-        }
-
-        var deleted = await ExecuteInTransactionAsync(
-            () => _seatRepository.DeleteAsync(seatId, cancellationToken), cancellationToken);
-        return deleted
+        var updatedSeat = await ExecuteInTransactionAsync(
+            () => _seatRepository.UpdateAsync(
+                roomId, seatId, seat.SeatTypeID, "inactive", seat.IsGap, cancellationToken),
+            cancellationToken);
+        return updatedSeat is not null
             ? (true, null)
             : (false, "Seat not found");
     }
@@ -486,6 +480,8 @@ public sealed class SeatService : ISeatService
         }
         if (managerCinemaId.HasValue && room.CinemaID != managerCinemaId)
             return (false, CinemaScopeMessages.AccessDenied, []);
+        if (!CanManageSeats(room))
+            return (false, "Seats can only be managed when the room is INACTIVE", []);
 
         if (await _seatRepository.HasActiveOrUpcomingShowtimesAsync(roomId, cancellationToken))
         {
@@ -531,14 +527,47 @@ public sealed class SeatService : ISeatService
         return (true, null, updatedSeats);
     }
 
-    private static string? ValidateSelector(SeatSelector selector)
+    private async Task<string?> ValidateSelectorsAsync(
+        int roomId,
+        IReadOnlyCollection<SeatSelector>? selectors,
+        CancellationToken cancellationToken)
     {
-        var mode = selector.Mode?.Trim().ToUpperInvariant();
-        if (mode is not ("IDS" or "ROWS" or "COLS"))
-            return "Selector mode must be IDS, ROWS, or COLS";
-        return selector.Target is null || selector.Target.Count == 0
-            ? "Selector target must contain at least one value"
-            : null;
+        if (selectors is null || selectors.Count == 0)
+            return null;
+
+        var currentSeats = await _seatRepository.GetSeatsByRoomAsync(roomId, cancellationToken);
+        foreach (var selector in selectors)
+        {
+            if (selector is null)
+                return "Selector is required";
+
+            var mode = selector.Mode?.Trim().ToUpperInvariant();
+            if (mode is not ("IDS" or "ROWS" or "COLS"))
+                return "Selector mode must be IDS, ROWS, or COLS";
+            if (selector.Target is null || selector.Target.Count == 0)
+                return "Selector target must contain at least one value";
+
+            foreach (var rawTarget in selector.Target)
+            {
+                var target = rawTarget?.Trim() ?? string.Empty;
+                var exists = mode switch
+                {
+                    "IDS" => int.TryParse(target, out var id) && id > 0
+                        && currentSeats.Any(seat => seat.SeatID == id),
+                    "ROWS" => target.Length > 0 && target.All(char.IsLetter)
+                        && currentSeats.Any(seat => string.Equals(
+                            seat.SeatRow, target, StringComparison.OrdinalIgnoreCase)),
+                    "COLS" => int.TryParse(target, out var col) && col > 0
+                        && currentSeats.Any(seat => seat.SeatCol == col),
+                    _ => false
+                };
+
+                if (!exists)
+                    return $"Selector target '{target}' is invalid or does not exist in the current layout";
+            }
+        }
+
+        return null;
     }
 
     private Task<T> ExecuteInTransactionAsync<T>(
@@ -592,7 +621,7 @@ public sealed class SeatService : ISeatService
         var normalizedStatus = NormalizeSeatStatus(status);
         if (normalizedStatus is null)
         {
-            return (false, "Status must be ACTIVE, DISABLED, MAINTENANCE, or INACTIVE", null, null, null, null);
+            return (false, "Status must be ACTIVE or INACTIVE", null, null, null, null);
         }
 
         if (await _seatRepository.SeatPositionExistsAsync(
@@ -710,7 +739,7 @@ public sealed class SeatService : ISeatService
             var status = NormalizeSeatStatus(item.Status);
             if (status is null)
             {
-                return (false, "Status must be ACTIVE, DISABLED, MAINTENANCE, or INACTIVE", []);
+                return (false, "Status must be ACTIVE or INACTIVE", []);
             }
 
             if (!positions.Add((rowLabel, item.ColIndex)))
@@ -737,6 +766,8 @@ public sealed class SeatService : ISeatService
             ? null
             : EnumValueMapper.Validate(status, "Status", DatabaseEnumMappings.SeatStatuses).DatabaseValue;
     }
+
+    private static bool CanManageSeats(Room room) => room.Status == "inactive";
 
     private static string? NormalizeRowLabel(string? rowLabel)
     {

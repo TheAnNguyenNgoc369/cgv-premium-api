@@ -1,6 +1,8 @@
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Movie;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
+using CinemaBooking.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
 
 namespace CinemaBooking.Infrastructure.Repositories;
@@ -46,6 +48,29 @@ public sealed class MovieRepository : IMovieRepository
 
         return query
             .OrderBy(m => m.Title)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<List<MovieTicketSales>> GetMovieTicketSalesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Payments
+            .AsNoTracking()
+            .Where(payment => payment.Status == PaymentStatus.Completed
+                && payment.Booking.Status != BookingStatus.Cancelled
+                && payment.Booking.Status != BookingStatus.Refunded)
+            .SelectMany(payment => payment.Booking.BookingSeats)
+            .GroupBy(bookingSeat => new
+            {
+                bookingSeat.Booking.Showtime.MovieID,
+                bookingSeat.Booking.Showtime.Movie.Title
+            })
+            .Select(group => new MovieTicketSales(
+                group.Key.MovieID,
+                group.Key.Title,
+                group.Sum(bookingSeat => bookingSeat.Seat.SeatType == null
+                    ? 1
+                    : bookingSeat.Seat.SeatType.Capacity)))
             .ToListAsync(cancellationToken);
     }
 

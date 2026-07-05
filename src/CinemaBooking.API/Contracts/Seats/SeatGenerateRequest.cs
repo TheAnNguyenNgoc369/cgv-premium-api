@@ -1,8 +1,10 @@
+using System.Text.Json.Serialization;
+
 namespace CinemaBooking.API.Contracts.Seats;
 
 public sealed record SeatGenerateRequest(
     int Rows,
-    int Columns,
+    [property: JsonPropertyName("column")] int Columns,
     int SeatTypeId,
     string Status
 );

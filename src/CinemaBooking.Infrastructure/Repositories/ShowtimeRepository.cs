@@ -112,7 +112,7 @@ public sealed class ShowtimeRepository : IShowtimeRepository
             .ToListAsync(cancellationToken);
         var roomIds = showtimeRooms.Select(item => item.RoomID).Distinct().ToArray();
         var activeSeats = await _db.Seats.AsNoTracking()
-            .Where(seat => roomIds.Contains(seat.RoomID) && seat.Status == "active"
+            .Where(seat => roomIds.Contains(seat.RoomID) && seat.IsCurrentLayout && seat.Status == "active"
                 && !seat.IsGap && seat.SeatTypeID.HasValue)
             .Select(seat => new { seat.RoomID, seat.SeatID, seat.SeatType!.Capacity })
             .ToListAsync(cancellationToken);
@@ -202,7 +202,7 @@ public sealed class ShowtimeRepository : IShowtimeRepository
     public Task<List<Seat>> GetSeatsByRoomAsync(
         int roomId, CancellationToken cancellationToken = default) =>
         _db.Seats.Include(seat => seat.SeatType)
-            .Where(seat => seat.RoomID == roomId && seat.Status == "active"
+            .Where(seat => seat.RoomID == roomId && seat.IsCurrentLayout && seat.Status == "active"
                 && !seat.IsGap && seat.SeatTypeID.HasValue)
             .OrderBy(seat => seat.SeatRow).ThenBy(seat => seat.SeatCol)
             .ToListAsync(cancellationToken);

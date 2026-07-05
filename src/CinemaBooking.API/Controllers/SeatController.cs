@@ -36,60 +36,36 @@ public sealed class SeatController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GetSeats(
         int roomId,
+        [FromQuery] int? seatId,
+        [FromQuery] string? rows,
+        [FromQuery] string? columns,
         CancellationToken cancellationToken)
     {
+        if (seatId is <= 0)
+            return BadRequest(new { success = false, message = "SeatId must be greater than 0" });
+
+        var rowFilter = SplitValues(rows)
+            .Select(value => value.ToUpperInvariant())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (rowFilter.Any(value => value.Any(character => !char.IsLetter(character))))
+            return BadRequest(new { success = false, message = "Rows must contain comma-separated row labels" });
+
+        var columnValues = SplitValues(columns);
+        if (columnValues.Any(value => !int.TryParse(value, out var column) || column <= 0))
+            return BadRequest(new { success = false, message = "Columns must contain comma-separated positive numbers" });
+        var columnFilter = columnValues.Select(int.Parse).ToHashSet();
+
         var seats = await _seatService.GetSeatsByRoomAsync(roomId, cancellationToken);
         if (seats is null)
-        {
             return NotFound(new { success = false, message = "Room not found" });
-        }
 
-        return Ok(seats.Select(ToResponse));
-    }
+        var filteredSeats = seats
+            .Where(seat => !seatId.HasValue || seat.SeatID == seatId.Value)
+            .Where(seat => rowFilter.Count == 0 || rowFilter.Contains(seat.SeatRow))
+            .Where(seat => columnFilter.Count == 0 || columnFilter.Contains(seat.SeatCol))
+            .ToList();
 
-    [HttpGet("seats/{seatId:int}")]
-    [AllowAnonymous]
-    public async Task<IActionResult> GetSeat(
-        int roomId,
-        int seatId,
-        CancellationToken cancellationToken)
-    {
-        var seat = await _seatService.GetSeatByIdAsync(roomId, seatId, cancellationToken);
-
-        return seat is null
-            ? NotFound(new { success = false, message = "Seat not found" })
-            : Ok(ToResponse(seat));
-    }
-
-    [HttpPost("seats")]
-    public async Task<IActionResult> CreateSeat(
-        int roomId,
-        [FromBody] SeatRequest request,
-        CancellationToken cancellationToken)
-    {
-        var managerCinemaId = await GetManagerCinemaIdAsync(cancellationToken);
-        if (!managerCinemaId.HasValue) return CinemaScopeForbidden();
-        var result = await _seatService.CreateSeatAsync(
-            roomId,
-            request.RowLabel,
-            request.SeatNumber,
-            request.SeatTypeId,
-            request.Status,
-            request.IsGap,
-            managerCinemaId,
-            cancellationToken);
-
-        if (!result.Succeeded)
-        {
-            return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
-        }
-
-        var response = ToResponse(result.Seat!);
-
-        return CreatedAtAction(
-            nameof(GetSeat),
-            new { roomId, seatId = response.SeatId },
-            response);
+        return Ok(ToSeatMapResponse(roomId, filteredSeats));
     }
 
     [HttpPost("seats/generate")]
@@ -115,52 +91,7 @@ public sealed class SeatController : ControllerBase
             return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
         }
 
-        return Ok(ToGenerateResponse(roomId, result.Result!));
-    }
-
-    [HttpPatch("seats/{seatId:int}")]
-    public async Task<IActionResult> UpdateSeat(
-        int roomId,
-        int seatId,
-        [FromBody] SeatUpdateRequest request,
-        CancellationToken cancellationToken)
-    {
-        var managerCinemaId = await GetManagerCinemaIdAsync(cancellationToken);
-        if (!managerCinemaId.HasValue) return CinemaScopeForbidden();
-        var result = await _seatService.UpdateSeatAsync(
-            roomId,
-            seatId,
-            request.SeatTypeId,
-            request.Status,
-            request.IsGap,
-            managerCinemaId,
-            cancellationToken);
-
-        if (!result.Succeeded)
-        {
-            return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
-        }
-
-        return Ok(ToResponse(result.Seat!));
-    }
-
-    [HttpDelete("seats/{seatId:int}")]
-    public async Task<IActionResult> DeleteSeat(
-        int roomId,
-        int seatId,
-        CancellationToken cancellationToken)
-    {
-        var managerCinemaId = await GetManagerCinemaIdAsync(cancellationToken);
-        if (!managerCinemaId.HasValue) return CinemaScopeForbidden();
-        var result = await _seatService.DeleteSeatAsync(
-            roomId, seatId, managerCinemaId, cancellationToken);
-
-        if (!result.Succeeded)
-        {
-            return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
-        }
-
-        return NoContent();
+        return Ok(ToSeatMapResponse(roomId, result.Result!.Seats));
     }
 
     [HttpPatch("seats/bulk")]
@@ -174,7 +105,7 @@ public sealed class SeatController : ControllerBase
 
         var result = await _seatService.BulkUpdateAsync(
             roomId,
-            ToAppSelector(request.Selector),
+            ToAppSelectors(request.Selector, request.Selectors),
             request.Update.SeatTypeId,
             request.Update.Status,
             request.Update.IsGap,
@@ -186,7 +117,8 @@ public sealed class SeatController : ControllerBase
             return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
         }
 
-        return Ok(result.Seats.Select(ToResponse));
+        var seats = await _seatService.GetSeatsByRoomAsync(roomId, cancellationToken);
+        return Ok(ToSeatMapResponse(roomId, seats!));
     }
 
     [HttpDelete("seats/bulk")]
@@ -200,7 +132,7 @@ public sealed class SeatController : ControllerBase
 
         var result = await _seatService.BulkDeleteAsync(
             roomId,
-            ToAppSelector(request.Selector),
+            ToAppSelectors(request.Selector, request.Selectors),
             managerCinemaId,
             cancellationToken);
 
@@ -209,66 +141,8 @@ public sealed class SeatController : ControllerBase
             return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
         }
 
-        return NoContent();
-    }
-
-    [HttpGet("seat-map")]
-    [AllowAnonymous]
-    public async Task<IActionResult> GetSeatMap(
-        int roomId,
-        CancellationToken cancellationToken)
-    {
         var seats = await _seatService.GetSeatsByRoomAsync(roomId, cancellationToken);
-        if (seats is null)
-        {
-            return NotFound(new { success = false, message = "Room not found" });
-        }
-
-        return Ok(ToSeatMapResponse(roomId, seats));
-    }
-
-    [HttpGet("layout")]
-    [AllowAnonymous]
-    public async Task<IActionResult> GetSeatLayout(
-        int roomId,
-        CancellationToken cancellationToken)
-    {
-        var layout = await _seatService.GetLayoutAsync(roomId, cancellationToken);
-        if (layout is null)
-        {
-            return NotFound(new { success = false, message = "Room not found" });
-        }
-
-        return Ok(ToLayoutResponse(roomId, layout));
-    }
-
-    [HttpPut("layout")]
-    public async Task<IActionResult> ReplaceSeatLayout(
-        int roomId,
-        [FromBody] SeatLayoutRequest request,
-        CancellationToken cancellationToken)
-    {
-        var managerCinemaId = await GetManagerCinemaIdAsync(cancellationToken);
-        if (!managerCinemaId.HasValue) return CinemaScopeForbidden();
-        var result = await _seatService.ReplaceLayoutAsync(
-            roomId,
-            request.TotalRows,
-            request.TotalCols,
-            request.Seats?.Select(ToSeatLayoutSeatItem).ToList() ?? [],
-            managerCinemaId,
-            cancellationToken);
-
-        if (!result.Succeeded)
-        {
-            return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
-        }
-
-        return Ok(ToLayoutResponse(
-            roomId,
-            new SeatLayoutResult(
-                request.TotalRows,
-                request.TotalCols,
-                result.Seats)));
+        return Ok(ToSeatMapResponse(roomId, seats!));
     }
 
     private async Task<IActionResult> ToErrorResponseAsync(
@@ -319,39 +193,6 @@ public sealed class SeatController : ControllerBase
             seat.IsGap);
     }
 
-    private static SeatLayoutResponse ToLayoutResponse(
-        int roomId,
-        SeatLayoutResult layout)
-    {
-        return new SeatLayoutResponse(
-            roomId,
-            layout.TotalRows,
-            layout.TotalCols,
-            layout.Seats.Select(ToResponse).ToList());
-    }
-
-    private static SeatLayoutSeatItem ToSeatLayoutSeatItem(SeatLayoutSeatRequest request)
-    {
-        return new SeatLayoutSeatItem(
-            request.RowLabel,
-            request.ColIndex,
-            request.SeatName,
-            request.SeatTypeId,
-            request.Status,
-            request.IsGap);
-    }
-
-    private static SeatGenerateResponse ToGenerateResponse(
-        int roomId,
-        SeatGenerateResult result)
-    {
-        return new SeatGenerateResponse(
-            roomId,
-            result.Rows,
-            result.Columns,
-            result.Seats.Select(ToResponse).ToList());
-    }
-
     private static SeatMapResponse ToSeatMapResponse(
         int roomId,
         IReadOnlyCollection<Seat> seats)
@@ -387,6 +228,23 @@ public sealed class SeatController : ControllerBase
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .ToList());
     }
+
+    private static IReadOnlyCollection<AppSeatSelector> ToAppSelectors(
+        ApiSeatSelector? selector,
+        IReadOnlyCollection<ApiSeatSelector>? selectors)
+    {
+        var result = new List<AppSeatSelector>();
+        if (selector is not null)
+            result.Add(ToAppSelector(selector));
+        if (selectors is not null)
+            result.AddRange(selectors.Where(item => item is not null).Select(ToAppSelector));
+        return result;
+    }
+
+    private static IReadOnlyCollection<string> SplitValues(string? values) =>
+        string.IsNullOrWhiteSpace(values)
+            ? Array.Empty<string>()
+            : values.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static object ToSeatTypeResponse(SeatType seatType)
     {

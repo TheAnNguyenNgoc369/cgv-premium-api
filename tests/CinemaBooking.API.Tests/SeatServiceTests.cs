@@ -11,7 +11,7 @@ public sealed class SeatServiceTests
     {
         var repository = new StubSeatRepository
         {
-            Room = new Room { RoomID = 1, Capacity = 0 },
+            Room = new Room { RoomID = 1, Capacity = 0, Status = "inactive" },
             SeatType = new SeatType { SeatTypeID = 1, TypeName = "standard", Capacity = 1 }
         };
         var service = new SeatService(repository);
@@ -28,7 +28,7 @@ public sealed class SeatServiceTests
     {
         var repository = new StubSeatRepository
         {
-            Room = new Room { RoomID = 1, Capacity = 0 }
+            Room = new Room { RoomID = 1, Capacity = 0, Status = "inactive" }
         };
         var service = new SeatService(repository);
 
@@ -48,7 +48,7 @@ public sealed class SeatServiceTests
     {
         var repository = new StubSeatRepository
         {
-            Room = new Room { RoomID = 1, CinemaID = 1 },
+            Room = new Room { RoomID = 1, CinemaID = 1, Status = "inactive" },
             SeatType = new SeatType { SeatTypeID = 1, TypeName = "standard", Capacity = 1 }
         };
         var service = new SeatService(repository);
@@ -64,11 +64,11 @@ public sealed class SeatServiceTests
     }
 
     [Fact]
-    public async Task BulkUpdate_WhenAnySeatHasRelations_DoesNotPartiallyUpdateEarlierSeats()
+    public async Task BulkUpdate_WhenSeatsHaveRelations_UpdatesCurrentSeats()
     {
         var repository = new StubSeatRepository
         {
-            Room = new Room { RoomID = 1, CinemaID = 1 },
+            Room = new Room { RoomID = 1, CinemaID = 1, Status = "inactive" },
             SelectedSeats =
             [
                 new Seat { SeatID = 1, RoomID = 1, SeatTypeID = 1, Status = "active" },
@@ -79,10 +79,10 @@ public sealed class SeatServiceTests
         var service = new SeatService(repository);
 
         var result = await service.BulkUpdateAsync(
-            1, new SeatSelector("ids", ["1", "2"]), null, "INACTIVE", null);
+            1, [new SeatSelector("ids", ["1", "2"])], null, "INACTIVE", null);
 
-        Assert.False(result.Succeeded);
-        Assert.Empty(repository.UpdatedSeatIds);
+        Assert.True(result.Succeeded);
+        Assert.Equal([1, 2], repository.UpdatedSeatIds);
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class SeatServiceTests
     {
         var repository = new StubSeatRepository
         {
-            Room = new Room { RoomID = 1 },
+            Room = new Room { RoomID = 1, Status = "inactive" },
             SeatType = new SeatType { SeatTypeID = 1 }
         };
         var service = new SeatService(repository);
@@ -103,11 +103,48 @@ public sealed class SeatServiceTests
     }
 
     [Fact]
+    public async Task GenerateSeats_WhenRoomAlreadyHasSeats_ReplacesCurrentLayout()
+    {
+        var repository = new StubSeatRepository
+        {
+            Room = new Room { RoomID = 1, Status = "inactive" },
+            SeatType = new SeatType { SeatTypeID = 1 },
+            ExistingSeatCount = 5
+        };
+        var service = new SeatService(repository);
+
+        var result = await service.GenerateSeatsAsync(1, 2, 3, 1, "ACTIVE");
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(6, result.Result!.Seats.Count);
+        Assert.Equal(1, repository.ReplaceLayoutCallCount);
+    }
+
+    [Theory]
+    [InlineData("DISABLED")]
+    [InlineData("MAINTENANCE")]
+    public async Task GenerateSeats_WithUnsupportedStatus_ReturnsActiveInactiveMessage(string status)
+    {
+        var repository = new StubSeatRepository
+        {
+            Room = new Room { RoomID = 1, Status = "inactive" },
+            SeatType = new SeatType { SeatTypeID = 1 }
+        };
+        var service = new SeatService(repository);
+
+        var result = await service.GenerateSeatsAsync(1, 1, 1, 1, status);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Status must be ACTIVE or INACTIVE", result.ErrorMessage);
+        Assert.Equal(0, repository.ReplaceLayoutCallCount);
+    }
+
+    [Fact]
     public async Task BulkUpdate_ValidMutation_ExecutesInsideTransaction()
     {
         var repository = new StubSeatRepository
         {
-            Room = new Room { RoomID = 1 },
+            Room = new Room { RoomID = 1, Status = "inactive" },
             SelectedSeats =
             [new Seat { SeatID = 1, RoomID = 1, SeatTypeID = 1, Status = "active" }]
         };
@@ -115,10 +152,106 @@ public sealed class SeatServiceTests
         var service = new SeatService(repository, unitOfWork);
 
         var result = await service.BulkUpdateAsync(
-            1, new SeatSelector("ids", ["1"]), null, "INACTIVE", null);
+            1, [new SeatSelector("ids", ["1"])], null, "INACTIVE", null);
 
         Assert.True(result.Succeeded);
         Assert.Equal(1, unitOfWork.ExecutionCount);
+    }
+
+    [Fact]
+    public async Task GenerateSeats_WhenRoomIsActive_ReturnsValidationError()
+    {
+        var repository = new StubSeatRepository
+        {
+            Room = new Room { RoomID = 1, Status = "active" },
+            SeatType = new SeatType { SeatTypeID = 1 }
+        };
+        var service = new SeatService(repository);
+
+        var result = await service.GenerateSeatsAsync(1, 1, 1, 1, "ACTIVE");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+            "Seats can only be managed when the room is INACTIVE",
+            result.ErrorMessage);
+        Assert.Equal(0, repository.ReplaceLayoutCallCount);
+    }
+
+    [Fact]
+    public async Task BulkDelete_LowercaseRowSelector_SoftDeletesMatchingSeats()
+    {
+        var seat = new Seat
+        {
+            SeatID = 1,
+            RoomID = 1,
+            SeatRow = "B",
+            SeatCol = 1,
+            SeatTypeID = 1,
+            Status = "active"
+        };
+        var repository = new StubSeatRepository
+        {
+            Room = new Room { RoomID = 1, Status = "inactive" },
+            SelectedSeats = [seat]
+        };
+        var service = new SeatService(repository);
+
+        var result = await service.BulkDeleteAsync(
+            1, [new SeatSelector("rows", ["b"])]);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("inactive", seat.Status);
+    }
+
+    [Fact]
+    public async Task BulkDelete_WhenAnyTargetDoesNotExist_DoesNotChangeAnySeat()
+    {
+        var seat = new Seat
+        {
+            SeatID = 1,
+            RoomID = 1,
+            SeatRow = "A",
+            SeatCol = 1,
+            SeatTypeID = 1,
+            Status = "active"
+        };
+        var repository = new StubSeatRepository
+        {
+            Room = new Room { RoomID = 1, Status = "inactive" },
+            SelectedSeats = [seat]
+        };
+        var unitOfWork = new RecordingUnitOfWork();
+        var service = new SeatService(repository, unitOfWork);
+
+        var result = await service.BulkDeleteAsync(
+            1, [new SeatSelector("rows", ["a", "not_found"])]);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("active", seat.Status);
+        Assert.Empty(repository.UpdatedSeatIds);
+        Assert.Equal(0, unitOfWork.ExecutionCount);
+    }
+
+    [Fact]
+    public async Task BulkDelete_WithoutSelectors_SoftDeletesAllCurrentSeats()
+    {
+        var seats = new List<Seat>
+        {
+            new() { SeatID = 1, RoomID = 1, SeatRow = "A", SeatCol = 1, SeatTypeID = 1, Status = "active" },
+            new() { SeatID = 2, RoomID = 1, SeatRow = "B", SeatCol = 1, SeatTypeID = 1, Status = "active" }
+        };
+        var repository = new StubSeatRepository
+        {
+            Room = new Room { RoomID = 1, Status = "inactive" },
+            SelectedSeats = seats
+        };
+        var service = new SeatService(repository);
+
+        var result = await service.BulkDeleteAsync(1, []);
+
+        Assert.True(result.Succeeded);
+        Assert.All(seats, seat => Assert.Equal("inactive", seat.Status));
+        Assert.Equal([1, 2], repository.UpdatedSeatIds);
     }
 
     private sealed class StubSeatRepository : ISeatRepository
@@ -127,6 +260,7 @@ public sealed class SeatServiceTests
         public SeatType? SeatType { get; set; }
         public int AddCallCount { get; private set; }
         public int ReplaceLayoutCallCount { get; private set; }
+        public int ExistingSeatCount { get; init; }
         public List<Seat> SelectedSeats { get; init; } = [];
         public HashSet<int> RelatedSeatIds { get; init; } = [];
         public List<int> UpdatedSeatIds { get; } = [];
@@ -135,7 +269,7 @@ public sealed class SeatServiceTests
             int roomId,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new List<Seat>());
+            return Task.FromResult(SelectedSeats);
         }
 
         public Task<Room?> GetRoomByIdAsync(
@@ -150,7 +284,9 @@ public sealed class SeatServiceTests
             int seatId,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<Seat?>(null);
+            return Task.FromResult(
+                SelectedSeats.FirstOrDefault(
+                    seat => seat.RoomID == roomId && seat.SeatID == seatId));
         }
 
         public Task<Seat?> GetSeatByIdAsync(
@@ -181,7 +317,7 @@ public sealed class SeatServiceTests
             int roomId,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(0);
+            return Task.FromResult(ExistingSeatCount);
         }
 
         public Task<bool> SeatPositionExistsAsync(
@@ -210,7 +346,7 @@ public sealed class SeatServiceTests
 
         public Task<List<Seat>> GetSeatsBySelectorAsync(
             int roomId,
-            SeatSelector selector,
+            IReadOnlyCollection<SeatSelector> selectors,
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(SelectedSeats);

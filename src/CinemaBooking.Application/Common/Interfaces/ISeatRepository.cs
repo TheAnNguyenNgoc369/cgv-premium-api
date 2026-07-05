@@ -43,7 +43,7 @@ public interface ISeatRepository
 
     Task<List<Seat>> GetSeatsBySelectorAsync(
         int roomId,
-        SeatSelector selector,
+        IReadOnlyCollection<SeatSelector> selectors,
         CancellationToken cancellationToken = default);
 
     Task<bool> HasActiveOrUpcomingShowtimesAsync(

@@ -36,7 +36,7 @@ public sealed class BookingRepository : IBookingRepository
     {
         return await _db.Seats
             .Include(s => s.SeatType)
-            .Where(s => seatIds.Contains(s.SeatID))
+            .Where(s => seatIds.Contains(s.SeatID) && s.IsCurrentLayout)
             .ToListAsync(cancellationToken);
     }
 

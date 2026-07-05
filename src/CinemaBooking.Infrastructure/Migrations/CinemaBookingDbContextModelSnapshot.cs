@@ -1090,6 +1090,11 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<bool>("IsCurrentLayout")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
                     b.Property<int>("RoomID")
                         .HasColumnType("int");
 
@@ -1120,13 +1125,14 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.HasIndex("RoomID", "SeatRow", "SeatCol")
                         .IsUnique()
+                        .HasFilter("[IsCurrentLayout] = 1")
                         .HasDatabaseName("UQ_Seat_RoomID_SeatRow_SeatCol");
 
                     b.ToTable("Seat", null, t =>
                         {
                             t.HasCheckConstraint("CK_Seat_SeatCol", "[SeatCol] > 0");
 
-                            t.HasCheckConstraint("CK_Seat_Status", "[Status] IN ('active', 'inactive', 'maintenance')");
+                            t.HasCheckConstraint("CK_Seat_Status", "[Status] IN ('active', 'inactive')");
                         });
                 });
 

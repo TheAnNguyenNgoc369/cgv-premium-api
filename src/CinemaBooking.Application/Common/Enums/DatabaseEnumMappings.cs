@@ -19,11 +19,7 @@ public static class DatabaseEnumMappings
             ["THREE_D"] = "3D", ["3D"] = "3D"
         };
     public static readonly IReadOnlyDictionary<string, string> SeatStatuses =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["ACTIVE"] = "active", ["INACTIVE"] = "inactive",
-            ["DISABLED"] = "inactive", ["MAINTENANCE"] = "inactive"
-        };
+        EnumValueMapper.CreateMappings("active", "inactive");
     public static readonly IReadOnlyDictionary<string, string> PaymentMethods =
         EnumValueMapper.CreateMappings("vnpay", "payos", "momo", "credit_card", "banking", "cash", "wallet");
     public static readonly IReadOnlyDictionary<string, string> BookingStatuses =

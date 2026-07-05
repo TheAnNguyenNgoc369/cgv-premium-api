@@ -53,7 +53,7 @@ public interface ISeatService
 
     Task<(bool Succeeded, string? ErrorMessage, List<Seat> Seats)> BulkUpdateAsync(
         int roomId,
-        SeatSelector selector,
+        IReadOnlyCollection<SeatSelector> selectors,
         int? seatTypeId,
         string? status,
         bool? isGap,
@@ -62,7 +62,7 @@ public interface ISeatService
 
     Task<(bool Succeeded, string? ErrorMessage)> BulkDeleteAsync(
         int roomId,
-        SeatSelector selector,
+        IReadOnlyCollection<SeatSelector> selectors,
         int? managerCinemaId = null,
         CancellationToken cancellationToken = default);
 

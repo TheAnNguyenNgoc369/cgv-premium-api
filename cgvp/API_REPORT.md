@@ -1,6 +1,6 @@
 # CinemaBooking API - Request/Response cho Tester
 
-> Cập nhật theo source ngày 03/07/2026. Source hiện có 95 API. Mỗi API bên dưới có đúng một request và một response thành công mẫu. ID, token, code và timestamp là dữ liệu minh họa; phải thay bằng dữ liệu thực tế của môi trường test.
+> Cập nhật theo source ngày 05/07/2026. Source hiện có 95 API. Mỗi API bên dưới có đúng một request và một response thành công mẫu. ID, token, code và timestamp là dữ liệu minh họa; phải thay bằng dữ liệu thực tế của môi trường test.
 
 ## 1. Quy ước sử dụng
 
@@ -59,7 +59,7 @@
 
 | API / Role | Request mẫu | Response thành công mẫu |
 |---|---|---|
-| `GET /api/admin/users?page=1&pageSize=10&role=customer&status=active`<br>Admin | Header: `Authorization: Bearer <adminToken>` | `200 {"items":[{"userId":10,"fullName":"QA Customer","email":"qa.customer@example.com","role":"customer","status":"active"}],"page":1,"pageSize":10,"totalItems":1,"totalPages":1}` |
+| `GET /api/admin/users?search=<keyword>&role=customer&status=active&page=1&pageSize=10`<br>Admin | Header: `Authorization: Bearer <adminToken>` | `200 {"items":[{"userId":10,"fullName":"QA Customer","email":"qa.customer@example.com","role":"customer","status":"active"}],"page":1,"pageSize":10,"totalItems":1,"totalPages":1}` |
 | `POST /api/admin/users`<br>Admin | `{"fullName":"QA Manager","email":"qa.manager@example.com","phone":"0901234568","password":"Test@123","role":"manager","status":"active","cinemaId":1}` | `201 {"userId":11,"fullName":"QA Manager","email":"qa.manager@example.com","phone":"0901234568","role":"manager","status":"active","cinemaId":1}` |
 | `PUT /api/admin/users/<userId>`<br>Admin | `{"fullName":"QA Manager Updated","email":"qa.manager@example.com","phone":"0901234568","cinemaId":1}` | `200 {"userId":11,"fullName":"QA Manager Updated","email":"qa.manager@example.com","role":"manager","status":"active","cinemaId":1}` |
 | `PATCH /api/admin/users/<userId>/role`<br>Admin | `{"role":"staff","cinemaId":1}` | `200 {"success":true,"message":"User role updated successfully."}` |
@@ -125,7 +125,7 @@
 
 | API / Role | Request mẫu | Response thành công mẫu |
 |---|---|---|
-| `GET /api/movie?status=now_showing&genreId=1`<br>Public | Body: none | `200 [{"movieId":1,"title":"QA Movie","genres":["Action"],"ageRating":"T13","posterUrl":null,"durationMinutes":120,"status":"now_showing"}]` |
+| `GET /api/movie?status=now_showing&genreId=1&genreName=Action&pageIndex=1&pageSize=10`<br>Public | Body: none | `200 {"items":[{"movieId":1,"title":"QA Movie","genres":["Action"],"ageRating":"T13","posterUrl":null,"durationMinutes":120,"status":"now_showing"}],"totalCount":1,"pageIndex":1,"pageSize":10}` |
 | `GET /api/movie/<movieId>`<br>Public | Body: none | `200 {"movieId":1,"title":"QA Movie","genres":["Action"],"ageRating":"T13","director":"QA Director","cast":"Tester One","description":"QA movie","durationMinutes":120,"showingFromDate":"2026-06-30T00:00:00+07:00","showingToDate":"2026-07-31T00:00:00+07:00","posterUrl":null,"posterPublicId":null,"trailerUrl":null,"status":"now_showing"}` |
 | `GET /api/movie/search?keyword=QA`<br>Public | Body: none | `200 [{"movieId":1,"title":"QA Movie","genres":["Action"],"ageRating":"T13","posterUrl":null,"durationMinutes":120,"status":"now_showing"}]` |
 | `POST /api/movie`<br>Admin | `{"title":"QA Movie","genres":["QA Action"],"ageRating":"T13","director":"QA Director","cast":"Tester One","synopsis":"QA movie","durationMinutes":120,"showingFromDate":"2026-06-30","showingToDate":"2026-07-31","posterUrl":null,"posterPublicId":null,"trailerUrl":null}` | `201 {"movieId":1,"title":"QA Movie","genres":["QA Action"],"ageRating":"T13","director":"QA Director","cast":"Tester One","description":"QA movie","durationMinutes":120,"showingFromDate":"2026-06-30T00:00:00+07:00","showingToDate":"2026-07-31T00:00:00+07:00","posterUrl":null,"posterPublicId":null,"trailerUrl":null,"status":"now_showing"}` |
@@ -133,11 +133,18 @@
 | `PUT /api/movie/<movieId>/poster`<br>Admin | Multipart: `file=@poster.jpg` | `200 {"movieId":1,"title":"QA Movie Updated","genres":["QA Action"],"ageRating":"T13","director":"QA Director","cast":"Tester One","description":"Updated","durationMinutes":120,"showingFromDate":"2026-06-30T00:00:00+07:00","showingToDate":"2026-07-31T00:00:00+07:00","posterUrl":"https://.../poster.jpg","posterPublicId":"poster_public_id","trailerUrl":null,"status":"now_showing"}` |
 | `DELETE /api/movie/<movieId>`<br>Admin | Header: `Authorization: Bearer <adminToken>` | `204 No Content` |
 
+Ghi chú query params của `GET /api/movie`:
+
+- `status`: giá trị hợp lệ theo movie status trong source.
+- `genreId`: danh sách ID dạng phân tách bởi dấu phẩy, ví dụ `1,2,3`.
+- `genreName`: danh sách tên genre dạng phân tách bởi dấu phẩy, ví dụ `Action,Drama`.
+- `pageIndex` và `pageSize`: số nguyên dương.
+
 ## 11. Showtime - 6 API
 
 | API / Role | Request mẫu | Response thành công mẫu |
 |---|---|---|
-| `GET /api/showtimes?cinemaId=1&date=2026-07-05&status=scheduled&page=1&pageSize=10&sortBy=startTime&sortDir=asc`<br>Public | Body: none | `200 {"items":[{"showtimeId":1,"movie":{"movieId":1,"title":"QA Movie","ageRating":"T13","durationMin":120,"posterUrl":null},"room":{"roomId":1,"roomName":"QA Room","roomType":"Standard","capacity":3},"cinema":{"cinemaId":1,"cinemaName":"QA Cinema","address":"01 Test Street","status":"active"},"startTime":"2026-07-05T19:30:00+07:00","endTime":"2026-07-05T22:00:00+07:00","basePrice":90000,"status":"scheduled","isSoldOut":false}],"page":1,"pageSize":10,"totalItems":1,"totalPages":1}` |
+| `GET /api/showtimes?movieId=1&cinemaId=1&movieName=QA&roomName=QA Room&date=2026-07-05&status=scheduled&page=1&pageSize=10&sortBy=startTime&sortDir=asc`<br>Public | Body: none | `200 {"items":[{"showtimeId":1,"movie":{"movieId":1,"title":"QA Movie","ageRating":"T13","durationMin":120,"posterUrl":null},"room":{"roomId":1,"roomName":"QA Room","roomType":"Standard","capacity":3},"cinema":{"cinemaId":1,"cinemaName":"QA Cinema","address":"01 Test Street","status":"active"},"startTime":"2026-07-05T19:30:00+07:00","endTime":"2026-07-05T22:00:00+07:00","basePrice":90000,"status":"scheduled","isSoldOut":false}],"page":1,"pageSize":10,"totalItems":1,"totalPages":1}` |
 | `POST /api/showtimes`<br>Manager | `{"movieId":1,"roomId":1,"startTime":"2026-07-05T19:30:00+07:00","basePrice":90000}` | `201 {"showtimeId":1,"movie":{"movieId":1,"title":"QA Movie","ageRating":"T13","durationMin":120,"posterUrl":null},"room":{"roomId":1,"roomName":"QA Room","roomType":"Standard","capacity":3},"startTime":"2026-07-05T19:30:00+07:00","endTime":"2026-07-05T22:00:00+07:00","basePrice":90000,"status":"scheduled","isSoldOut":false}` |
 | `PUT /api/showtimes/<showtimeId>`<br>Manager | `{"movieId":1,"roomId":1,"startTime":"2026-07-05T20:00:00+07:00","basePrice":100000,"status":"scheduled"}` | `200 {"showtimeId":1,"movie":{"movieId":1,"title":"QA Movie","ageRating":"T13","durationMin":120,"posterUrl":null},"room":{"roomId":1,"roomName":"QA Room","roomType":"Standard","capacity":3},"startTime":"2026-07-05T20:00:00+07:00","endTime":"2026-07-05T22:30:00+07:00","basePrice":100000,"status":"scheduled","isSoldOut":false}` |
 | `DELETE /api/showtimes/<showtimeId>`<br>Manager | Header: `Authorization: Bearer <managerToken>` | `204 No Content` |
@@ -150,6 +157,16 @@ Quy tắc lịch chiếu hiện tại:
 - `PUT` có thể bỏ field `status`; khi bỏ thì giữ nguyên status hiện tại. Giá trị hợp lệ: `scheduled`, `cancelled`, `completed`.
 - Trong cùng cinema và cùng `startTime`, mỗi `roomType` chỉ có tối đa một showtime không bị `cancelled`.
 - Showtime `cancelled` không chặn việc tạo hoặc cập nhật showtime khác tại cùng thời điểm và loại phòng.
+
+Ghi chú query params của `GET /api/showtimes`:
+
+- `movieId`, `cinemaId`: số nguyên tùy chọn để lọc.
+- `movieName`, `roomName`: chuỗi tùy chọn để lọc theo tên.
+- `date`: `yyyy-MM-dd`.
+- `status`: giá trị status showtime hợp lệ trong source.
+- `page`, `pageSize`: số nguyên dương.
+- `sortBy`: mặc định `startTime`.
+- `sortDir`: mặc định `asc`.
 
 ## 12. Product/F&B - 7 API
 
@@ -185,6 +202,20 @@ Quy tắc lịch chiếu hiện tại:
 | `GET /api/payments/<paymentId>`<br>Customer/Staff | Header: `Authorization: Bearer <token>` | `200 {"paymentId":1,"bookingId":1,"paymentMethod":"VNPAY","amount":330000,"status":"SUCCESS","paidAt":"2026-07-01T16:10:00+07:00","createdAt":"2026-07-01T16:00:00+07:00"}` |
 | `GET /api/payments/booking/<bookingId>`<br>Customer/Staff | Header: `Authorization: Bearer <token>` | `200 {"paymentId":1,"bookingId":1,"paymentMethod":"VNPAY","amount":330000,"status":"SUCCESS","paidAt":"2026-07-01T16:10:00+07:00","createdAt":"2026-07-01T16:00:00+07:00"}` |
 
+Ghi chú tham số của `POST /api/payments/initiate`:
+
+- `bookingId`: bắt buộc, số nguyên.
+- `paymentMethod`: bắt buộc, hiện source đang dùng các giá trị `payos`, `vnpay`, `wallet`, `cash`.
+- `cash` chỉ dùng cho `Staff`.
+- Giá trị `paymentMethod` sẽ được chuẩn hóa ở tầng service, nhưng tester nên gửi đúng chữ thường như ví dụ.
+
+Ghi chú query/body của các API payment khác:
+
+- `POST /api/payments/vnpay/callback`: query string do VNPay gửi, trong source đang đọc toàn bộ query params và xử lý theo bộ tham số của VNPay; tối thiểu cần `vnp_TxnRef`, `vnp_ResponseCode`, `vnp_TransactionNo`, `vnp_SecureHash`.
+- `POST /api/payments/payos/webhook`: body bắt buộc có `code`, `desc`, `success`, `data`, `signature`.
+- `data` của PayOS webhook có các field chính: `orderCode`, `amount`, `description`, `accountNumber`, `reference`, `transactionDateTime`, `currency`, `paymentLinkId`, `code`, `desc`; các field đối tác có thể gửi thêm vẫn được contract chấp nhận nếu có trong source model.
+- `POST /api/payments/cash/confirm`: body bắt buộc có `paymentId`.
+
 ## 15. Invoice - 3 API
 
 | API / Role | Request mẫu | Response thành công mẫu |
@@ -210,19 +241,33 @@ Quy tắc lịch chiếu hiện tại:
 | `PUT /api/vouchers/<voucherId>`<br>Admin | Multipart: `voucherCode=QA10&discountType=percentage&discountValue=15&validFrom=2026-07-01T00:00:00+07:00&validUntil=2026-07-31T23:59:59+07:00&image=@voucher.jpg` | `200 {"voucherId":1,"voucherCode":"QA10","category":"general","discountType":"percentage","discountValue":15,"minOrderValue":100000,"maxUses":100,"usedCount":0,"validFrom":"2026-07-01T00:00:00+07:00","validUntil":"2026-07-31T23:59:59+07:00","imageUrl":"https://.../voucher.jpg","description":"QA discount updated","isActive":true,"createdAt":"2026-07-01T10:00:00+07:00"}` |
 | `DELETE /api/vouchers/<voucherId>`<br>Admin | Header: `Authorization: Bearer <adminToken>` | `204 No Content` |
 
+Ghi chú query params của `GET /api/vouchers`:
+
+- `pageIndex`, `pageSize`: số nguyên dương.
+- `searchKeyword`: chuỗi tìm kiếm tùy chọn.
+
 ## 18. Ticket - 1 API
 
 | API / Role | Request mẫu | Response thành công mẫu |
 |---|---|---|
 | `GET /api/tickets/booking/<bookingId>`<br>Customer/Staff | Header: `Authorization: Bearer <token>` | `200 {"success":true,"tickets":[{"ticketID":1,"bookingSeatID":10,"qrCode":"<uuid>","status":"valid","checkedInAt":null,"checkedInByID":null}]}` |
 
-## 19. Reports - 3 API
+## 19. Reports - 4 API
 
 | API / Role | Request mẫu | Response thành công mẫu |
 |---|---|---|
 | `GET /api/v1/reports/revenue-summary?startDate=2026-07-01&endDate=2026-07-31&cinemaId=1`<br>Admin/Manager | Body: none | `200 {"grossRevenue":1000000,"ticketRevenue":700000,"fnbRevenue":300000,"discountAmount":50000,"bookingCount":12,"ticketsSold":40,"averageOrderValue":83333.33}` |
 | `GET /api/v1/reports/movie-performance?startDate=2026-07-01&endDate=2026-07-31&searchMovie=QA&cinemaId=1`<br>Admin/Manager | Body: none | `200 [{"movieId":1,"title":"QA Movie","showtimeCount":5,"bookingCount":12,"ticketsSold":40,"occupancyRate":0.8,"revenue":1000000}]` |
+| `GET /api/v1/reports/top-selling?startDate=2026-07-01&endDate=2026-07-31&cinemaId=1`<br>Admin/Manager | Body: none | `200 [{"itemId":1,"itemName":"QA Combo","quantitySold":40,"revenue":300000}]` |
 | `GET /api/v1/reports/export?format=excel&reportType=revenue&startDate=2026-07-01&endDate=2026-07-31&cinemaId=1`<br>Admin/Manager | Body: none | `200 file download with Excel content and appropriate Content-Type` |
+
+Ghi chú query params của `GET /api/v1/reports/*`:
+
+- `startDate` và `endDate` bắt buộc, định dạng `yyyy-MM-dd`.
+- `cinemaId`: số nguyên tùy chọn.
+- `searchMovie`: chuỗi tùy chọn cho `movie-performance`.
+- `format`: chỉ nhận `excel` hoặc `pdf`.
+- `reportType`: chỉ nhận `revenue`, `fnb`, hoặc `occupancy`.
 
 ## 20. Error response Tester cần kiểm tra
 
@@ -258,3 +303,4 @@ Các điểm response hiện còn gộp hoặc chưa đồng nhất trong source
 8. Customer/Staff khởi tạo payment; hoàn tất VNPay, PayOS, wallet hoặc cash. Với PayOS, webhook phải có chữ ký hợp lệ do PayOS gửi.
 9. Kiểm tra booking, payment, invoice và membership.
 10. Test concurrency bằng hai customer cùng giữ một ghế.
+| `GET /api/showtimes?movieId=1&cinemaId=1&movieName=QA&roomName=QA Room&date=2026-07-05&status=scheduled&page=1&pageSize=10&sortBy=startTime&sortDir=asc`<br>Public | Body: none | `200 {"items":[{"showtimeId":1,"movie":{"movieId":1,"title":"QA Movie","ageRating":"T13","durationMin":120,"posterUrl":null},"room":{"roomId":1,"roomName":"QA Room","roomType":"Standard","capacity":3},"cinema":{"cinemaId":1,"cinemaName":"QA Cinema","address":"01 Test Street","status":"active"},"startTime":"2026-07-05T19:30:00+07:00","endTime":"2026-07-05T22:00:00+07:00","basePrice":90000,"status":"scheduled","isSoldOut":false}],"page":1,"pageSize":10,"totalItems":1,"totalPages":1}` |

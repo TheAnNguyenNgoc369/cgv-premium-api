@@ -23,7 +23,7 @@ public sealed class SeatRepository : ISeatRepository
         return _dbContext.Seats
             .AsNoTracking()
             .Include(seat => seat.SeatType)
-            .Where(seat => seat.RoomID == roomId)
+            .Where(seat => seat.RoomID == roomId && seat.IsCurrentLayout)
             .OrderBy(seat => seat.SeatRow)
             .ThenBy(seat => seat.SeatCol)
             .ToListAsync(cancellationToken);
@@ -47,7 +47,7 @@ public sealed class SeatRepository : ISeatRepository
             .AsNoTracking()
             .Include(seat => seat.SeatType)
             .FirstOrDefaultAsync(
-                seat => seat.RoomID == roomId && seat.SeatID == seatId,
+                seat => seat.RoomID == roomId && seat.SeatID == seatId && seat.IsCurrentLayout,
                 cancellationToken);
     }
 
@@ -58,7 +58,9 @@ public sealed class SeatRepository : ISeatRepository
         return _dbContext.Seats
             .AsNoTracking()
             .Include(seat => seat.SeatType)
-            .FirstOrDefaultAsync(seat => seat.SeatID == seatId, cancellationToken);
+            .FirstOrDefaultAsync(
+                seat => seat.SeatID == seatId && seat.IsCurrentLayout,
+                cancellationToken);
     }
 
     public Task<SeatType?> GetSeatTypeByNameAsync(
@@ -85,7 +87,7 @@ public sealed class SeatRepository : ISeatRepository
     {
         return _dbContext.Seats
             .AsNoTracking()
-            .CountAsync(seat => seat.RoomID == roomId, cancellationToken);
+            .CountAsync(seat => seat.RoomID == roomId && seat.IsCurrentLayout, cancellationToken);
     }
 
     public Task<bool> SeatPositionExistsAsync(
@@ -98,6 +100,7 @@ public sealed class SeatRepository : ISeatRepository
         var query = _dbContext.Seats
             .AsNoTracking()
             .Where(seat => seat.RoomID == roomId
+                && seat.IsCurrentLayout
                 && seat.SeatRow == rowLabel
                 && seat.SeatCol == seatNumber);
 
@@ -111,52 +114,34 @@ public sealed class SeatRepository : ISeatRepository
 
     public Task<List<Seat>> GetSeatsBySelectorAsync(
         int roomId,
-        SeatSelector selector,
+        IReadOnlyCollection<SeatSelector> selectors,
         CancellationToken cancellationToken = default)
     {
-        var normalizedMode = selector.Mode?.Trim().ToUpperInvariant();
-        if (normalizedMode is null)
-        {
-            return Task.FromResult(new List<Seat>());
-        }
-
         IQueryable<Seat> query = _dbContext.Seats
             .AsNoTracking()
             .Include(seat => seat.SeatType)
-            .Where(seat => seat.RoomID == roomId);
+            .Where(seat => seat.RoomID == roomId && seat.IsCurrentLayout);
 
-        if (normalizedMode == "IDS")
+        foreach (var selector in selectors)
         {
-            var ids = selector.Target
-                .Select(value => int.TryParse(value, out var id) ? id : (int?)null)
-                .Where(id => id.HasValue)
-                .Select(id => id!.Value)
-                .ToArray();
-
-            query = query.Where(seat => ids.Contains(seat.SeatID));
-        }
-        else if (normalizedMode == "ROWS")
-        {
-            var rows = selector.Target
-                .Select(value => string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant())
-                .Where(value => value is not null)
-                .ToArray();
-
-            query = query.Where(seat => rows.Contains(seat.SeatRow));
-        }
-        else if (normalizedMode == "COLS")
-        {
-            var cols = selector.Target
-                .Select(value => int.TryParse(value, out var col) ? col : (int?)null)
-                .Where(col => col.HasValue)
-                .Select(col => col!.Value)
-                .ToArray();
-
-            query = query.Where(seat => cols.Contains(seat.SeatCol));
-        }
-        else
-        {
-            return Task.FromResult(new List<Seat>());
+            var normalizedMode = selector.Mode.Trim().ToUpperInvariant();
+            if (normalizedMode == "IDS")
+            {
+                var ids = selector.Target.Select(int.Parse).ToArray();
+                query = query.Where(seat => ids.Contains(seat.SeatID));
+            }
+            else if (normalizedMode == "ROWS")
+            {
+                var rows = selector.Target
+                    .Select(value => value.Trim().ToUpperInvariant())
+                    .ToArray();
+                query = query.Where(seat => rows.Contains(seat.SeatRow));
+            }
+            else if (normalizedMode == "COLS")
+            {
+                var cols = selector.Target.Select(int.Parse).ToArray();
+                query = query.Where(seat => cols.Contains(seat.SeatCol));
+            }
         }
 
         return query
@@ -227,7 +212,7 @@ public sealed class SeatRepository : ISeatRepository
         var seat = await _dbContext.Seats
             .Include(s => s.SeatType)
             .FirstOrDefaultAsync(
-                s => s.RoomID == roomId && s.SeatID == seatId,
+                s => s.RoomID == roomId && s.SeatID == seatId && s.IsCurrentLayout,
                 cancellationToken);
 
         if (seat is null)
@@ -279,32 +264,26 @@ public sealed class SeatRepository : ISeatRepository
         CancellationToken cancellationToken = default)
     {
         var existingSeats = await _dbContext.Seats
-            .Where(seat => seat.RoomID == roomId)
+            .Where(seat => seat.RoomID == roomId
+                && seat.IsCurrentLayout
+                && seat.Status == "active"
+                && !seat.IsGap)
             .ToListAsync(cancellationToken);
-
-        var relatedSeatIds = await GetRelatedSeatIdsAsync(roomId, cancellationToken);
-        var requestedSeats = seats.ToDictionary(
-            seat => (seat.SeatRow, seat.SeatCol),
-            seat => seat);
 
         foreach (var existingSeat in existingSeats)
         {
-            if (requestedSeats.Remove((existingSeat.SeatRow, existingSeat.SeatCol), out var requestedSeat))
-            {
-                ApplyLayoutValues(existingSeat, requestedSeat);
-                continue;
-            }
-
-            if (relatedSeatIds.Contains(existingSeat.SeatID))
-            {
-                existingSeat.Status = "inactive";
-                continue;
-            }
-
-            _dbContext.Seats.Remove(existingSeat);
+            existingSeat.Status = "inactive";
+            existingSeat.IsCurrentLayout = false;
         }
 
-        _dbContext.Seats.AddRange(requestedSeats.Values);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        foreach (var seat in seats)
+        {
+            seat.IsCurrentLayout = true;
+        }
+
+        _dbContext.Seats.AddRange(seats);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await RecalculateRoomCapacityAsync(roomId, cancellationToken);
@@ -346,7 +325,10 @@ public sealed class SeatRepository : ISeatRepository
         CancellationToken cancellationToken)
     {
         var capacity = await _dbContext.Seats
-            .Where(seat => seat.RoomID == roomId)
+            .Where(seat => seat.RoomID == roomId
+                && seat.IsCurrentLayout
+                && seat.Status == "active"
+                && !seat.IsGap)
             .Join(
                 _dbContext.SeatTypes,
                 seat => seat.SeatTypeID,

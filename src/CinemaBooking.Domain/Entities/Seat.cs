@@ -9,6 +9,7 @@ public class Seat
     public int? SeatTypeID { get; set; }
     public string Status { get; set; } = "active";
     public bool IsGap { get; set; }
+    public bool IsCurrentLayout { get; set; } = true;
 
     public Room Room { get; set; } = null!;
     public SeatType? SeatType { get; set; }
