@@ -375,19 +375,17 @@ public sealed class SeatService : ISeatService
 
         return await ExecuteInTransactionAsync(async () =>
         {
-            var updatedSeats = new List<Seat>();
             foreach (var update in plannedUpdates)
             {
-                var updatedSeat = await _seatRepository.UpdateAsync(
-                    roomId, update.Seat.SeatID, update.SeatTypeId,
-                    update.Status, update.IsGap, cancellationToken);
-
-                if (updatedSeat is null)
-                    throw new InvalidOperationException("Seat disappeared during bulk update.");
-
-                updatedSeats.Add(updatedSeat);
+                update.Seat.SeatTypeID = update.SeatTypeId;
+                update.Seat.Status = update.Status;
+                update.Seat.IsGap = update.IsGap;
             }
 
+            var updatedSeats = await _seatRepository.UpdateRangeAsync(
+                roomId, plannedUpdates.Select(update => update.Seat).ToList(), cancellationToken);
+            if (updatedSeats.Count != plannedUpdates.Count)
+                throw new InvalidOperationException("Seat disappeared during bulk update.");
             return (true, (string?)null, updatedSeats);
         }, cancellationToken);
     }
@@ -420,13 +418,11 @@ public sealed class SeatService : ISeatService
         return await ExecuteInTransactionAsync(async () =>
         {
             foreach (var seat in seats)
-            {
-                var updatedSeat = await _seatRepository.UpdateAsync(
-                    roomId, seat.SeatID, seat.SeatTypeID, "inactive", seat.IsGap, cancellationToken);
+                seat.Status = "inactive";
 
-                if (updatedSeat is null)
-                    throw new InvalidOperationException("Seat disappeared during bulk delete.");
-            }
+            var updatedSeats = await _seatRepository.UpdateRangeAsync(roomId, seats, cancellationToken);
+            if (updatedSeats.Count != seats.Count)
+                throw new InvalidOperationException("Seat disappeared during bulk delete.");
 
             return (true, (string?)null);
         }, cancellationToken);

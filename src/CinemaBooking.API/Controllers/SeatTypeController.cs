@@ -9,7 +9,6 @@ namespace CinemaBooking.API.Controllers;
 
 [ApiController]
 [Route("api/seat-types")]
-[Authorize(Roles = Roles.Manager)]
 public sealed class SeatTypeController : ControllerBase
 {
     private readonly ISeatTypeService _seatTypeService;
@@ -20,6 +19,7 @@ public sealed class SeatTypeController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> GetSeatTypes(CancellationToken cancellationToken)
     {
         var seatTypes = await _seatTypeService.GetSeatTypesAsync(cancellationToken);
@@ -27,6 +27,7 @@ public sealed class SeatTypeController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> GetSeatTypeById(
         int id,
         CancellationToken cancellationToken)
@@ -39,6 +40,7 @@ public sealed class SeatTypeController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> CreateSeatType(
         [FromBody] SeatTypeRequest request,
         CancellationToken cancellationToken)
@@ -67,6 +69,7 @@ public sealed class SeatTypeController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> UpdateSeatType(
         int id,
         [FromBody] SeatTypeRequest request,
@@ -95,6 +98,7 @@ public sealed class SeatTypeController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> DeleteSeatType(
         int id,
         CancellationToken cancellationToken)
