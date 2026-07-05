@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json.Serialization;
 using CinemaBooking.API.Configuration;
 using CinemaBooking.API.OpenApi;
 using CinemaBooking.API.Services;
@@ -27,8 +28,11 @@ public static class DependencyInjection
     {
         services.AddControllers()
             .AddJsonOptions(options =>
+            {
                 options.JsonSerializerOptions.Converters.Add(
-                    new VietnamDateTimeJsonConverter()))
+                    new VietnamDateTimeJsonConverter());
+                options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+            })
             .ConfigureApiBehaviorOptions(options =>
             {
                 options.InvalidModelStateResponseFactory = context =>
