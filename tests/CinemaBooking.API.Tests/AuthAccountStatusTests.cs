@@ -45,6 +45,58 @@ public sealed class AuthAccountStatusTests
             result.ErrorMessage);
     }
 
+    [Fact]
+    public async Task LoginAsync_VerifiedUserStillMarkedUnverified_ActivatesAndAllowsLogin()
+    {
+        const string password = "Password@123";
+        var user = new User
+        {
+            UserID = 4,
+            Email = "verified@example.com",
+            PasswordHash = PasswordHasher.Hash(password),
+            Status = UserStatuses.Unverified,
+            EmailVerifiedAt = DateTime.UtcNow.AddMinutes(-5)
+        };
+        var repository = new StubUserRepository { User = user };
+        var service = new AuthService(repository, new StubEmailSender());
+
+        var result = await service.LoginAsync(user.Email, password);
+
+        Assert.True(result.Succeeded);
+        Assert.Same(user, result.User);
+        Assert.Equal(UserStatuses.Active, user.Status);
+        Assert.True(repository.SaveChangesCalled);
+    }
+
+    [Fact]
+    public async Task VerifyEmailAsync_AdminMarkedUserUnverified_ActivatesAccount()
+    {
+        var user = new User
+        {
+            UserID = 3,
+            Email = "unverified@example.com",
+            Status = UserStatuses.Unverified
+        };
+        var token = new EmailVerificationToken
+        {
+            Token = "verification-code",
+            UserID = user.UserID,
+            User = user,
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(10)
+        };
+        var repository = new StubUserRepository { VerificationToken = token };
+        var service = new AuthService(repository, new StubEmailSender());
+
+        var result = await service.VerifyEmailAsync(token.Token);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(UserStatuses.Active, user.Status);
+        Assert.NotNull(user.EmailVerifiedAt);
+        Assert.NotNull(token.VerifiedAt);
+        Assert.True(repository.SaveChangesCalled);
+    }
+
     private sealed class StubEmailSender : IEmailSender
     {
         public Task<bool> SendAsync(string toEmail, string subject, string htmlBody,
@@ -55,6 +107,8 @@ public sealed class AuthAccountStatusTests
     {
         public bool EmailExists { get; init; }
         public User? User { get; init; }
+        public EmailVerificationToken? VerificationToken { get; init; }
+        public bool SaveChangesCalled { get; private set; }
 
         public Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default) =>
             Task.FromResult(EmailExists);
@@ -76,7 +130,7 @@ public sealed class AuthAccountStatusTests
         public Task AddEmailVerificationTokenAsync(EmailVerificationToken verificationToken,
             CancellationToken cancellationToken = default) => Unsupported();
         public Task<EmailVerificationToken?> GetEmailVerificationTokenAsync(string token,
-            CancellationToken cancellationToken = default) => Unsupported<EmailVerificationToken?>();
+            CancellationToken cancellationToken = default) => Task.FromResult(VerificationToken);
         public Task<EmailVerificationToken?> GetLatestEmailVerificationTokenAsync(int userId,
             CancellationToken cancellationToken = default) => Unsupported<EmailVerificationToken?>();
         public Task AddPasswordResetTokenAsync(PasswordResetToken resetToken,
@@ -95,7 +149,11 @@ public sealed class AuthAccountStatusTests
             CancellationToken cancellationToken = default) => Unsupported<bool>();
         public Task<bool> TryIncrementTokenVersionAsync(int userId, int expectedTokenVersion,
             CancellationToken cancellationToken = default) => Unsupported<bool>();
-        public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Unsupported();
+        public Task SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            SaveChangesCalled = true;
+            return Task.CompletedTask;
+        }
 
         private static Task Unsupported() => throw new NotSupportedException();
         private static Task<T> Unsupported<T>() => throw new NotSupportedException();

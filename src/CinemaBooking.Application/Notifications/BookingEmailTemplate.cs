@@ -44,7 +44,6 @@ internal static class BookingEmailTemplate
             <p style="margin: 0 0 10px; color: #777777; font-size: 13px;">{Encode(seatType)}</p>
             <img src="cid:{Encode(contentId)}" alt="QR vé ghế {Encode(seatCode)}" width="180" height="180" style="display: block; margin: 0 auto 8px;" />
             <p style="margin: 0; color: #999999; font-family: Consolas, 'Courier New', monospace; font-size: 10px; overflow-wrap: anywhere;">{Encode(qrCode)}</p>
-            <a href="cid:{Encode(contentId)}" download="{Encode(fileName)}" style="display: inline-block; margin-top: 12px; background: #c62828; color: #ffffff; font-size: 13px; font-weight: 700; text-decoration: none; padding: 10px 18px; border-radius: 6px;">Tải QR (.png)</a>
         </div>
         """;
 

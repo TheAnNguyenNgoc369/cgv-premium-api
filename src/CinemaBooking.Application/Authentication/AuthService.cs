@@ -26,13 +26,16 @@ public sealed class AuthService : IAuthService
 
     private readonly IUserRepository _userRepository;
     private readonly IEmailSender _emailSender;
+    private readonly IEmailQueue? _emailQueue;
 
     public AuthService(
         IUserRepository userRepository,
-        IEmailSender emailSender)
+        IEmailSender emailSender,
+        IEmailQueue? emailQueue = null)
     {
         _userRepository = userRepository;
         _emailSender = emailSender;
+        _emailQueue = emailQueue;
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, int? UserId, bool VerificationEmailSent)> RegisterAsync(
@@ -138,6 +141,14 @@ public sealed class AuthService : IAuthService
         }
 
         if (string.Equals(user.Status, UserStatuses.Unverified, StringComparison.OrdinalIgnoreCase)
+            && user.EmailVerifiedAt.HasValue)
+        {
+            user.Status = ActiveStatus;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _userRepository.SaveChangesAsync(cancellationToken);
+        }
+
+        if (string.Equals(user.Status, UserStatuses.Unverified, StringComparison.OrdinalIgnoreCase)
             || !user.EmailVerifiedAt.HasValue)
         {
             return (false, "Please verify your email before logging in.", null);
@@ -203,8 +214,10 @@ public sealed class AuthService : IAuthService
             verificationToken,
             cancellationToken);
 
-        var verificationEmailSent = await _emailSender.SendAsync(
+        var verificationEmailSent = await QueueOrSendAsync(
+            user.UserID,
             user.Email,
+            "register",
             "Verify your Cinema Booking account",
             BuildVerificationEmailBody(user.FullName, verificationToken.Token),
             cancellationToken);
@@ -273,8 +286,10 @@ public sealed class AuthService : IAuthService
             resetToken,
             cancellationToken);
 
-        var emailSent = await _emailSender.SendAsync(
+        var emailSent = await QueueOrSendAsync(
+            user.UserID,
             user.Email,
+            "forgot_password",
             "Reset your Cinema Booking password",
             BuildResetPasswordEmailBody(user.FullName, resetToken.Token),
             cancellationToken);
@@ -378,6 +393,13 @@ public sealed class AuthService : IAuthService
         }
 
         verificationToken.User.EmailVerifiedAt = now;
+        if (string.Equals(
+                verificationToken.User.Status,
+                UserStatuses.Unverified,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            verificationToken.User.Status = ActiveStatus;
+        }
         verificationToken.User.UpdatedAt = now;
         verificationToken.VerifiedAt = now;
         await _userRepository.SaveChangesAsync(cancellationToken);
@@ -391,6 +413,33 @@ public sealed class AuthService : IAuthService
             && Regex.IsMatch(password, "[A-Z]")
             && Regex.IsMatch(password, @"\d")
             && Regex.IsMatch(password, "[^A-Za-z0-9]");
+    }
+
+    private async Task<bool> QueueOrSendAsync(
+        int userId,
+        string email,
+        string eventType,
+        string subject,
+        string htmlBody,
+        CancellationToken cancellationToken)
+    {
+        if (_emailQueue is null)
+            return await _emailSender.SendAsync(email, subject, htmlBody, cancellationToken);
+
+        try
+        {
+            await _emailQueue.EnqueueAsync(
+                userId, email, eventType, subject, htmlBody, cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static int GetRetryAfterSeconds(
@@ -472,7 +521,7 @@ public sealed class AuthService : IAuthService
     private static string BuildResetPasswordEmailBody(string fullName, string token)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var resetUrl = $"https://intent-legible-manatee.ngrok-free.app/resetPassword?token={Uri.EscapeDataString(token)}";
+        var resetUrl = $"https://directly-washhouse-recovery.ngrok-free.dev/resetPassword?token={Uri.EscapeDataString(token)}";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
