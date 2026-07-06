@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Infrastructure.Email;
 using CinemaBooking.Infrastructure.Persistence;
@@ -8,105 +9,50 @@ using Microsoft.Extensions.Logging;
 
 namespace CinemaBooking.Infrastructure.BackgroundJobs;
 
-public sealed class EmailDeliveryJob : BackgroundService
+public sealed class EmailDeliveryJob(IServiceScopeFactory scopeFactory, ILogger<EmailDeliveryJob> logger) : BackgroundService
 {
-    private const string DeliveryFailedMessage = "Email delivery failed.";
-    private readonly EmailQueueChannel _channel;
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ILogger<EmailDeliveryJob> _logger;
-
-    public EmailDeliveryJob(
-        EmailQueueChannel channel,
-        IServiceScopeFactory scopeFactory,
-        ILogger<EmailDeliveryJob> logger)
-    {
-        _channel = channel;
-        _scopeFactory = scopeFactory;
-        _logger = logger;
-    }
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var item in _channel.ReadAllAsync(stoppingToken))
-            await ProcessAsync(item, stoppingToken);
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            await ProcessBatchAsync(stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+        }
     }
-
-    private async Task ProcessAsync(EmailQueueItem item, CancellationToken cancellationToken)
+    private async Task ProcessBatchAsync(CancellationToken ct)
     {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<CinemaBookingDbContext>();
-        var emailSender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
-        var emailLog = await dbContext.EmailLogs.SingleOrDefaultAsync(
-            log => log.EmailLogID == item.EmailLogId,
-            cancellationToken);
-
-        if (emailLog is null || emailLog.DeliveryStatus is "sent" or "failed")
-            return;
-
-        emailLog.DeliveryStatus = "processing";
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        bool sent;
-        try
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<CinemaBookingDbContext>();
+        var sender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
+        var now = DateTime.UtcNow;
+        var logs = await db.EmailLogs.Where(x => (x.DeliveryStatus == "pending" || x.DeliveryStatus == "retrying") && (x.NextAttemptAt == null || x.NextAttemptAt <= now))
+            .OrderBy(x => x.CreatedAt).Take(20).ToListAsync(ct);
+        foreach (var log in logs)
         {
-            sent = await emailSender.SendAsync(
-                item.ToEmail,
-                item.Subject,
-                item.HtmlBody,
-                item.InlineImages,
-                cancellationToken);
+            log.DeliveryStatus = "processing"; await db.SaveChangesAsync(ct);
+            try
+            {
+                var images = log.InlineImagesJson is null ? null : JsonSerializer.Deserialize<List<EmailInlineImage>>(log.InlineImagesJson);
+                if (await sender.SendAsync(log.ToEmail, log.Subject, log.HtmlBody, images, ct))
+                { log.DeliveryStatus = "sent"; log.SentAt = DateTime.UtcNow; log.LastError = null; log.NextAttemptAt = null; }
+                else ScheduleRetry(log);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            { log.LastError = ex.Message; ScheduleRetry(log); logger.LogError(ex, "Email log {EmailLogId} failed", log.EmailLogID); }
+            await db.SaveChangesAsync(ct);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            sent = false;
-            _logger.LogError(exception, "Unexpected failure delivering email log {EmailLogId}", item.EmailLogId);
-        }
-
-        if (sent)
-        {
-            emailLog.DeliveryStatus = "sent";
-            emailLog.SentAt = DateTime.UtcNow;
-            emailLog.LastError = null;
-            await dbContext.SaveChangesAsync(cancellationToken);
-            return;
-        }
-
-        emailLog.LastError = DeliveryFailedMessage;
-        if (emailLog.RetryCount >= EmailRetryPolicy.MaxRetryCount)
-        {
-            emailLog.DeliveryStatus = "failed";
-            await dbContext.SaveChangesAsync(cancellationToken);
-            _logger.LogError("Email log {EmailLogId} failed after {RetryCount} retries", item.EmailLogId, emailLog.RetryCount);
-            return;
-        }
-
-        emailLog.RetryCount++;
-        emailLog.DeliveryStatus = "retrying";
-        await dbContext.SaveChangesAsync(cancellationToken);
-        _ = RetryLaterAsync(item, emailLog.RetryCount, cancellationToken);
     }
-
-    private async Task RetryLaterAsync(
-        EmailQueueItem item,
-        int retryCount,
-        CancellationToken cancellationToken)
+    private static void ScheduleRetry(Domain.Entities.EmailLog log)
     {
-        try
+        log.LastError ??= "Email delivery failed.";
+        if (log.RetryCount >= EmailRetryPolicy.MaxRetryCount)
         {
-            await Task.Delay(EmailRetryPolicy.GetDelay(retryCount), cancellationToken);
-            await _channel.WriteAsync(item, cancellationToken);
+            log.DeliveryStatus = "failed";
+            log.NextAttemptAt = null;
+            return;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Application shutdown intentionally abandons this in-memory retry.
-        }
-        catch (Exception exception)
-        {
-            _logger.LogError(exception, "Failed to requeue email log {EmailLogId}", item.EmailLogId);
-        }
+        log.RetryCount++;
+        log.DeliveryStatus = "retrying";
+        log.NextAttemptAt = DateTime.UtcNow.Add(EmailRetryPolicy.GetDelay(log.RetryCount));
     }
 }

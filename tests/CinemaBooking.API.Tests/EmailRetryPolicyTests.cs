@@ -8,8 +8,8 @@ public sealed class EmailRetryPolicyTests
     public void RetrySchedule_UsesConfiguredDelays()
     {
         Assert.Equal(3, EmailRetryPolicy.MaxRetryCount);
-        Assert.Equal(TimeSpan.FromSeconds(30), EmailRetryPolicy.GetDelay(1));
-        Assert.Equal(TimeSpan.FromMinutes(2), EmailRetryPolicy.GetDelay(2));
-        Assert.Equal(TimeSpan.FromMinutes(5), EmailRetryPolicy.GetDelay(3));
+        Assert.Equal(TimeSpan.FromMinutes(1), EmailRetryPolicy.GetDelay(1));
+        Assert.Equal(TimeSpan.FromMinutes(5), EmailRetryPolicy.GetDelay(2));
+        Assert.Equal(TimeSpan.FromMinutes(15), EmailRetryPolicy.GetDelay(3));
     }
 }

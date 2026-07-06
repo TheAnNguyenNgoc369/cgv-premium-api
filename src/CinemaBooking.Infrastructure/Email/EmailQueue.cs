@@ -1,19 +1,14 @@
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
+using System.Text.Json;
 
 namespace CinemaBooking.Infrastructure.Email;
 
 public sealed class EmailQueue : IEmailQueue
 {
     private readonly CinemaBookingDbContext _dbContext;
-    private readonly EmailQueueChannel _channel;
-
-    public EmailQueue(CinemaBookingDbContext dbContext, EmailQueueChannel channel)
-    {
-        _dbContext = dbContext;
-        _channel = channel;
-    }
+    public EmailQueue(CinemaBookingDbContext dbContext) => _dbContext = dbContext;
 
     public Task<int> EnqueueAsync(
         int? userId,
@@ -42,6 +37,9 @@ public sealed class EmailQueue : IEmailQueue
         {
             UserID = userId,
             ToEmail = toEmail,
+            Subject = subject,
+            HtmlBody = htmlBody,
+            InlineImagesJson = inlineImages is null ? null : JsonSerializer.Serialize(inlineImages),
             EventType = eventType,
             DeliveryStatus = "pending",
             RetryCount = 0,
@@ -50,10 +48,6 @@ public sealed class EmailQueue : IEmailQueue
 
         _dbContext.EmailLogs.Add(emailLog);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await _channel.WriteAsync(
-            new EmailQueueItem(emailLog.EmailLogID, toEmail, subject, htmlBody, inlineImages),
-            cancellationToken);
-
         return emailLog.EmailLogID;
     }
 }

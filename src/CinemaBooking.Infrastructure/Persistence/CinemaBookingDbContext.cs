@@ -43,6 +43,7 @@ public class CinemaBookingDbContext : DbContext
     public DbSet<AdminActionLog> AdminActionLogs => Set<AdminActionLog>();
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<NotificationOutbox> NotificationOutbox => Set<NotificationOutbox>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

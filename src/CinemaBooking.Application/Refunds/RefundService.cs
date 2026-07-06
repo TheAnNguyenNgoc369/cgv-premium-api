@@ -15,7 +15,7 @@ public sealed class RefundService : IRefundService
     private readonly ITicketRepository _ticketRepository;
     private readonly IBookingRepository _bookingRepository;
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IBookingEmailService _bookingEmailService;
+    private readonly INotificationOutbox _notificationOutbox;
 
     public RefundService(
         IRefundRepository refundRepository,
@@ -23,7 +23,7 @@ public sealed class RefundService : IRefundService
         IPaymentRepository paymentRepository,
         ITicketRepository ticketRepository,
         IBookingRepository bookingRepository,
-        IBookingEmailService bookingEmailService,
+        INotificationOutbox notificationOutbox,
         IUnitOfWork unitOfWork)
     {
         _refundRepository = refundRepository;
@@ -31,7 +31,7 @@ public sealed class RefundService : IRefundService
         _paymentRepository = paymentRepository;
         _ticketRepository = ticketRepository;
         _bookingRepository = bookingRepository;
-        _bookingEmailService = bookingEmailService;
+        _notificationOutbox = notificationOutbox;
         _unitOfWork = unitOfWork;
     }
 
@@ -181,7 +181,7 @@ public sealed class RefundService : IRefundService
             };
         }, cancellationToken);
 
-        await _bookingEmailService.QueueRefundProcessedAsync(
+        await _notificationOutbox.EnqueueRefundCompletedAsync(
             bookingId, result.RefundAmount, now, cancellationToken);
 
         return (true, null, result);

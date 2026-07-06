@@ -13,6 +13,9 @@ public class EmailLogConfiguration : IEntityTypeConfiguration<EmailLog>
         builder.HasKey(e => e.EmailLogID);
 
         builder.Property(e => e.ToEmail).HasMaxLength(150).IsRequired();
+        builder.Property(e => e.Subject).HasMaxLength(250).IsRequired();
+        builder.Property(e => e.HtmlBody).IsRequired();
+        builder.Property(e => e.InlineImagesJson);
         builder.Property(e => e.EventType).HasMaxLength(50).IsRequired();
         builder.Property(e => e.DeliveryStatus).HasMaxLength(20).IsRequired().HasDefaultValue("pending");
         builder.Property(e => e.RetryCount).HasDefaultValue(0);
@@ -20,6 +23,7 @@ public class EmailLogConfiguration : IEntityTypeConfiguration<EmailLog>
         builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
 
         builder.HasIndex(e => e.UserID).HasDatabaseName("IX_EmailLog_UserID");
+        builder.HasIndex(e => new { e.DeliveryStatus, e.NextAttemptAt });
 
         builder.HasOne(e => e.User)
             .WithMany(u => u.EmailLogs)

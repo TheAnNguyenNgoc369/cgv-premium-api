@@ -24,7 +24,7 @@ public sealed class PaymentService : IPaymentService
     private readonly IPayOSService _payOSService;
     private readonly IInvoiceService _invoiceService;
     private readonly ITicketService _ticketService;
-    private readonly IBookingEmailService _bookingEmailService;
+    private readonly INotificationOutbox _notificationOutbox;
     private readonly IUnitOfWork _unitOfWork;
 
     public PaymentService(
@@ -35,7 +35,7 @@ public sealed class PaymentService : IPaymentService
         IPayOSService payOSService,
         IInvoiceService invoiceService,
         ITicketService ticketService,
-        IBookingEmailService bookingEmailService,
+        INotificationOutbox notificationOutbox,
         IUnitOfWork unitOfWork)
     {
         _paymentRepository = paymentRepository;
@@ -45,7 +45,7 @@ public sealed class PaymentService : IPaymentService
         _payOSService = payOSService;
         _invoiceService = invoiceService;
         _ticketService = ticketService;
-        _bookingEmailService = bookingEmailService;
+        _notificationOutbox = notificationOutbox;
         _unitOfWork = unitOfWork;
     }
 
@@ -106,7 +106,7 @@ public sealed class PaymentService : IPaymentService
             var updated = await _paymentRepository.GetPaymentByIdAsync(request.PaymentId, cancellationToken);
             return PaymentOperationResult.Success(MapToPaymentResponse(updated)!);
         }, cancellationToken);
-        await _bookingEmailService.QueueBookingConfirmedAsync(payment.BookingID, cancellationToken);
+        await _notificationOutbox.EnqueueBookingSuccessAsync(payment.BookingID, cancellationToken);
         return result;
     }
 
@@ -157,7 +157,7 @@ public sealed class PaymentService : IPaymentService
         }, cancellationToken);
 
         if (isSuccess)
-            await _bookingEmailService.QueueBookingConfirmedAsync(payment.BookingID, cancellationToken);
+            await _notificationOutbox.EnqueueBookingSuccessAsync(payment.BookingID, cancellationToken);
 
         var bookingStatus = isSuccess ? BookingStatus.Paid : BookingStatus.PaymentFailed;
         var paymentStatus = isSuccess ? PaymentStatus.Completed : PaymentStatus.Failed;
@@ -226,7 +226,7 @@ public sealed class PaymentService : IPaymentService
                 EnumValueMapper.ToApiValue(PaymentStatus.Completed),
                 EnumValueMapper.ToApiValue(BookingStatus.Paid));
 
-        await _bookingEmailService.QueueBookingConfirmedAsync(payment.BookingID, cancellationToken);
+        await _notificationOutbox.EnqueueBookingSuccessAsync(payment.BookingID, cancellationToken);
 
         return new(true, "Payment completed successfully.", payment.PaymentID, payment.BookingID,
             EnumValueMapper.ToApiValue(PaymentStatus.Completed),
@@ -369,7 +369,7 @@ public sealed class PaymentService : IPaymentService
                 EnumValueMapper.ToApiValue(BookingStatus.Paid), invoice.InvoiceCode,
                 CalculatePointsEarned(booking.FinalAmount)));
         }, cancellationToken);
-        await _bookingEmailService.QueueBookingConfirmedAsync(booking.BookingID, cancellationToken);
+        await _notificationOutbox.EnqueueBookingSuccessAsync(booking.BookingID, cancellationToken);
         return result;
     }
 

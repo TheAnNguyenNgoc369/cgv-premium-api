@@ -4,9 +4,9 @@ internal static class EmailRetryPolicy
 {
     private static readonly TimeSpan[] Delays =
     [
-        TimeSpan.FromSeconds(30),
-        TimeSpan.FromMinutes(2),
-        TimeSpan.FromMinutes(5)
+        TimeSpan.FromMinutes(1),
+        TimeSpan.FromMinutes(5),
+        TimeSpan.FromMinutes(15)
     ];
 
     public static int MaxRetryCount => Delays.Length;

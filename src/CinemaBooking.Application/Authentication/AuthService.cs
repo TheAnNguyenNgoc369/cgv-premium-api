@@ -93,13 +93,14 @@ public sealed class AuthService : IAuthService
             verificationToken,
             cancellationToken);
 
-        var verificationEmailSent = await _emailSender.SendAsync(
+        await _authEmailService.QueueVerificationAsync(
+            user.UserID,
             user.Email,
             "Verify your Cinema Booking account",
             BuildVerificationEmailBody(user.FullName, verificationToken.Token),
             cancellationToken);
 
-        return (true, null, user.UserID, verificationEmailSent);
+        return (true, null, user.UserID, true);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, User? User)> LoginAsync(
