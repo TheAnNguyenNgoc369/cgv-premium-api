@@ -151,4 +151,23 @@ public sealed class PaymentRepository : IPaymentRepository
         payment.TransactionCode = null;
         await _db.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task UpdatePaymentForRefundAsync(
+        int paymentId,
+        decimal refundAmount,
+        string refundReason,
+        int refundedBy,
+        CancellationToken cancellationToken = default)
+    {
+        var payment = await _db.Payments.FindAsync(new object[] { paymentId }, cancellationToken)
+            ?? throw new InvalidOperationException($"Payment {paymentId} not found");
+
+        payment.Status = PaymentStatus.Refunded;
+        payment.RefundReason = refundReason;
+        payment.RefundAmount = refundAmount;
+        payment.RefundedAt = DateTime.UtcNow;
+        payment.RefundedBy = refundedBy;
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
 }
