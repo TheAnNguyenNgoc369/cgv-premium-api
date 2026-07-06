@@ -56,6 +56,25 @@ public interface IBookingRepository
         int bookingId,
         CancellationToken cancellationToken = default);
 
+    Task<Booking?> GetBookingByQRCodeAsync(
+        string qrCode,
+        CancellationToken cancellationToken = default);
+
+    Task<Booking?> GetBookingWithFullDetailsForCheckInAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default);
+
+    Task<int?> GetStaffCinemaIdAsync(
+        int staffId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> PerformCheckInAsync(
+        int bookingId,
+        int staffId,
+        string? ipAddress,
+        DateTime checkedInAt,
+        CancellationToken cancellationToken = default);
+
     Task<List<Booking>> GetBookingsByUserAsync(
         int userId,
         CancellationToken cancellationToken = default);

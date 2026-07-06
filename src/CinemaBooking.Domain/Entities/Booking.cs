@@ -13,12 +13,16 @@ public class Booking
     public int? PointsEarned { get; set; }
     public int? PointsRedeemed { get; set; }
     public string Status { get; set; } = "pending";
+    public string? QRCode { get; set; }
+    public DateTime? CheckedInAt { get; set; }
+    public int? CheckedInByUserId { get; set; }
     public DateTime BookingDate { get; set; }
     public DateTime UpdatedAt { get; set; }
 
     public User? User { get; set; }
     public Showtime Showtime { get; set; } = null!;
     public User? CreatedByStaff { get; set; }
+    public User? CheckedInByUser { get; set; }
     public ICollection<BookingSeat> BookingSeats { get; set; } = [];
     public ICollection<SeatHold> SeatHolds { get; set; } = [];
     public ICollection<BookingFnB> BookingFnBs { get; set; } = [];

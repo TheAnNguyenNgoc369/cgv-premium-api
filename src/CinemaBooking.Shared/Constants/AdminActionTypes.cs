@@ -30,4 +30,5 @@ public static class AdminActionTypes
     public const string DeleteMovie = "delete_movie";
     public const string ExportReport = "export_report";
     public const string Refund = "refund";
+    public const string CheckIn = "check_in";
 }

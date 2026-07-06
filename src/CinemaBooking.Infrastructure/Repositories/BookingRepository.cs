@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
@@ -158,6 +153,101 @@ public sealed class BookingRepository : IBookingRepository
             .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)
             .AsSplitQuery()
             .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
+    }
+
+    public async Task<Booking?> GetBookingByQRCodeAsync(
+        string qrCode,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Bookings
+            .FirstOrDefaultAsync(b => b.QRCode == qrCode, cancellationToken);
+    }
+
+    public async Task<Booking?> GetBookingWithFullDetailsForCheckInAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Bookings
+            .Include(b => b.User)
+            .Include(b => b.Showtime).ThenInclude(s => s.Movie)
+            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat).ThenInclude(s => s.SeatType)
+            .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket)
+            .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
+            .Include(b => b.Payment)
+            .Include(b => b.Refunds)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
+    }
+
+    public async Task<int?> GetStaffCinemaIdAsync(
+        int staffId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _db.Users
+            .Where(u => u.UserID == staffId)
+            .Select(u => u.CinemaID)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return user;
+    }
+
+    public async Task<bool> PerformCheckInAsync(
+        int bookingId,
+        int staffId,
+        string? ipAddress,
+        DateTime checkedInAt,
+        CancellationToken cancellationToken = default)
+    {
+        using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var booking = await _db.Bookings
+                .Include(b => b.BookingSeats)
+                .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
+
+            if (booking is null)
+                return false;
+
+            var tickets = await _db.Tickets
+                .Where(t => booking.BookingSeats.Select(bs => bs.BookingSeatID).Contains(t.BookingSeatID))
+                .ToListAsync(cancellationToken);
+
+            foreach (var ticket in tickets)
+            {
+                ticket.Status = TicketStatus.Used;
+                ticket.CheckedInAt = checkedInAt;
+                ticket.CheckedInByID = staffId;
+            }
+
+            booking.Status = BookingStatus.Used;
+            booking.CheckedInAt = checkedInAt;
+            booking.CheckedInByUserId = staffId;
+            booking.UpdatedAt = checkedInAt;
+
+            var auditLog = new AdminActionLog
+            {
+                AdminID = staffId,
+                TargetTable = "Booking",
+                TargetID = booking.BookingID,
+                ActionType = AdminActionTypes.CheckIn,
+                Description = $"Staff checked in booking {booking.BookingCode}",
+                IPAddress = ipAddress ?? "unknown",
+                CreatedAt = checkedInAt
+            };
+
+            await _db.AdminActionLogs.AddAsync(auditLog, cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
     }
 
     public async Task<List<Booking>> GetBookingsByUserAsync(
