@@ -18,6 +18,7 @@ public sealed class RoomRepository : IRoomRepository
     {
         return _dbContext.Rooms
             .AsNoTracking()
+            .Include(r => r.RoomType)
             .OrderBy(r => r.CinemaID)
             .ThenBy(r => r.RoomName)
             .ToListAsync(cancellationToken);
@@ -29,6 +30,7 @@ public sealed class RoomRepository : IRoomRepository
     {
         return _dbContext.Rooms
             .AsNoTracking()
+            .Include(r => r.RoomType)
             .Where(r => r.CinemaID == cinemaId)
             .OrderBy(r => r.RoomName)
             .ToListAsync(cancellationToken);
@@ -40,6 +42,7 @@ public sealed class RoomRepository : IRoomRepository
     {
         return _dbContext.Rooms
             .AsNoTracking()
+            .Include(r => r.RoomType)
             .FirstOrDefaultAsync(r => r.RoomID == roomId, cancellationToken);
     }
 
@@ -51,6 +54,9 @@ public sealed class RoomRepository : IRoomRepository
             .AsNoTracking()
             .AnyAsync(c => c.CinemaID == cinemaId, cancellationToken);
     }
+
+    public Task<bool> RoomTypeExistsAsync(int roomTypeId, CancellationToken cancellationToken = default) =>
+        _dbContext.RoomTypes.AsNoTracking().AnyAsync(x => x.RoomTypeID == roomTypeId, cancellationToken);
 
     public Task<bool> NameExistsInCinemaAsync(
         int cinemaId,
@@ -91,7 +97,7 @@ public sealed class RoomRepository : IRoomRepository
         int roomId,
         int cinemaId,
         string roomName,
-        string roomType,
+        int roomTypeId,
         string status,
         string? description,
         CancellationToken cancellationToken = default)
@@ -106,7 +112,7 @@ public sealed class RoomRepository : IRoomRepository
 
         room.CinemaID = cinemaId;
         room.RoomName = roomName;
-        room.RoomType = roomType;
+        room.RoomTypeID = roomTypeId;
         room.Status = status;
         room.Description = description;
 

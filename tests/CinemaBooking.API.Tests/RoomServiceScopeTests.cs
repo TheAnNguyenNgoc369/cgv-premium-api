@@ -13,7 +13,7 @@ public sealed class RoomServiceScopeTests
         var service = new RoomService(repository);
 
         var result = await service.CreateRoomAsync(
-            2, "Room 1", "STANDARD", "ACTIVE", null, managerCinemaId: 1);
+            2, "Room 1", 1, "ACTIVE", null, managerCinemaId: 1);
 
         Assert.False(result.Succeeded);
         Assert.Equal(
@@ -54,6 +54,8 @@ public sealed class RoomServiceScopeTests
             Task.FromResult(ExistingRoom);
         public Task<bool> CinemaExistsAsync(int cinemaId, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
+        public Task<bool> RoomTypeExistsAsync(int roomTypeId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(true);
         public Task<bool> NameExistsInCinemaAsync(int cinemaId, string roomName,
             int? excludingRoomId = null, CancellationToken cancellationToken = default) =>
             Task.FromResult(false);
@@ -65,7 +67,7 @@ public sealed class RoomServiceScopeTests
             return Task.FromResult(room);
         }
         public Task<Room?> UpdateAsync(int roomId, int cinemaId, string roomName,
-            string roomType, string status, string? description,
+            int roomTypeId, string status, string? description,
             CancellationToken cancellationToken = default) => Task.FromResult<Room?>(null);
         public Task<bool> HasActiveOrUpcomingShowtimesAsync(
             int roomId, CancellationToken cancellationToken = default) => Task.FromResult(false);

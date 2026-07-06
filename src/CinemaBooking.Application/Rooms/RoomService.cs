@@ -36,7 +36,7 @@ public sealed class RoomService : IRoomService
     public async Task<(bool Succeeded, string? ErrorMessage, Room? Room)> CreateRoomAsync(
         int cinemaId,
         string name,
-        string type,
+        int roomTypeId,
         string status,
         string? description,
         int? managerCinemaId = null,
@@ -47,7 +47,7 @@ public sealed class RoomService : IRoomService
         var validation = await ValidateRoomAsync(
             cinemaId,
             name,
-            type,
+            roomTypeId,
             status,
             excludingRoomId: null,
             cancellationToken);
@@ -61,7 +61,7 @@ public sealed class RoomService : IRoomService
         {
             CinemaID = cinemaId,
             RoomName = name.Trim(),
-            RoomType = validation.RoomType!,
+            RoomTypeID = roomTypeId,
             Capacity = 0,
             Status = validation.Status!,
             Description = NormalizeNullable(description),
@@ -77,7 +77,7 @@ public sealed class RoomService : IRoomService
         int roomId,
         int cinemaId,
         string name,
-        string type,
+        int roomTypeId,
         string status,
         string? description,
         int? managerCinemaId = null,
@@ -95,7 +95,7 @@ public sealed class RoomService : IRoomService
         var validation = await ValidateRoomAsync(
             cinemaId,
             name,
-            type,
+            roomTypeId,
             status,
             roomId,
             cancellationToken);
@@ -109,7 +109,7 @@ public sealed class RoomService : IRoomService
             roomId,
             cinemaId,
             name.Trim(),
-            validation.RoomType!,
+            roomTypeId,
             validation.Status!,
             NormalizeNullable(description),
             cancellationToken);
@@ -149,39 +149,38 @@ public sealed class RoomService : IRoomService
             : (false, "Room not found");
     }
 
-    private async Task<(bool Succeeded, string? ErrorMessage, string? RoomType, string? Status)> ValidateRoomAsync(
+    private async Task<(bool Succeeded, string? ErrorMessage, string? Status)> ValidateRoomAsync(
         int cinemaId,
         string name,
-        string type,
+        int roomTypeId,
         string status,
         int? excludingRoomId,
         CancellationToken cancellationToken)
     {
         if (cinemaId <= 0)
         {
-            return (false, "CinemaId is required", null, null);
+            return (false, "CinemaId is required", null);
         }
 
         if (!await _roomRepository.CinemaExistsAsync(cinemaId, cancellationToken))
         {
-            return (false, "Cinema not found", null, null);
+            return (false, "Cinema not found", null);
         }
 
         if (string.IsNullOrWhiteSpace(name))
         {
-            return (false, "Name is required", null, null);
+            return (false, "Name is required", null);
         }
 
-        var normalizedType = NormalizeRoomType(type);
-        if (normalizedType is null)
+        if (!await _roomRepository.RoomTypeExistsAsync(roomTypeId, cancellationToken))
         {
-            return (false, "Type must be STANDARD, VIP, IMAX, or THREE_D", null, null);
+            return (false, "Room type not found", null);
         }
 
         var normalizedStatus = NormalizeStatus(status);
         if (normalizedStatus is null)
         {
-            return (false, "Status must be ACTIVE, MAINTENANCE, or INACTIVE", null, null);
+            return (false, "Status must be ACTIVE, MAINTENANCE, or INACTIVE", null);
         }
 
         if (await _roomRepository.NameExistsInCinemaAsync(
@@ -190,17 +189,10 @@ public sealed class RoomService : IRoomService
                 excludingRoomId,
                 cancellationToken))
         {
-            return (false, "Room name must be unique within the cinema", null, null);
+            return (false, "Room name must be unique within the cinema", null);
         }
 
-        return (true, null, normalizedType, normalizedStatus);
-    }
-
-    private static string? NormalizeRoomType(string type)
-    {
-        return string.IsNullOrWhiteSpace(type)
-            ? null
-            : EnumValueMapper.Validate(type, "Type", DatabaseEnumMappings.RoomTypes).DatabaseValue;
+        return (true, null, normalizedStatus);
     }
 
     private static string? NormalizeStatus(string status)

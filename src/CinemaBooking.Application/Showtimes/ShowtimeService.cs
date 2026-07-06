@@ -195,7 +195,7 @@ public sealed class ShowtimeService : IShowtimeService
 
             if (normalizedStatus != "cancelled"
                 && await _showtimeRepository.HasRoomTypeStartConflictAsync(
-                    room.CinemaID, room.RoomType, startTime, existing?.ShowtimeID, cancellationToken))
+                    room.CinemaID, room.RoomType.TypeName, startTime, existing?.ShowtimeID, cancellationToken))
                 return (false,
                     "Another showtime with the same room type already starts at this time in the cinema",
                     (Showtime?)null);
@@ -206,6 +206,8 @@ public sealed class ShowtimeService : IShowtimeService
             showtime.StartTime = startTime;
             showtime.EndTime = endTime;
             showtime.BasePrice = basePrice;
+            if (existing is null || existing.RoomID != roomId)
+                showtime.RoomExtraPrice = room.RoomType.ExtraPrice;
             showtime.Status = normalizedStatus!;
             var saved = existing is null
                 ? await _showtimeRepository.AddAsync(showtime, cancellationToken)
@@ -256,10 +258,10 @@ public sealed class ShowtimeService : IShowtimeService
         var seatResults = seats.Select(seat => new SeatMapSeatResult(
             seat.SeatID, seat.SeatRow, seat.SeatCol, seat.SeatType?.TypeName,
             seat.SeatType?.ExtraPrice ?? 0,
-            seat.IsGap ? 0 : showtime.BasePrice + (seat.SeatType?.ExtraPrice ?? 0),
+            seat.IsGap ? 0 : showtime.BasePrice + showtime.RoomExtraPrice + (seat.SeatType?.ExtraPrice ?? 0),
             seat.IsGap ? seat.Status : bookedSeatIds.Contains(seat.SeatID) ? SeatStatus.Booked
                 : heldSeatIds.Contains(seat.SeatID) ? SeatStatus.Held : SeatStatus.Available,
             seat.IsGap)).ToList();
-        return (new SeatMapResult(showtime.ShowtimeID, showtime.Room.RoomName, showtime.Room.RoomType, seatResults), null);
+        return (new SeatMapResult(showtime.ShowtimeID, showtime.Room.RoomName, showtime.Room.RoomType.TypeName, seatResults), null);
     }
 }
