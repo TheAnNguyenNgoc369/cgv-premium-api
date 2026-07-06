@@ -29,6 +29,18 @@ public sealed class ReportsController : ControllerBase
         [FromQuery] int? cinemaId, CancellationToken ct) => await Run(startDate, endDate, cinemaId,
             async (f, t, c, u, ip) => Ok(await _reports.TopSellingAsync(f, t, c, u, ip, ct)));
 
+    [HttpGet("revenue")]
+    public async Task<IActionResult> Revenue([FromQuery] DateOnly? startDate, [FromQuery] DateOnly? endDate,
+        [FromQuery] string? groupBy, [FromQuery] int? cinemaId, CancellationToken ct)
+    {
+        groupBy = groupBy?.Trim().ToLowerInvariant();
+        if (groupBy is not ("day" or "week" or "month"))
+            return BadRequest(new { success = false, message = "groupBy must be day, week, or month." });
+
+        return await Run(startDate, endDate, cinemaId,
+            async (f, t, c, u, ip) => Ok(await _reports.RevenueAsync(f, t, groupBy, c, u, ip, ct)));
+    }
+
     [HttpGet("export")]
     public async Task<IActionResult> Export([FromQuery] string format, [FromQuery] string reportType,
         [FromQuery] DateOnly? startDate, [FromQuery] DateOnly? endDate, [FromQuery] int? cinemaId, CancellationToken ct)
