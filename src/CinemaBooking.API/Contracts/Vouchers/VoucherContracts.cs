@@ -20,5 +20,5 @@ public sealed class VoucherRequest
 
 public sealed record VoucherResponse(int VoucherId, string VoucherCode, string? Category, string DiscountType,
     decimal DiscountValue, decimal? MinOrderValue, int? MaxUses, int UsedCount, DateTimeOffset ValidFrom,
-    DateTimeOffset ValidUntil, string? ImageUrl, string? Description, bool IsActive, DateTime CreatedAt);
+    DateTimeOffset ValidUntil, string? ImageUrl, string? Description, bool IsActive, string Status, DateTime CreatedAt);
 public sealed record VoucherPageResponse(IReadOnlyList<VoucherResponse> Items, int PageIndex, int PageSize, int TotalItems, int TotalPages);

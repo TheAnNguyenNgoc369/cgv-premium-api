@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using System.Globalization;
 
 namespace CinemaBooking.Infrastructure.Reports;
 
@@ -34,7 +35,7 @@ public sealed class ReportService : IReportService
         var result = new RevenueSummary(gross, bookings.Sum(b => b.BookingSeats.Sum(s => s.TicketPrice)),
             bookings.Sum(b => b.BookingFnBs.Sum(f => f.SubTotal)), bookings.Sum(b => b.DiscountAmount),
             bookings.Count, CountTicketsSold(bookings), bookings.Count == 0 ? 0 : gross / bookings.Count);
-        await Audit(actorId, AdminActionTypes.ViewRevenueReport, "Viewed revenue summary", ip, ct); return result;
+        return result;
     }
 
     public async Task<IReadOnlyList<MoviePerformance>> MoviePerformanceAsync(DateTime from, DateTime to, string? search,
@@ -52,7 +53,7 @@ public sealed class ReportService : IReportService
                 var capacity = shows.Sum(x => x.Room.Capacity); return new MoviePerformance(g.Key.MovieID, g.Key.Title,
                     shows.Count, bookings.Count, sold, capacity == 0 ? 0 : Math.Round(sold * 100m / capacity, 2), g.Sum(x => x.Amount)); })
             .OrderByDescending(x => x.Revenue).ToList();
-        await Audit(actorId, AdminActionTypes.ViewRevenueReport, "Viewed movie performance report", ip, ct); return result;
+        return result;
     }
 
     public async Task<TopSellingReport> TopSellingAsync(
@@ -118,9 +119,72 @@ public sealed class ReportService : IReportService
             .ThenBy(cinema => cinema.CinemaId)
             .ToList();
 
-        await Audit(actorId, AdminActionTypes.ViewRevenueReport, "Viewed top-selling report", ip, ct);
         return new TopSellingReport(movies, fnbProducts, cinemas);
     }
+
+    public async Task<object> RevenueAsync(DateTime from, DateTime to, string groupBy, int? cinemaId,
+        int actorId, string? ip, CancellationToken ct)
+    {
+        var paymentRows = await Payments(from, to, cinemaId)
+            .Where(payment => payment.Booking.Status == BookingStatus.Paid
+                || payment.Booking.Status == BookingStatus.Used)
+            .Include(payment => payment.Booking).ThenInclude(booking => booking.BookingSeats)
+                .ThenInclude(bookingSeat => bookingSeat.Seat).ThenInclude(seat => seat.SeatType)
+            .Include(payment => payment.Booking).ThenInclude(booking => booking.BookingFnBs)
+            .AsSplitQuery()
+            .ToListAsync(ct);
+
+        var rows = paymentRows
+            .Select(payment => new RevenueRow(
+                VietnamTime.GetDate(payment.PaidAt!.Value),
+                payment.Booking.BookingSeats.Sum(seat => seat.TicketPrice),
+                payment.Booking.BookingFnBs.Sum(item => item.SubTotal),
+                ReportService.CountTicketsSold([payment.Booking])))
+            .ToList();
+
+        object result = groupBy switch
+        {
+            "day" => rows.GroupBy(row => row.Date)
+                .OrderBy(group => group.Key)
+                .Select(group => Daily(group.Key, group)).ToList(),
+            "week" => rows.GroupBy(row => new
+                {
+                    Year = ISOWeek.GetYear(row.Date.ToDateTime(TimeOnly.MinValue)),
+                    Week = ISOWeek.GetWeekOfYear(row.Date.ToDateTime(TimeOnly.MinValue))
+                })
+                .OrderBy(group => group.Key.Year).ThenBy(group => group.Key.Week)
+                .Select(group => Weekly(group.Key.Year, group.Key.Week, group)).ToList(),
+            _ => rows.GroupBy(row => new { row.Date.Year, row.Date.Month })
+                .OrderBy(group => group.Key.Year).ThenBy(group => group.Key.Month)
+                .Select(group => Monthly(group.Key.Year, group.Key.Month, group)).ToList()
+        };
+
+        return result;
+    }
+
+    private static DailyRevenue Daily(DateOnly date, IEnumerable<RevenueRow> rows)
+    {
+        var values = rows.ToList();
+        var ticket = values.Sum(row => row.TicketRevenue); var fnb = values.Sum(row => row.FnbRevenue);
+        return new DailyRevenue(date, ticket + fnb, ticket, fnb, values.Count, values.Sum(row => row.TicketsSold));
+    }
+
+    private static WeeklyRevenue Weekly(int year, int week, IEnumerable<RevenueRow> rows)
+    {
+        var values = rows.ToList(); var monday = DateOnly.FromDateTime(ISOWeek.ToDateTime(year, week, DayOfWeek.Monday));
+        var ticket = values.Sum(row => row.TicketRevenue); var fnb = values.Sum(row => row.FnbRevenue);
+        return new WeeklyRevenue($"{year}-W{week:00}", monday, monday.AddDays(6), ticket + fnb, ticket, fnb,
+            values.Count, values.Sum(row => row.TicketsSold));
+    }
+
+    private static MonthlyRevenue Monthly(int year, int month, IEnumerable<RevenueRow> rows)
+    {
+        var values = rows.ToList(); var ticket = values.Sum(row => row.TicketRevenue); var fnb = values.Sum(row => row.FnbRevenue);
+        return new MonthlyRevenue($"{year}-{month:00}", ticket + fnb, ticket, fnb, values.Count,
+            values.Sum(row => row.TicketsSold));
+    }
+
+    private sealed record RevenueRow(DateOnly Date, decimal TicketRevenue, decimal FnbRevenue, int TicketsSold);
 
     public async Task<ReportFile> ExportAsync(string format, string type, DateTime from, DateTime to, int? cinemaId,
         int actorId, string? ip, CancellationToken ct)
