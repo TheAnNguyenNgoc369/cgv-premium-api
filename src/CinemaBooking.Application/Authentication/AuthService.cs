@@ -4,6 +4,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Security;
+using CinemaBooking.Application.Notifications;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 
@@ -26,16 +27,16 @@ public sealed class AuthService : IAuthService
 
     private readonly IUserRepository _userRepository;
     private readonly IEmailSender _emailSender;
-    private readonly IEmailQueue? _emailQueue;
+    private readonly IAuthEmailService _authEmailService;
 
     public AuthService(
         IUserRepository userRepository,
         IEmailSender emailSender,
-        IEmailQueue? emailQueue = null)
+        IAuthEmailService authEmailService)
     {
         _userRepository = userRepository;
         _emailSender = emailSender;
-        _emailQueue = emailQueue;
+        _authEmailService = authEmailService;
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, int? UserId, bool VerificationEmailSent)> RegisterAsync(
@@ -214,15 +215,20 @@ public sealed class AuthService : IAuthService
             verificationToken,
             cancellationToken);
 
-        var verificationEmailSent = await QueueOrSendAsync(
-            user.UserID,
-            user.Email,
-            "register",
-            "Verify your Cinema Booking account",
-            BuildVerificationEmailBody(user.FullName, verificationToken.Token),
-            cancellationToken);
-
-        if (!verificationEmailSent)
+        try
+        {
+            await _authEmailService.QueueVerificationAsync(
+                user.UserID,
+                user.Email,
+                "Verify your Cinema Booking account",
+                BuildVerificationEmailBody(user.FullName, verificationToken.Token),
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
         {
             await _userRepository.DeleteEmailVerificationTokenAsync(
                 verificationToken.Token,
@@ -286,15 +292,20 @@ public sealed class AuthService : IAuthService
             resetToken,
             cancellationToken);
 
-        var emailSent = await QueueOrSendAsync(
-            user.UserID,
-            user.Email,
-            "forgot_password",
-            "Reset your Cinema Booking password",
-            BuildResetPasswordEmailBody(user.FullName, resetToken.Token),
-            cancellationToken);
-
-        if (!emailSent)
+        try
+        {
+            await _authEmailService.QueuePasswordResetAsync(
+                user.UserID,
+                user.Email,
+                "Reset your Cinema Booking password",
+                BuildResetPasswordEmailBody(user.FullName, resetToken.Token),
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
         {
             await _userRepository.DeletePasswordResetTokenAsync(
                 resetToken.Token,
@@ -413,33 +424,6 @@ public sealed class AuthService : IAuthService
             && Regex.IsMatch(password, "[A-Z]")
             && Regex.IsMatch(password, @"\d")
             && Regex.IsMatch(password, "[^A-Za-z0-9]");
-    }
-
-    private async Task<bool> QueueOrSendAsync(
-        int userId,
-        string email,
-        string eventType,
-        string subject,
-        string htmlBody,
-        CancellationToken cancellationToken)
-    {
-        if (_emailQueue is null)
-            return await _emailSender.SendAsync(email, subject, htmlBody, cancellationToken);
-
-        try
-        {
-            await _emailQueue.EnqueueAsync(
-                userId, email, eventType, subject, htmlBody, cancellationToken);
-            return true;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     private static int GetRetryAfterSeconds(

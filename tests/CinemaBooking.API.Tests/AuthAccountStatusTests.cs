@@ -1,6 +1,7 @@
 using CinemaBooking.Application.Authentication;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Security;
+using CinemaBooking.Application.Notifications;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 
@@ -12,7 +13,7 @@ public sealed class AuthAccountStatusTests
     public async Task RegisterAsync_ExistingInactiveEmail_ReturnsEmailInUse()
     {
         var service = new AuthService(
-            new StubUserRepository { EmailExists = true }, new StubEmailSender());
+            new StubUserRepository { EmailExists = true }, new StubEmailSender(), new StubAuthEmailService());
 
         var result = await service.RegisterAsync(
             "Existing User", "existing@example.com", "0901234567", "Password@123");
@@ -35,7 +36,7 @@ public sealed class AuthAccountStatusTests
                 Status = UserStatuses.Inactive,
                 EmailVerifiedAt = DateTime.UtcNow
             }
-        }, new StubEmailSender());
+        }, new StubEmailSender(), new StubAuthEmailService());
 
         var result = await service.LoginAsync("inactive@example.com", password);
 
@@ -58,7 +59,7 @@ public sealed class AuthAccountStatusTests
             EmailVerifiedAt = DateTime.UtcNow.AddMinutes(-5)
         };
         var repository = new StubUserRepository { User = user };
-        var service = new AuthService(repository, new StubEmailSender());
+        var service = new AuthService(repository, new StubEmailSender(), new StubAuthEmailService());
 
         var result = await service.LoginAsync(user.Email, password);
 
@@ -86,7 +87,7 @@ public sealed class AuthAccountStatusTests
             ExpiresAt = DateTime.UtcNow.AddMinutes(10)
         };
         var repository = new StubUserRepository { VerificationToken = token };
-        var service = new AuthService(repository, new StubEmailSender());
+        var service = new AuthService(repository, new StubEmailSender(), new StubAuthEmailService());
 
         var result = await service.VerifyEmailAsync(token.Token);
 
@@ -101,6 +102,15 @@ public sealed class AuthAccountStatusTests
     {
         public Task<bool> SendAsync(string toEmail, string subject, string htmlBody,
             CancellationToken cancellationToken = default) => Task.FromResult(true);
+    }
+
+    private sealed class StubAuthEmailService : IAuthEmailService
+    {
+        public Task QueueVerificationAsync(int userId, string email, string subject, string htmlBody,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task QueuePasswordResetAsync(int userId, string email, string subject, string htmlBody,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class StubUserRepository : IUserRepository
