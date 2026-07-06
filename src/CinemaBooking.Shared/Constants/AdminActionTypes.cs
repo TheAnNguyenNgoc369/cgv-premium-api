@@ -2,6 +2,10 @@ namespace CinemaBooking.Shared.Constants;
 
 public static class AdminActionTypes
 {
+    public const string CreateShowtimeType = "create_showtime_type";
+    public const string UpdateShowtimeType = "update_showtime_type";
+    public const string DeleteShowtimeType = "delete_showtime_type";
+    public const string GenerateShowtimeByType = "generate_showtime_by_type";
     public const string CreateRoomType = "create_room_type";
     public const string UpdateRoomType = "update_room_type";
     public const string DeleteRoomType = "delete_room_type";

@@ -1,5 +1,6 @@
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
+using CinemaBooking.Application.Notifications;
 using CinemaBooking.Shared.Constants;
 
 namespace CinemaBooking.Application.Refunds;
@@ -14,6 +15,7 @@ public sealed class RefundService : IRefundService
     private readonly ITicketRepository _ticketRepository;
     private readonly IBookingRepository _bookingRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly INotificationOutbox _notificationOutbox;
 
     public RefundService(
         IRefundRepository refundRepository,
@@ -21,6 +23,7 @@ public sealed class RefundService : IRefundService
         IPaymentRepository paymentRepository,
         ITicketRepository ticketRepository,
         IBookingRepository bookingRepository,
+        INotificationOutbox notificationOutbox,
         IUnitOfWork unitOfWork)
     {
         _refundRepository = refundRepository;
@@ -28,6 +31,7 @@ public sealed class RefundService : IRefundService
         _paymentRepository = paymentRepository;
         _ticketRepository = ticketRepository;
         _bookingRepository = bookingRepository;
+        _notificationOutbox = notificationOutbox;
         _unitOfWork = unitOfWork;
     }
 
@@ -176,6 +180,9 @@ public sealed class RefundService : IRefundService
                 Status = BookingStatus.Refunded
             };
         }, cancellationToken);
+
+        await _notificationOutbox.EnqueueRefundCompletedAsync(
+            bookingId, result.RefundAmount, now, cancellationToken);
 
         return (true, null, result);
     }

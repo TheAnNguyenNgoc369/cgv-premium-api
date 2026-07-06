@@ -13,12 +13,17 @@ public class EmailLogConfiguration : IEntityTypeConfiguration<EmailLog>
         builder.HasKey(e => e.EmailLogID);
 
         builder.Property(e => e.ToEmail).HasMaxLength(150).IsRequired();
+        builder.Property(e => e.Subject).HasMaxLength(250).IsRequired();
+        builder.Property(e => e.HtmlBody).IsRequired();
+        builder.Property(e => e.InlineImagesJson);
         builder.Property(e => e.EventType).HasMaxLength(50).IsRequired();
-        builder.Property(e => e.DeliveryStatus).HasMaxLength(20).IsRequired().HasDefaultValue("sent");
+        builder.Property(e => e.DeliveryStatus).HasMaxLength(20).IsRequired().HasDefaultValue("pending");
         builder.Property(e => e.RetryCount).HasDefaultValue(0);
-        builder.Property(e => e.CreatedAt).HasDefaultValueSql("GETDATE()");
+        builder.Property(e => e.LastError).HasMaxLength(2000);
+        builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
 
         builder.HasIndex(e => e.UserID).HasDatabaseName("IX_EmailLog_UserID");
+        builder.HasIndex(e => new { e.DeliveryStatus, e.NextAttemptAt });
 
         builder.HasOne(e => e.User)
             .WithMany(u => u.EmailLogs)
@@ -28,8 +33,8 @@ public class EmailLogConfiguration : IEntityTypeConfiguration<EmailLog>
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_EmailLog_EventType", "[EventType] IN ('register','booking_confirmed','booking_cancelled','forgot_password','refund_processed','points_earned','reward_redeemed')");
-            t.HasCheckConstraint("CK_EmailLog_DeliveryStatus", "[DeliveryStatus] IN ('sent', 'failed', 'retrying')");
-            t.HasCheckConstraint("CK_EmailLog_RetryCount", "[RetryCount] >= 0");
+            t.HasCheckConstraint("CK_EmailLog_DeliveryStatus", "[DeliveryStatus] IN ('pending', 'processing', 'sent', 'failed', 'retrying')");
+            t.HasCheckConstraint("CK_EmailLog_RetryCount", "[RetryCount] BETWEEN 0 AND 3");
         });
     }
 }

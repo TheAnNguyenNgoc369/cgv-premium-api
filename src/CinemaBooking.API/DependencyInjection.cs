@@ -53,6 +53,14 @@ public static class DependencyInjection
                         var fieldName = GetFieldName(errorEntry.Key);
                         var errorText = errorEntry.Error ?? string.Empty;
 
+                        if (context.HttpContext?.Request.Path.StartsWithSegments("/api/showtime-types", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            var message = string.IsNullOrWhiteSpace(errorText)
+                                ? $"{char.ToLowerInvariant(fieldName[0])}{fieldName[1..]} is invalid."
+                                : errorText;
+                            return new BadRequestObjectResult(new { success = false, message });
+                        }
+
                         if (context.HttpContext?.Request.Path.StartsWithSegments("/api/v1/reports", StringComparison.OrdinalIgnoreCase) == true
                             && (fieldName == "startDate" || fieldName == "endDate"))
                         {

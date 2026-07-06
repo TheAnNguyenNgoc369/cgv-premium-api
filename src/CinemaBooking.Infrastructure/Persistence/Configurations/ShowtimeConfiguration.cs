@@ -31,6 +31,10 @@ public class ShowtimeConfiguration : IEntityTypeConfiguration<Showtime>
             .HasForeignKey(s => s.RoomID)
             .HasConstraintName("FK_Showtime_Room");
 
+        builder.HasOne(s => s.ShowtimeType).WithMany(x => x.Showtimes)
+            .HasForeignKey(s => s.ShowtimeTypeID)
+            .HasConstraintName("FK_Showtime_ShowtimeType");
+
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_Showtime_Time", "[EndTime] > [StartTime]");

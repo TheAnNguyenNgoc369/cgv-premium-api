@@ -15,6 +15,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using CinemaBooking.Application.ActivityLogs;
 using CinemaBooking.Infrastructure.ActivityLogs;
+using CinemaBooking.Application.Notifications;
+using CinemaBooking.Infrastructure.Notifications;
 
 namespace CinemaBooking.Infrastructure;
 
@@ -64,12 +66,16 @@ public static class DependencyInjection
 
         services.AddSingleton(Options.Create(cloudinarySettings));
         services.AddScoped<IEmailSender, SmtpEmailSender>();
+        services.AddScoped<IEmailQueue, EmailQueue>();
+        services.AddScoped<INotificationOutbox, Notifications.NotificationOutbox>();
         services.AddScoped<IImageStorageService, CloudinaryImageStorageService>();
         services.AddScoped<IPayOSService, PayOSService>();
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IActivityLogService, ActivityLogService>();
         services.AddHostedService<SeatHoldExpirationJob>();
         services.AddHostedService<ShowtimeCompletionJob>();
+        services.AddHostedService<EmailDeliveryJob>();
+        services.AddHostedService<NotificationOutboxJob>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScopedByConvention(typeof(DependencyInjection).Assembly, "Repository");
 
