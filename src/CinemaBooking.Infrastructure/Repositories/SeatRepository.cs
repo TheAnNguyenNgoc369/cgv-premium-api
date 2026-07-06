@@ -192,7 +192,6 @@ public sealed class SeatRepository : ISeatRepository
         }
 
         await RecalculateRoomCapacityAsync(seat.RoomID, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _dbContext.Entry(seat)
             .Reference(s => s.SeatType)
@@ -227,13 +226,41 @@ public sealed class SeatRepository : ISeatRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await RecalculateRoomCapacityAsync(roomId, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _dbContext.Entry(seat)
             .Reference(s => s.SeatType)
             .LoadAsync(cancellationToken);
 
         return seat;
+    }
+
+    public async Task<List<Seat>> UpdateRangeAsync(
+        int roomId,
+        IReadOnlyCollection<Seat> seats,
+        CancellationToken cancellationToken = default)
+    {
+        if (seats.Count == 0) return [];
+
+        foreach (var seat in seats)
+        {
+            seat.SeatType = null;
+            _dbContext.Attach(seat);
+            var entry = _dbContext.Entry(seat);
+            entry.Property(item => item.SeatTypeID).IsModified = true;
+            entry.Property(item => item.Status).IsModified = true;
+            entry.Property(item => item.IsGap).IsModified = true;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await RecalculateRoomCapacityAsync(roomId, cancellationToken);
+
+        var ids = seats.Select(seat => seat.SeatID).ToArray();
+        return await _dbContext.Seats.AsNoTracking()
+            .Include(seat => seat.SeatType)
+            .Where(seat => ids.Contains(seat.SeatID))
+            .OrderBy(seat => seat.SeatRow)
+            .ThenBy(seat => seat.SeatCol)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<bool> DeleteAsync(
@@ -253,7 +280,6 @@ public sealed class SeatRepository : ISeatRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await RecalculateRoomCapacityAsync(roomId, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
 
         return true;
     }
@@ -263,20 +289,12 @@ public sealed class SeatRepository : ISeatRepository
         IReadOnlyCollection<Seat> seats,
         CancellationToken cancellationToken = default)
     {
-        var existingSeats = await _dbContext.Seats
+        await _dbContext.Seats
             .Where(seat => seat.RoomID == roomId
-                && seat.IsCurrentLayout
-                && seat.Status == "active"
-                && !seat.IsGap)
-            .ToListAsync(cancellationToken);
-
-        foreach (var existingSeat in existingSeats)
-        {
-            existingSeat.Status = "inactive";
-            existingSeat.IsCurrentLayout = false;
-        }
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+                && seat.IsCurrentLayout)
+            .ExecuteUpdateAsync(updates => updates
+                .SetProperty(seat => seat.Status, "inactive")
+                .SetProperty(seat => seat.IsCurrentLayout, false), cancellationToken);
 
         foreach (var seat in seats)
         {
@@ -287,7 +305,6 @@ public sealed class SeatRepository : ISeatRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await RecalculateRoomCapacityAsync(roomId, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
 
         return await GetSeatsByRoomAsync(roomId, cancellationToken);
     }
@@ -336,12 +353,9 @@ public sealed class SeatRepository : ISeatRepository
                 (_, seatType) => seatType.Capacity)
             .SumAsync(cancellationToken);
 
-        var room = await _dbContext.Rooms
-            .FirstOrDefaultAsync(item => item.RoomID == roomId, cancellationToken);
-
-        if (room is not null)
-        {
-            room.Capacity = capacity;
-        }
+        await _dbContext.Rooms
+            .Where(item => item.RoomID == roomId)
+            .ExecuteUpdateAsync(updates => updates
+                .SetProperty(room => room.Capacity, capacity), cancellationToken);
     }
 }

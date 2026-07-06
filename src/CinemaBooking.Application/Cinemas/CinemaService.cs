@@ -40,6 +40,8 @@ public sealed class CinemaService : ICinemaService
     public async Task<(bool Succeeded, string? ErrorMessage, Cinema? Cinema)> CreateCinemaAsync(
         string cinemaName,
         string address,
+        double? latitude,
+        double? longitude,
         string? status,
         CancellationToken cancellationToken = default)
     {
@@ -60,6 +62,8 @@ public sealed class CinemaService : ICinemaService
         {
             CinemaName = cinemaName.Trim(),
             Address = address.Trim(),
+            Latitude = latitude.HasValue ? Convert.ToDecimal(latitude.Value) : null,
+            Longitude = longitude.HasValue ? Convert.ToDecimal(longitude.Value) : null,
             Status = normalizedStatus,
             CreatedAt = now,
             UpdatedAt = now
@@ -74,6 +78,8 @@ public sealed class CinemaService : ICinemaService
         int cinemaId,
         string cinemaName,
         string address,
+        double? latitude,
+        double? longitude,
         string? status,
         CancellationToken cancellationToken = default)
     {
@@ -99,6 +105,8 @@ public sealed class CinemaService : ICinemaService
             cinemaId,
             cinemaName.Trim(),
             address.Trim(),
+            latitude.HasValue ? Convert.ToDecimal(latitude.Value) : null,
+            longitude.HasValue ? Convert.ToDecimal(longitude.Value) : null,
             normalizedStatus,
             DateTime.UtcNow,
             cancellationToken);

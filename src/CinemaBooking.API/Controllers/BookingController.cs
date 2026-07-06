@@ -162,7 +162,7 @@ public sealed class BookingController : ControllerBase
         var userId = GetCurrentUserId();
         var bookings = await _bookingService.GetMyBookingsAsync(userId, cancellationToken);
 
-        return Ok(bookings.Select(MapToResponse));
+        return Ok(bookings.Select(MapToMyResponse));
     }
 
     private int GetCurrentUserId()
@@ -177,6 +177,43 @@ public sealed class BookingController : ControllerBase
             booking.BookingCode,
             booking.ShowtimeID,
             booking.Showtime.Movie.Title,
+            booking.Showtime.StartTime,
+            booking.Showtime.Room.Cinema.CinemaName,
+            booking.Showtime.Room.RoomName,
+            booking.SubTotal,
+            booking.DiscountAmount,
+            booking.FinalAmount,
+            booking.Status,
+            booking.BookingDate,
+            booking.BookingSeats.Select(bs => new BookingSeatResponse(
+                bs.SeatID, bs.Seat.SeatRow, bs.Seat.SeatCol, bs.TicketPrice
+            )).ToList(),
+            booking.BookingFnBs.Select(fnb => new BookingFnBResponse(
+                fnb.Product.ItemName,
+                fnb.Quantity,
+                fnb.UnitPrice,
+                fnb.SubTotal
+            )).ToList(),
+            booking.BookingVoucher != null
+                ? new BookingVoucherResponse(
+                    booking.BookingVoucher.Voucher.VoucherCode,
+                    booking.BookingVoucher.DiscountApplied
+                  )
+                : null
+        );
+    }
+
+    private static MyBookingResponse MapToMyResponse(Booking booking)
+    {
+        return new MyBookingResponse(
+            booking.BookingID,
+            booking.BookingCode,
+            booking.ShowtimeID,
+            new BookingMovieResponse(
+                booking.Showtime.Movie.Title,
+                booking.Showtime.Movie.PosterURL,
+                booking.Showtime.Movie.AgeRating,
+                booking.Showtime.Movie.DurationMin),
             booking.Showtime.StartTime,
             booking.Showtime.Room.Cinema.CinemaName,
             booking.Showtime.Room.RoomName,

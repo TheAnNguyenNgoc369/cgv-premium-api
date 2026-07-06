@@ -66,6 +66,21 @@ public interface ISeatRepository
         bool isGap,
         CancellationToken cancellationToken = default);
 
+    async Task<List<Seat>> UpdateRangeAsync(
+        int roomId,
+        IReadOnlyCollection<Seat> seats,
+        CancellationToken cancellationToken = default)
+    {
+        var updated = new List<Seat>();
+        foreach (var seat in seats)
+        {
+            var result = await UpdateAsync(
+                roomId, seat.SeatID, seat.SeatTypeID, seat.Status, seat.IsGap, cancellationToken);
+            if (result is not null) updated.Add(result);
+        }
+        return updated;
+    }
+
     Task<bool> DeleteAsync(
         int seatId,
         CancellationToken cancellationToken = default);

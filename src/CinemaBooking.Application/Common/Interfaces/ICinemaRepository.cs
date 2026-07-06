@@ -21,6 +21,8 @@ public interface ICinemaRepository
         int cinemaId,
         string cinemaName,
         string address,
+        decimal? latitude,
+        decimal? longitude,
         string status,
         DateTime updatedAt,
         CancellationToken cancellationToken = default);

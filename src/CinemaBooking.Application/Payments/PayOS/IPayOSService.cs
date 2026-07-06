@@ -12,4 +12,8 @@ public interface IPayOSService
     Task<PayOSVerifiedWebhookData> VerifyWebhookAsync(
         PayOSWebhook webhook,
         CancellationToken cancellationToken = default);
+
+    Task<PayOSPaymentLinkStatusResult> GetPaymentLinkStatusAsync(
+        long orderCode,
+        CancellationToken cancellationToken = default);
 }

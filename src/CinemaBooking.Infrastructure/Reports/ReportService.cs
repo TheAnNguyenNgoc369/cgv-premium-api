@@ -19,7 +19,8 @@ public sealed class ReportService : IReportService
     private IQueryable<Payment> Payments(DateTime from, DateTime to, int? cinemaId)
     {
         var query = _db.Payments.AsNoTracking().Where(p => p.Status == PaymentStatus.Completed
-            && p.PaidAt >= from && p.PaidAt < to && p.Booking.Status != BookingStatus.Cancelled
+            && p.PaidAt.HasValue && p.PaidAt.Value >= from && p.PaidAt.Value < to
+            && p.Booking.Status != BookingStatus.Cancelled
             && p.Booking.Status != BookingStatus.Refunded);
         return cinemaId.HasValue ? query.Where(p => p.Booking.Showtime.Room.CinemaID == cinemaId) : query;
     }

@@ -80,6 +80,16 @@ public sealed class PayOSService : IPayOSService
             verified.Code);
     }
 
+    public async Task<PayOSPaymentLinkStatusResult> GetPaymentLinkStatusAsync(
+        long orderCode,
+        CancellationToken cancellationToken = default)
+    {
+        var client = CreateClient();
+        var paymentLink = await client.PaymentRequests.GetAsync(orderCode);
+
+        return new PayOSPaymentLinkStatusResult(paymentLink.Status.ToString());
+    }
+
     private PayOSClient CreateClient()
     {
         if (string.IsNullOrWhiteSpace(_settings.ClientId)

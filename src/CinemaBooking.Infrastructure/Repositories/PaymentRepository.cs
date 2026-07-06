@@ -82,6 +82,20 @@ public sealed class PaymentRepository : IPaymentRepository
         return affectedRows == 1;
     }
 
+    public async Task<bool> TryCancelPendingPaymentAsync(
+        int paymentId,
+        CancellationToken cancellationToken = default)
+    {
+        var affectedRows = await _db.Payments
+            .Where(payment => payment.PaymentID == paymentId
+                && payment.Status == PaymentStatus.Pending)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(payment => payment.Status, PaymentStatus.Cancelled),
+                cancellationToken);
+
+        return affectedRows == 1;
+    }
+
     public async Task<PaymentSession> CreatePaymentSessionAsync(
         PaymentSession session,
         CancellationToken cancellationToken = default)
@@ -107,6 +121,18 @@ public sealed class PaymentRepository : IPaymentRepository
         return await _db.PaymentSessions
             .Include(ps => ps.Payment)
             .FirstOrDefaultAsync(ps => ps.GatewayOrderNo == orderNo, cancellationToken);
+    }
+
+    public async Task<PaymentSession?> GetLatestPaymentSessionAsync(
+        int paymentId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.PaymentSessions
+            .AsNoTracking()
+            .Where(session => session.PaymentID == paymentId)
+            .OrderByDescending(session => session.CreatedAt)
+            .ThenByDescending(session => session.SessionID)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task UpdatePaymentSessionStatusAsync(

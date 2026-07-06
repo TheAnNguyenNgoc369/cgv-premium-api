@@ -23,6 +23,31 @@ public sealed record BookingResponse(
     BookingVoucherResponse? VoucherApplied
 );
 
+public sealed record MyBookingResponse(
+    int BookingID,
+    string BookingCode,
+    int ShowtimeID,
+    BookingMovieResponse Movie,
+    DateTime StartTime,
+    string CinemaName,
+    string RoomName,
+    decimal SubTotal,
+    decimal DiscountAmount,
+    decimal FinalAmount,
+    string Status,
+    DateTime BookingDate,
+    List<BookingSeatResponse> Seats,
+    List<BookingFnBResponse> FnbItems,
+    BookingVoucherResponse? VoucherApplied
+);
+
+public sealed record BookingMovieResponse(
+    string Title,
+    string? PosterUrl,
+    string AgeRating,
+    int DurationMinutes
+);
+
 public sealed record BookingSeatResponse(
     int SeatID,
     string SeatRow,

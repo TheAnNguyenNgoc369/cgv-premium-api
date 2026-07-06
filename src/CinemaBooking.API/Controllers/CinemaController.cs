@@ -55,6 +55,8 @@ public sealed class CinemaController : ControllerBase
         var result = await _cinemaService.CreateCinemaAsync(
             request.CinemaName,
             request.Address,
+            request.Latitude,
+            request.Longitude,
             request.Status,
             cancellationToken);
 
@@ -82,6 +84,8 @@ public sealed class CinemaController : ControllerBase
             id,
             request.CinemaName,
             request.Address,
+            request.Latitude,
+            request.Longitude,
             request.Status,
             cancellationToken);
 
@@ -125,6 +129,8 @@ public sealed class CinemaController : ControllerBase
             cinema.CinemaID,
             cinema.CinemaName,
             cinema.Address,
+            cinema.Latitude.HasValue ? decimal.ToDouble(cinema.Latitude.Value) : null,
+            cinema.Longitude.HasValue ? decimal.ToDouble(cinema.Longitude.Value) : null,
             EnumValueMapper.ToApiValue(cinema.Status),
             cinema.CreatedAt,
             cinema.UpdatedAt);
