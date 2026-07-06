@@ -13,6 +13,7 @@ public class ShowtimeConfiguration : IEntityTypeConfiguration<Showtime>
         builder.HasKey(s => s.ShowtimeID);
 
         builder.Property(s => s.BasePrice).HasColumnType("decimal(18,2)");
+        builder.Property(s => s.RoomExtraPrice).HasColumnType("decimal(18,2)");
         builder.Property(s => s.Status).HasMaxLength(30).IsRequired().HasDefaultValue("scheduled");
         builder.Property(s => s.CreatedAt).HasDefaultValueSql("GETDATE()");
 

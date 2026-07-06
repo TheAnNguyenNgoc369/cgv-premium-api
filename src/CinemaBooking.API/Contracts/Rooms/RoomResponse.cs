@@ -4,6 +4,7 @@ public sealed record RoomResponse(
     int RoomId,
     int CinemaId,
     string Name,
+    int RoomTypeId,
     string Type,
     int Capacity,
     string Status,

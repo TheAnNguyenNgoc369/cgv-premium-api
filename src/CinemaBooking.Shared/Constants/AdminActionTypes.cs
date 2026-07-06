@@ -2,6 +2,9 @@ namespace CinemaBooking.Shared.Constants;
 
 public static class AdminActionTypes
 {
+    public const string CreateRoomType = "create_room_type";
+    public const string UpdateRoomType = "update_room_type";
+    public const string DeleteRoomType = "delete_room_type";
     public const string CreateUser = "create_user";
     public const string UpdateUser = "update_user";
     public const string LockUser = "lock_user";

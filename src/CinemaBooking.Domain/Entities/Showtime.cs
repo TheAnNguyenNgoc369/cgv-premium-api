@@ -8,6 +8,7 @@ public class Showtime
     public DateTime StartTime { get; set; }
     public DateTime EndTime { get; set; }
     public decimal BasePrice { get; set; }
+    public decimal RoomExtraPrice { get; set; }
     public string Status { get; set; } = "scheduled";
     public DateTime CreatedAt { get; set; }
 

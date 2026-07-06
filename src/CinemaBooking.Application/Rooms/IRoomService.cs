@@ -15,7 +15,7 @@ public interface IRoomService
     Task<(bool Succeeded, string? ErrorMessage, Room? Room)> CreateRoomAsync(
         int cinemaId,
         string name,
-        string type,
+        int roomTypeId,
         string status,
         string? description,
         int? managerCinemaId = null,
@@ -25,7 +25,7 @@ public interface IRoomService
         int roomId,
         int cinemaId,
         string name,
-        string type,
+        int roomTypeId,
         string status,
         string? description,
         int? managerCinemaId = null,

@@ -322,7 +322,8 @@ public sealed class ShowtimeServiceTests
             {
                 RoomID = roomId,
                 CinemaID = 1,
-                RoomType = "Standard",
+                RoomTypeID = 1,
+                RoomType = new RoomType { RoomTypeID = 1, TypeName = "Standard" },
                 Status = "active",
                 Cinema = new Cinema { CinemaID = 1, Status = "active" }
             });
