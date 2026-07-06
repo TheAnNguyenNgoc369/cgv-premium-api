@@ -158,7 +158,7 @@ public sealed class RefundService : IRefundService
 
             await _ticketRepository.UpdateTicketsStatusByBookingAsync(
                 bookingId,
-                "refunded",
+                "cancelled",
                 cancellationToken);
 
             await _refundRepository.UpdateRefundStatusAsync(
