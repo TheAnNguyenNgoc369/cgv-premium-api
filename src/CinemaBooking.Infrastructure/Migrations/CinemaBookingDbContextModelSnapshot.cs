@@ -338,14 +338,14 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
 
                     b.Property<string>("DeliveryStatus")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)")
-                        .HasDefaultValue("sent");
+                        .HasDefaultValue("pending");
 
                     b.Property<string>("EventType")
                         .IsRequired()
@@ -356,6 +356,10 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(0);
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<DateTime?>("SentAt")
                         .HasColumnType("datetime2");
@@ -375,11 +379,11 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.ToTable("EmailLog", null, t =>
                         {
-                            t.HasCheckConstraint("CK_EmailLog_DeliveryStatus", "[DeliveryStatus] IN ('sent', 'failed', 'retrying')");
+                            t.HasCheckConstraint("CK_EmailLog_DeliveryStatus", "[DeliveryStatus] IN ('pending', 'processing', 'sent', 'failed', 'retrying')");
 
                             t.HasCheckConstraint("CK_EmailLog_EventType", "[EventType] IN ('register','booking_confirmed','booking_cancelled','forgot_password','refund_processed','points_earned','reward_redeemed')");
 
-                            t.HasCheckConstraint("CK_EmailLog_RetryCount", "[RetryCount] >= 0");
+                            t.HasCheckConstraint("CK_EmailLog_RetryCount", "[RetryCount] BETWEEN 0 AND 3");
                         });
                 });
 

@@ -6,9 +6,10 @@ public class EmailLog
     public int? UserID { get; set; }
     public string ToEmail { get; set; } = null!;
     public string EventType { get; set; } = null!;
-    public string DeliveryStatus { get; set; } = "sent";
+    public string DeliveryStatus { get; set; } = "pending";
     public int RetryCount { get; set; }
     public DateTime? SentAt { get; set; }
+    public string? LastError { get; set; }
     public DateTime CreatedAt { get; set; }
 
     public User? User { get; set; }

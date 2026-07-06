@@ -53,6 +53,7 @@ public static class DependencyInjection
         };
 
         services.AddSingleton(Options.Create(emailSettings));
+        services.AddSingleton<EmailQueueChannel>();
 
         var cloudinarySection = configuration.GetSection(CloudinarySettings.SectionName);
         var cloudinarySettings = new CloudinarySettings
@@ -64,12 +65,14 @@ public static class DependencyInjection
 
         services.AddSingleton(Options.Create(cloudinarySettings));
         services.AddScoped<IEmailSender, SmtpEmailSender>();
+        services.AddScoped<IEmailQueue, EmailQueue>();
         services.AddScoped<IImageStorageService, CloudinaryImageStorageService>();
         services.AddScoped<IPayOSService, PayOSService>();
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IActivityLogService, ActivityLogService>();
         services.AddHostedService<SeatHoldExpirationJob>();
         services.AddHostedService<ShowtimeCompletionJob>();
+        services.AddHostedService<EmailDeliveryJob>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScopedByConvention(typeof(DependencyInjection).Assembly, "Repository");
 
