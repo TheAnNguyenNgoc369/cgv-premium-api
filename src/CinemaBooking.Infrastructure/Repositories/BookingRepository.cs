@@ -250,6 +250,47 @@ public sealed class BookingRepository : IBookingRepository
         }
     }
 
+    public async Task<(List<Booking> Bookings, int TotalCount)> GetCheckInHistoryAsync(
+        int? staffId,
+        int? cinemaId,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _db.Bookings
+            .Include(b => b.User)
+            .Include(b => b.CheckedInByUser)
+            .Include(b => b.Showtime).ThenInclude(s => s.Movie)
+            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.BookingSeats)
+            .Where(b => b.CheckedInAt != null);
+
+        if (staffId.HasValue)
+            query = query.Where(b => b.CheckedInByUserId == staffId.Value);
+
+        if (cinemaId.HasValue)
+            query = query.Where(b => b.Showtime.Room.CinemaID == cinemaId.Value);
+
+        if (from.HasValue)
+            query = query.Where(b => b.CheckedInAt >= from.Value);
+
+        if (to.HasValue)
+            query = query.Where(b => b.CheckedInAt <= to.Value);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var bookings = await query
+            .OrderByDescending(b => b.CheckedInAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+
+        return (bookings, totalCount);
+    }
+
     public async Task<List<Booking>> GetBookingsByUserAsync(
         int userId,
         CancellationToken cancellationToken = default)

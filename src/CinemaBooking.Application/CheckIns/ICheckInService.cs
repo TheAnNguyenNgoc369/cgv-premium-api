@@ -12,4 +12,13 @@ public interface ICheckInService
         int staffId,
         string? ipAddress,
         CancellationToken cancellationToken = default);
+
+    Task<CheckInHistoryResult> GetHistoryAsync(
+        int? staffId,
+        int? cinemaId,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
 }

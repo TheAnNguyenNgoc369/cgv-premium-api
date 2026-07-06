@@ -9,7 +9,6 @@ namespace CinemaBooking.API.Controllers;
 
 [ApiController]
 [Route("api/checkins")]
-[Authorize(Roles = Roles.Staff)]
 public sealed class CheckInsController : ControllerBase
 {
     private readonly ICheckInService _checkInService;
@@ -20,6 +19,7 @@ public sealed class CheckInsController : ControllerBase
     }
 
     [HttpPost("lookup")]
+    [Authorize(Roles = Roles.Staff)]
     public async Task<IActionResult> Lookup(
         [FromBody] CheckInLookupRequest request,
         CancellationToken cancellationToken)
@@ -94,6 +94,7 @@ public sealed class CheckInsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = Roles.Staff)]
     public async Task<IActionResult> CheckIn(
         [FromBody] CheckInRequest request,
         CancellationToken cancellationToken)
@@ -142,5 +143,44 @@ public sealed class CheckInsController : ControllerBase
     private string? GetClientIpAddress()
     {
         return HttpContext.Connection.RemoteIpAddress?.ToString();
+    }
+
+    [HttpGet("history")]
+    [Authorize(Roles = $"{Roles.Staff},{Roles.Manager},{Roles.Admin}")]
+    public async Task<IActionResult> GetHistory(
+        [FromQuery] CheckInHistoryRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _checkInService.GetHistoryAsync(
+            request.StaffId,
+            request.CinemaId,
+            request.From,
+            request.To,
+            request.Page,
+            request.PageSize,
+            cancellationToken);
+
+        var response = new CheckInHistoryResponse
+        {
+            Records = result.Records.Select(r => new CheckInHistoryResponse.CheckInRecord
+            {
+                BookingId = r.BookingId,
+                BookingCode = r.BookingCode,
+                CustomerName = r.CustomerName,
+                MovieTitle = r.MovieTitle,
+                CinemaName = r.CinemaName,
+                RoomName = r.RoomName,
+                ShowtimeStart = r.ShowtimeStart,
+                CheckedInAt = r.CheckedInAt,
+                StaffName = r.StaffName,
+                SeatCount = r.SeatCount,
+                TotalAmount = r.TotalAmount
+            }).ToList(),
+            TotalCount = result.TotalCount,
+            Page = request.Page,
+            PageSize = request.PageSize
+        };
+
+        return Ok(new { success = true, data = response });
     }
 }

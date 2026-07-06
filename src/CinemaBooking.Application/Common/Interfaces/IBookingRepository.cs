@@ -75,6 +75,15 @@ public interface IBookingRepository
         DateTime checkedInAt,
         CancellationToken cancellationToken = default);
 
+    Task<(List<Booking> Bookings, int TotalCount)> GetCheckInHistoryAsync(
+        int? staffId,
+        int? cinemaId,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
     Task<List<Booking>> GetBookingsByUserAsync(
         int userId,
         CancellationToken cancellationToken = default);

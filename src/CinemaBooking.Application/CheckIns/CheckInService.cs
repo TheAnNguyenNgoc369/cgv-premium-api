@@ -145,4 +145,44 @@ public sealed class CheckInService : ICheckInService
 
         return (true, null, booking.BookingCode, now);
     }
+
+    public async Task<CheckInHistoryResult> GetHistoryAsync(
+        int? staffId,
+        int? cinemaId,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var (bookings, totalCount) = await _bookingRepository.GetCheckInHistoryAsync(
+            staffId,
+            cinemaId,
+            from,
+            to,
+            page,
+            pageSize,
+            cancellationToken);
+
+        var records = bookings.Select(b => new CheckInHistoryResult.CheckInRecord
+        {
+            BookingId = b.BookingID,
+            BookingCode = b.BookingCode,
+            CustomerName = b.User?.FullName,
+            MovieTitle = b.Showtime.Movie.Title,
+            CinemaName = b.Showtime.Room.Cinema.CinemaName,
+            RoomName = b.Showtime.Room.RoomName,
+            ShowtimeStart = b.Showtime.StartTime,
+            CheckedInAt = b.CheckedInAt!.Value,
+            StaffName = b.CheckedInByUser?.FullName ?? "Unknown",
+            SeatCount = b.BookingSeats.Count,
+            TotalAmount = b.FinalAmount
+        }).ToList();
+
+        return new CheckInHistoryResult
+        {
+            Records = records,
+            TotalCount = totalCount
+        };
+    }
 }
