@@ -5,6 +5,7 @@ using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using CinemaBooking.Application.ActivityLogs;
 
 namespace CinemaBooking.API.Controllers;
 
@@ -13,10 +14,12 @@ namespace CinemaBooking.API.Controllers;
 public sealed class CinemaController : ControllerBase
 {
     private readonly ICinemaService _cinemaService;
+    private readonly IActivityLogService _activityLogs;
 
-    public CinemaController(ICinemaService cinemaService)
+    public CinemaController(ICinemaService cinemaService, IActivityLogService activityLogs)
     {
         _cinemaService = cinemaService;
+        _activityLogs = activityLogs;
     }
 
     [HttpGet]
@@ -66,6 +69,8 @@ public sealed class CinemaController : ControllerBase
         }
 
         var response = ToResponse(result.Cinema!);
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.CreateCinema,
+            "Cinema", response.CinemaId, $"Created cinema {response.CinemaId}", this.AuditIpAddress(), cancellationToken);
 
         return CreatedAtAction(
             nameof(GetCinemaById),
@@ -99,6 +104,8 @@ public sealed class CinemaController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateCinema,
+            "Cinema", id, $"Updated cinema {id}", this.AuditIpAddress(), cancellationToken);
         return Ok(ToResponse(result.Cinema!));
     }
 
@@ -120,6 +127,8 @@ public sealed class CinemaController : ControllerBase
             return Conflict(new { success = false, message = result.ErrorMessage });
         }
 
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.DeleteCinema,
+            "Cinema", id, $"Deleted cinema {id}", this.AuditIpAddress(), cancellationToken);
         return NoContent();
     }
 

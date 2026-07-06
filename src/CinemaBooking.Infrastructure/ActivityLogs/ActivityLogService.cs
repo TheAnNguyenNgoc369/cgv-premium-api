@@ -2,6 +2,7 @@ using CinemaBooking.Application.ActivityLogs;
 using CinemaBooking.Infrastructure.Persistence;
 using CinemaBooking.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
+using CinemaBooking.Domain.Entities;
 
 namespace CinemaBooking.Infrastructure.ActivityLogs;
 
@@ -24,6 +25,15 @@ public sealed class ActivityLogService : IActivityLogService
     private readonly CinemaBookingDbContext _db;
     public ActivityLogService(CinemaBookingDbContext db) => _db = db;
     public IReadOnlyList<string> GetActionTypes() => Modules.Keys.ToArray();
+    public async Task RecordAsync(int actorId, string actionType, string targetTable, int targetId,
+        string description, string ipAddress, CancellationToken ct)
+    {
+        if (!Modules.ContainsKey(actionType)) throw new ArgumentOutOfRangeException(nameof(actionType));
+        _db.AdminActionLogs.Add(new AdminActionLog { AdminID=actorId, ActionType=actionType,
+            TargetTable=targetTable, TargetID=targetId, Description=description,
+            IPAddress=string.IsNullOrWhiteSpace(ipAddress) ? "unknown" : ipAddress, CreatedAt=DateTime.UtcNow });
+        await _db.SaveChangesAsync(ct);
+    }
 
     public async Task<ActivityLogPage> GetAsync(string? actionType, string? module, int? actorId, int? targetUserId,
         string? targetTable, int? targetId, DateOnly? startDate, DateOnly? endDate, int page, int pageSize, CancellationToken ct)
@@ -48,5 +58,6 @@ public sealed class ActivityLogService : IActivityLogService
         return x is null ? null : new(x.LogID,ToVietnam(x.CreatedAt),x.AdminID,x.Admin.FullName,x.Admin.Role,x.ActionType,Module(x.ActionType),x.IPAddress!,x.TargetUserID,x.TargetTable,x.TargetID,x.Description!);
     }
     private static string Module(string action) => Modules.TryGetValue(action, out var module) ? module : "Unknown";
-    private static DateTime ToVietnam(DateTime value) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(value, DateTimeKind.Utc), Vietnam);
+    private static DateTimeOffset ToVietnam(DateTime value) => TimeZoneInfo.ConvertTime(
+        new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Utc)), Vietnam);
 }

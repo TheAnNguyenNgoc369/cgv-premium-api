@@ -10,6 +10,7 @@ using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
+using CinemaBooking.Application.ActivityLogs;
 
 namespace CinemaBooking.API.Controllers;
 
@@ -21,15 +22,18 @@ public sealed class SeatController : ControllerBase
     private readonly ISeatService _seatService;
     private readonly ISeatTypeService _seatTypeService;
     private readonly IManagerCinemaScopeService _managerCinemaScopeService;
+    private readonly IActivityLogService _activityLogs;
 
     public SeatController(
         ISeatService seatService,
         ISeatTypeService seatTypeService,
-        IManagerCinemaScopeService managerCinemaScopeService)
+        IManagerCinemaScopeService managerCinemaScopeService,
+        IActivityLogService activityLogs)
     {
         _seatService = seatService;
         _seatTypeService = seatTypeService;
         _managerCinemaScopeService = managerCinemaScopeService;
+        _activityLogs = activityLogs;
     }
 
     [HttpGet("seats")]
@@ -91,6 +95,9 @@ public sealed class SeatController : ControllerBase
             return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
         }
 
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.GenerateSeat,
+            "Room", roomId, $"Generated seats for room {roomId}", this.AuditIpAddress(), cancellationToken);
+
         return Ok(ToSeatMapResponse(roomId, result.Result!.Seats));
     }
 
@@ -117,6 +124,9 @@ public sealed class SeatController : ControllerBase
             return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
         }
 
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateSeat,
+            "Room", roomId, $"Updated seats in room {roomId}", this.AuditIpAddress(), cancellationToken);
+
         var seats = await _seatService.GetSeatsByRoomAsync(roomId, cancellationToken);
         return Ok(ToSeatMapResponse(roomId, seats!));
     }
@@ -140,6 +150,9 @@ public sealed class SeatController : ControllerBase
         {
             return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
         }
+
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.DeleteSeat,
+            "Room", roomId, $"Deleted seats in room {roomId}", this.AuditIpAddress(), cancellationToken);
 
         var seats = await _seatService.GetSeatsByRoomAsync(roomId, cancellationToken);
         return Ok(ToSeatMapResponse(roomId, seats!));
