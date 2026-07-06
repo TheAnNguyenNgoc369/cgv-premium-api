@@ -19,7 +19,8 @@ public sealed class VoucherController : ControllerBase
         [FromQuery] string? searchKeyword = null, CancellationToken cancellationToken = default)
     {
         var result = await _service.GetAsync(searchKeyword, pageIndex, pageSize, cancellationToken);
-        return Ok(new VoucherPageResponse(result.Items.Select(Map).ToList(), result.PageIndex, result.PageSize,
+        var currentTime = DateTime.UtcNow;
+        return Ok(new VoucherPageResponse(result.Items.Select(v => Map(v, currentTime)).ToList(), result.PageIndex, result.PageSize,
             result.TotalItems, (int)Math.Ceiling(result.TotalItems / (double)result.PageSize)));
     }
 
@@ -56,9 +57,18 @@ public sealed class VoucherController : ControllerBase
     { "not_found" => NotFound(new { success = false, message = r.Error }), "conflict" => Conflict(new { success = false, message = r.Error }), _ => BadRequest(new { success = false, message = r.Error }) };
     private static VoucherCommand Command(VoucherRequest r) => new(r.VoucherCode, r.Category, r.DiscountType,
         r.DiscountValue, r.MinOrderValue, r.MaxUses, r.ValidFrom!.Value, r.ValidUntil!.Value, r.Description, r.IsActive);
-    private static VoucherResponse Map(Voucher v) => new(v.VoucherID, v.VoucherCode, v.Category, v.DiscountType,
+    private static VoucherResponse Map(Voucher v) => Map(v, DateTime.UtcNow);
+    private static VoucherResponse Map(Voucher v, DateTime currentTime) => new(v.VoucherID, v.VoucherCode, v.Category, v.DiscountType,
         v.DiscountValue, v.MinOrderValue, v.MaxUses, v.UsedCount, VietnamTime.FromUtc(v.ValidFrom),
-        VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description, v.IsActive, v.CreatedAt);
+        VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description, v.IsActive, Status(v, currentTime), v.CreatedAt);
+    private static string Status(Voucher v, DateTime currentTime)
+    {
+        if (!v.IsActive) return "DISABLED";
+        if (currentTime > v.ValidUntil) return "EXPIRED";
+        if (v.MaxUses.HasValue && v.UsedCount >= v.MaxUses.Value) return "EXHAUSTED";
+        if (currentTime < v.ValidFrom) return "UPCOMING";
+        return "ACTIVE";
+    }
     private bool TryUserId(out int id) => int.TryParse(User.FindFirst("userId")?.Value, out id);
     private string? Ip() => HttpContext.Connection.RemoteIpAddress?.ToString();
 }
