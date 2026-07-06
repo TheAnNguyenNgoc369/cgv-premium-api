@@ -24,6 +24,8 @@ public class CinemaBookingDbContext : DbContext
     public DbSet<SeatType> SeatTypes => Set<SeatType>();
     public DbSet<Seat> Seats => Set<Seat>();
     public DbSet<Showtime> Showtimes => Set<Showtime>();
+    public DbSet<ShowtimeType> ShowtimeTypes => Set<ShowtimeType>();
+    public DbSet<ShowtimeTypeSlot> ShowtimeTypeSlots => Set<ShowtimeTypeSlot>();
     public DbSet<SeatHold> SeatHolds => Set<SeatHold>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<BookingSeat> BookingSeats => Set<BookingSeat>();

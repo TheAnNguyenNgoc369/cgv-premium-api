@@ -15,6 +15,8 @@ public sealed class ActivityLogService : IActivityLogService
         [AdminActionTypes.ChangeRole]="UserManagement", [AdminActionTypes.DeleteUser]="UserManagement",
         [AdminActionTypes.CreateVoucher]="Voucher", [AdminActionTypes.UpdateVoucher]="Voucher", [AdminActionTypes.DeleteVoucher]="Voucher",
         [AdminActionTypes.CreateShowtime]="Showtime", [AdminActionTypes.UpdateShowtime]="Showtime", [AdminActionTypes.DeleteShowtime]="Showtime",
+        [AdminActionTypes.CreateShowtimeType]="ShowtimeType", [AdminActionTypes.UpdateShowtimeType]="ShowtimeType",
+        [AdminActionTypes.DeleteShowtimeType]="ShowtimeType", [AdminActionTypes.GenerateShowtimeByType]="ShowtimeType",
         [AdminActionTypes.UpdateTicketPrice]="TicketPrice", [AdminActionTypes.GenerateSeat]="SeatManagement",
         [AdminActionTypes.UpdateSeat]="SeatManagement", [AdminActionTypes.DeleteSeat]="SeatManagement",
         [AdminActionTypes.CreateCinema]="Cinema", [AdminActionTypes.UpdateCinema]="Cinema", [AdminActionTypes.DeleteCinema]="Cinema",
