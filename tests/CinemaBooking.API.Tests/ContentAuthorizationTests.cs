@@ -30,13 +30,10 @@ public sealed class ContentAuthorizationTests
     [Theory]
     [InlineData(nameof(SeatTypeController.GetSeatTypes))]
     [InlineData(nameof(SeatTypeController.GetSeatTypeById))]
-    public void SeatTypeReads_RequireManager(string methodName)
+    public void SeatTypeReads_AllowAnonymous(string methodName)
     {
         var method = typeof(SeatTypeController).GetMethod(methodName)!;
-        var attribute = Assert.Single(method
-            .GetCustomAttributes(typeof(AuthorizeAttribute), true)
-            .Cast<AuthorizeAttribute>());
-        Assert.Equal(Roles.Manager, attribute.Roles);
+        Assert.Single(method.GetCustomAttributes(typeof(AllowAnonymousAttribute), true));
     }
 
     [Theory]

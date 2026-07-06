@@ -19,7 +19,7 @@ public sealed class SeatTypeController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Roles = Roles.Manager)]
+    [AllowAnonymous]
     public async Task<IActionResult> GetSeatTypes(CancellationToken cancellationToken)
     {
         var seatTypes = await _seatTypeService.GetSeatTypesAsync(cancellationToken);
@@ -27,7 +27,7 @@ public sealed class SeatTypeController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
-    [Authorize(Roles = Roles.Manager)]
+    [AllowAnonymous]
     public async Task<IActionResult> GetSeatTypeById(
         int id,
         CancellationToken cancellationToken)
