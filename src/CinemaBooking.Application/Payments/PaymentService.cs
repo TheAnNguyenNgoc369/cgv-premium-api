@@ -2,6 +2,7 @@ using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Contracts.Payment;
 using CinemaBooking.Application.Invoices;
+using CinemaBooking.Application.Notifications;
 using CinemaBooking.Application.Payments.VNPay;
 using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Application.Tickets;
@@ -23,6 +24,7 @@ public sealed class PaymentService : IPaymentService
     private readonly IPayOSService _payOSService;
     private readonly IInvoiceService _invoiceService;
     private readonly ITicketService _ticketService;
+    private readonly IBookingEmailService _bookingEmailService;
     private readonly IUnitOfWork _unitOfWork;
 
     public PaymentService(
@@ -33,6 +35,7 @@ public sealed class PaymentService : IPaymentService
         IPayOSService payOSService,
         IInvoiceService invoiceService,
         ITicketService ticketService,
+        IBookingEmailService bookingEmailService,
         IUnitOfWork unitOfWork)
     {
         _paymentRepository = paymentRepository;
@@ -42,6 +45,7 @@ public sealed class PaymentService : IPaymentService
         _payOSService = payOSService;
         _invoiceService = invoiceService;
         _ticketService = ticketService;
+        _bookingEmailService = bookingEmailService;
         _unitOfWork = unitOfWork;
     }
 
@@ -96,12 +100,14 @@ public sealed class PaymentService : IPaymentService
         if (payment.PaymentMethod != PaymentMethod.Cash)
             return Error(PaymentErrorType.Conflict, "Payment is not a cash payment.");
 
-        return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        var result = await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             await CompletePaymentAsync(payment, null, cancellationToken);
             var updated = await _paymentRepository.GetPaymentByIdAsync(request.PaymentId, cancellationToken);
             return PaymentOperationResult.Success(MapToPaymentResponse(updated)!);
         }, cancellationToken);
+        await _bookingEmailService.QueueBookingConfirmedAsync(payment.BookingID, cancellationToken);
+        return result;
     }
 
     public async Task<VNPayCallbackResult> ProcessVNPayCallbackAsync(
@@ -149,6 +155,9 @@ public sealed class PaymentService : IPaymentService
 
             return true;
         }, cancellationToken);
+
+        if (isSuccess)
+            await _bookingEmailService.QueueBookingConfirmedAsync(payment.BookingID, cancellationToken);
 
         var bookingStatus = isSuccess ? BookingStatus.Paid : BookingStatus.PaymentFailed;
         var paymentStatus = isSuccess ? PaymentStatus.Completed : PaymentStatus.Failed;
@@ -216,6 +225,8 @@ public sealed class PaymentService : IPaymentService
             return new(true, "Payment already processed.", payment.PaymentID, payment.BookingID,
                 EnumValueMapper.ToApiValue(PaymentStatus.Completed),
                 EnumValueMapper.ToApiValue(BookingStatus.Paid));
+
+        await _bookingEmailService.QueueBookingConfirmedAsync(payment.BookingID, cancellationToken);
 
         return new(true, "Payment completed successfully.", payment.PaymentID, payment.BookingID,
             EnumValueMapper.ToApiValue(PaymentStatus.Completed),
@@ -308,7 +319,7 @@ public sealed class PaymentService : IPaymentService
                 booking.UserID.Value, booking.FinalAmount, cancellationToken))
             return Error(PaymentErrorType.Validation, "Insufficient wallet balance.");
 
-        return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        var result = await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             await _walletRepository.DeductBalanceAsync(
                 booking.UserID.Value, booking.FinalAmount, cancellationToken);
@@ -358,6 +369,8 @@ public sealed class PaymentService : IPaymentService
                 EnumValueMapper.ToApiValue(BookingStatus.Paid), invoice.InvoiceCode,
                 CalculatePointsEarned(booking.FinalAmount)));
         }, cancellationToken);
+        await _bookingEmailService.QueueBookingConfirmedAsync(booking.BookingID, cancellationToken);
+        return result;
     }
 
     private async Task<PaymentOperationResult> ProcessVNPayPaymentAsync(

@@ -15,7 +15,7 @@ public sealed class EmailDeliveryJob : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<EmailDeliveryJob> _logger;
 
-    internal EmailDeliveryJob(
+    public EmailDeliveryJob(
         EmailQueueChannel channel,
         IServiceScopeFactory scopeFactory,
         ILogger<EmailDeliveryJob> logger)
@@ -53,6 +53,7 @@ public sealed class EmailDeliveryJob : BackgroundService
                 item.ToEmail,
                 item.Subject,
                 item.HtmlBody,
+                item.InlineImages,
                 cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

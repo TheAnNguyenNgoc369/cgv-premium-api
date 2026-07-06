@@ -1,9 +1,13 @@
+using CinemaBooking.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace CinemaBooking.Infrastructure.Migrations;
 
+[DbContext(typeof(CinemaBookingDbContext))]
+[Migration("20260706134500_CompleteEmailLogFlow")]
 public partial class CompleteEmailLogFlow : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
