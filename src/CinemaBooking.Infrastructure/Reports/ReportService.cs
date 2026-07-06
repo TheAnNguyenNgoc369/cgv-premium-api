@@ -35,7 +35,7 @@ public sealed class ReportService : IReportService
         var result = new RevenueSummary(gross, bookings.Sum(b => b.BookingSeats.Sum(s => s.TicketPrice)),
             bookings.Sum(b => b.BookingFnBs.Sum(f => f.SubTotal)), bookings.Sum(b => b.DiscountAmount),
             bookings.Count, CountTicketsSold(bookings), bookings.Count == 0 ? 0 : gross / bookings.Count);
-        await Audit(actorId, AdminActionTypes.ViewRevenueReport, "Viewed revenue summary", ip, ct); return result;
+        return result;
     }
 
     public async Task<IReadOnlyList<MoviePerformance>> MoviePerformanceAsync(DateTime from, DateTime to, string? search,
@@ -53,7 +53,7 @@ public sealed class ReportService : IReportService
                 var capacity = shows.Sum(x => x.Room.Capacity); return new MoviePerformance(g.Key.MovieID, g.Key.Title,
                     shows.Count, bookings.Count, sold, capacity == 0 ? 0 : Math.Round(sold * 100m / capacity, 2), g.Sum(x => x.Amount)); })
             .OrderByDescending(x => x.Revenue).ToList();
-        await Audit(actorId, AdminActionTypes.ViewRevenueReport, "Viewed movie performance report", ip, ct); return result;
+        return result;
     }
 
     public async Task<TopSellingReport> TopSellingAsync(
@@ -119,7 +119,6 @@ public sealed class ReportService : IReportService
             .ThenBy(cinema => cinema.CinemaId)
             .ToList();
 
-        await Audit(actorId, AdminActionTypes.ViewRevenueReport, "Viewed top-selling report", ip, ct);
         return new TopSellingReport(movies, fnbProducts, cinemas);
     }
 
@@ -160,7 +159,6 @@ public sealed class ReportService : IReportService
                 .Select(group => Monthly(group.Key.Year, group.Key.Month, group)).ToList()
         };
 
-        await Audit(actorId, AdminActionTypes.ViewRevenueReport, $"Viewed revenue report grouped by {groupBy}", ip, ct);
         return result;
     }
 

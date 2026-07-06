@@ -13,6 +13,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using CinemaBooking.Application.ActivityLogs;
+using CinemaBooking.Infrastructure.ActivityLogs;
 
 namespace CinemaBooking.Infrastructure;
 
@@ -65,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<IImageStorageService, CloudinaryImageStorageService>();
         services.AddScoped<IPayOSService, PayOSService>();
         services.AddScoped<IReportService, ReportService>();
+        services.AddScoped<IActivityLogService, ActivityLogService>();
         services.AddHostedService<SeatHoldExpirationJob>();
         services.AddHostedService<ShowtimeCompletionJob>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
