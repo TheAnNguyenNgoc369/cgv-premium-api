@@ -23,4 +23,9 @@ public interface ITicketRepository
     Task<List<Ticket>> GetTicketsByUserIdAsync(
         int userId,
         CancellationToken cancellationToken = default);
+
+    Task UpdateTicketsStatusByBookingAsync(
+        int bookingId,
+        string status,
+        CancellationToken cancellationToken = default);
 }

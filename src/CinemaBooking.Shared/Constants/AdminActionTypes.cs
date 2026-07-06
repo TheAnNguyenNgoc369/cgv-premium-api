@@ -13,4 +13,5 @@ public static class AdminActionTypes
     public const string DeleteVoucher = "delete_voucher";
     public const string ViewRevenueReport = "view_revenue_report";
     public const string ExportReport = "export_report";
+    public const string Refund = "refund";
 }

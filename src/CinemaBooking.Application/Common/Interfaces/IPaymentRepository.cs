@@ -64,4 +64,11 @@ public interface IPaymentRepository
         string paymentMethod,
         decimal amount,
         CancellationToken cancellationToken = default);
+
+    Task UpdatePaymentForRefundAsync(
+        int paymentId,
+        decimal refundAmount,
+        string refundReason,
+        int refundedBy,
+        CancellationToken cancellationToken = default);
 }

@@ -34,6 +34,11 @@ public class RefundConfiguration : IEntityTypeConfiguration<Refund>
             .HasForeignKey(r => r.ProcessedBy)
             .HasConstraintName("FK_Refund_ProcessedBy");
 
+        builder.HasOne(r => r.Wallet)
+            .WithMany()
+            .HasForeignKey(r => r.WalletID)
+            .HasConstraintName("FK_Refund_Wallet");
+
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_Refund_Amount", "[Amount] >= 0");

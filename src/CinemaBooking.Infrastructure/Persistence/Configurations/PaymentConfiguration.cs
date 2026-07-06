@@ -14,6 +14,7 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
 
         builder.Property(p => p.PaymentMethod).HasMaxLength(50).IsRequired();
         builder.Property(p => p.Amount).HasColumnType("decimal(18,2)");
+        builder.Property(p => p.RefundAmount).HasColumnType("decimal(18,2)");
         builder.Property(p => p.TransactionCode).HasMaxLength(200);
         builder.Property(p => p.Status).HasMaxLength(30).IsRequired().HasDefaultValue("pending");
         builder.Property(p => p.CreatedAt).HasDefaultValueSql("GETDATE()");
@@ -26,6 +27,11 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
             .WithOne(b => b.Payment)
             .HasForeignKey<Payment>(p => p.BookingID)
             .HasConstraintName("FK_Payment_Booking");
+
+        builder.HasOne(p => p.RefundedByUser)
+            .WithMany()
+            .HasForeignKey(p => p.RefundedBy)
+            .HasConstraintName("FK_Payment_RefundedBy");
 
         builder.ToTable(t =>
         {

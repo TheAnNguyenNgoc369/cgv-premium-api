@@ -71,4 +71,21 @@ public sealed class TicketRepository : ITicketRepository
                 .ThenBy(t => t.BookingSeat.Seat.SeatCol)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task UpdateTicketsStatusByBookingAsync(
+        int bookingId,
+        string status,
+        CancellationToken cancellationToken = default)
+    {
+        var tickets = await _db.Tickets
+            .Where(t => t.BookingSeat.BookingID == bookingId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var ticket in tickets)
+        {
+            ticket.Status = status;
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
 }
