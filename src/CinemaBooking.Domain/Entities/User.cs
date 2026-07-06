@@ -30,6 +30,7 @@ public class User
     public ICollection<Ticket> CheckedInTickets { get; set; } = [];
     public ICollection<Refund> ProcessedRefunds { get; set; } = [];
     public ICollection<LoyaltyPoints> LoyaltyPoints { get; set; } = [];
+    public ICollection<UserVoucher> UserVouchers { get; set; } = [];
     public ICollection<AdminActionLog> AdminActions { get; set; } = [];
     public ICollection<AdminActionLog> TargetedAdminActions { get; set; } = [];
     public ICollection<EmailLog> EmailLogs { get; set; } = [];

@@ -38,4 +38,25 @@ public sealed class VoucherRepository : IVoucherRepository
     { _db.AdminActionLogs.Add(log); await _db.SaveChangesAsync(ct); return voucher; }
     public async Task<bool> DeactivateAsync(int id, AdminActionLog log, CancellationToken ct)
     { var voucher = await _db.Vouchers.FindAsync([id], ct); if (voucher is null) return false; voucher.IsActive = false; _db.AdminActionLogs.Add(log); await _db.SaveChangesAsync(ct); return true; }
+
+    public async Task<List<Voucher>> GetRedeemableVouchersAsync(CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        return await _db.Vouchers
+            .AsNoTracking()
+            .Where(v => v.IsActive
+                && v.IsRedeemable
+                && v.RequiredPoints.HasValue
+                && v.ValidFrom <= now
+                && v.ValidUntil >= now
+                && (!v.RemainingQuantity.HasValue || v.RemainingQuantity > 0))
+            .OrderBy(v => v.RequiredPoints)
+            .ToListAsync(ct);
+    }
+
+    public Task<Voucher?> GetForRedemptionAsync(int voucherId, CancellationToken ct) =>
+        _db.Vouchers.FirstOrDefaultAsync(v => v.VoucherID == voucherId, ct);
+
+    public async Task<int> GetUserRedemptionCountAsync(int userId, int voucherId, CancellationToken ct) =>
+        await _db.Set<UserVoucher>().CountAsync(uv => uv.UserID == userId && uv.VoucherID == voucherId, ct);
 }

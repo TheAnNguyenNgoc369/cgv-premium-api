@@ -31,4 +31,5 @@ public static class AdminActionTypes
     public const string ExportReport = "export_report";
     public const string Refund = "refund";
     public const string CheckIn = "check_in";
+    public const string RedeemVoucher = "redeem_voucher";
 }
