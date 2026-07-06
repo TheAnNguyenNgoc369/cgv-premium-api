@@ -61,6 +61,8 @@ public sealed class CinemaRepository : ICinemaRepository
         int cinemaId,
         string cinemaName,
         string address,
+        decimal? latitude,
+        decimal? longitude,
         string status,
         DateTime updatedAt,
         CancellationToken cancellationToken = default)
@@ -75,6 +77,8 @@ public sealed class CinemaRepository : ICinemaRepository
 
         cinema.CinemaName = cinemaName;
         cinema.Address = address;
+        cinema.Latitude = latitude;
+        cinema.Longitude = longitude;
         cinema.Status = status;
         cinema.UpdatedAt = updatedAt;
 

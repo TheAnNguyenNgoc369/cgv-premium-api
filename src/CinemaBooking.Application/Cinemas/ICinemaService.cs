@@ -18,6 +18,8 @@ public interface ICinemaService
     Task<(bool Succeeded, string? ErrorMessage, Cinema? Cinema)> CreateCinemaAsync(
         string cinemaName,
         string address,
+        double? latitude,
+        double? longitude,
         string? status,
         CancellationToken cancellationToken = default);
 
@@ -25,6 +27,8 @@ public interface ICinemaService
         int cinemaId,
         string cinemaName,
         string address,
+        double? latitude,
+        double? longitude,
         string? status,
         CancellationToken cancellationToken = default);
 
