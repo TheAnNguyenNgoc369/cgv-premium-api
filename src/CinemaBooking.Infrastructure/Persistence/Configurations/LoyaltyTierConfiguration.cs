@@ -14,6 +14,7 @@ public class LoyaltyTierConfiguration : IEntityTypeConfiguration<LoyaltyTier>
 
         builder.Property(t => t.TierName).HasMaxLength(20).IsRequired();
         builder.Property(t => t.DiscountRate).HasColumnType("decimal(4,2)");
+        builder.Property(t => t.MaxRefundPerMonth).IsRequired();
 
         builder.HasIndex(t => t.TierName).IsUnique().HasDatabaseName("UQ_LoyaltyTiers_TierName");
 
@@ -25,9 +26,9 @@ public class LoyaltyTierConfiguration : IEntityTypeConfiguration<LoyaltyTier>
         });
 
         builder.HasData(
-            new LoyaltyTier { TierID = 1, TierName = "silver", MinPoints = 0, DiscountRate = 0.00m },
-            new LoyaltyTier { TierID = 2, TierName = "gold", MinPoints = 1000, DiscountRate = 0.05m },
-            new LoyaltyTier { TierID = 3, TierName = "platinum", MinPoints = 5000, DiscountRate = 0.10m },
-            new LoyaltyTier { TierID = 4, TierName = "megavip", MinPoints = 10000, DiscountRate = 0.15m });
+            new LoyaltyTier { TierID = 1, TierName = "silver", MinPoints = 0, DiscountRate = 0.00m, MaxRefundPerMonth = 1 },
+            new LoyaltyTier { TierID = 2, TierName = "gold", MinPoints = 1000, DiscountRate = 0.05m, MaxRefundPerMonth = 3 },
+            new LoyaltyTier { TierID = 3, TierName = "platinum", MinPoints = 5000, DiscountRate = 0.10m, MaxRefundPerMonth = 5 },
+            new LoyaltyTier { TierID = 4, TierName = "megavip", MinPoints = 10000, DiscountRate = 0.15m, MaxRefundPerMonth = 7 });
     }
 }
