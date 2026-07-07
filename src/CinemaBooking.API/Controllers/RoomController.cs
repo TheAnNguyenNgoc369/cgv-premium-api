@@ -166,6 +166,7 @@ public sealed class RoomController : ControllerBase
             room.RoomID,
             room.CinemaID,
             room.RoomName,
+            EnumValueMapper.ToApiValue(room.RoomType.TypeName == "3D" ? "THREE_D" : room.RoomType.TypeName),
             room.RoomTypeID,
             room.RoomType.TypeName,
             room.Capacity,

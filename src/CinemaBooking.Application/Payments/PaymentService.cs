@@ -548,6 +548,14 @@ public sealed class PaymentService : IPaymentService
             booking.BookingID, BookingStatus.Paid, cancellationToken);
 
         await _ticketService.CreateTicketsForBookingAsync(booking.BookingID, cancellationToken);
+
+        var qrCode = GenerateQRCode();
+        await _bookingRepository.UpdateBookingQRCodeAsync(booking.BookingID, qrCode, cancellationToken);
+    }
+
+    private static string GenerateQRCode()
+    {
+        return Guid.NewGuid().ToString("N").ToUpperInvariant();
     }
 
     private static PaymentOperationResult? ValidateBookingForPayment(

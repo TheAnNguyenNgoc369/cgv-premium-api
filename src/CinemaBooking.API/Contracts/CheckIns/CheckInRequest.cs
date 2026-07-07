@@ -4,7 +4,7 @@ namespace CinemaBooking.API.Contracts.CheckIns;
 
 public sealed class CheckInRequest
 {
-    [Required(ErrorMessage = "Booking ID is required")]
-    [Range(1, int.MaxValue, ErrorMessage = "Booking ID must be a positive number")]
-    public int BookingId { get; set; }
+    [Required(ErrorMessage = "QR Code is required")]
+    [MaxLength(100, ErrorMessage = "QR Code must not exceed 100 characters")]
+    public string QRCode { get; set; } = string.Empty;
 }

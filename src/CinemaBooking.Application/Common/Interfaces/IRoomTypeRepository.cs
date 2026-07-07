@@ -4,6 +4,7 @@ namespace CinemaBooking.Application.Common.Interfaces;
 
 public interface IRoomTypeRepository
 {
+    Task<int?> GetRoomTypeIdByNameAsync(string typeName, CancellationToken cancellationToken = default);
     Task<List<RoomType>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<RoomType?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
     Task<bool> NameExistsAsync(string name, int? excludingId = null, CancellationToken cancellationToken = default);

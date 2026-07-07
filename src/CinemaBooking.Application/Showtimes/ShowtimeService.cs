@@ -195,7 +195,7 @@ public sealed class ShowtimeService : IShowtimeService
 
             if (normalizedStatus != "cancelled"
                 && await _showtimeRepository.HasRoomTypeStartConflictAsync(
-                    room.CinemaID, room.RoomType.TypeName, startTime, existing?.ShowtimeID, cancellationToken))
+                    room.CinemaID, room.RoomTypeID, startTime, existing?.ShowtimeID, cancellationToken))
                 return (false,
                     "Another showtime with the same room type already starts at this time in the cinema",
                     (Showtime?)null);

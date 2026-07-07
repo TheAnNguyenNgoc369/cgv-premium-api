@@ -35,6 +35,11 @@ public sealed class CheckInService : ICheckInService
         if (bookingWithDetails is null)
             return (false, "Booking not found.", null);
 
+        if (bookingWithDetails.Showtime is null ||
+            bookingWithDetails.Showtime.Room is null ||
+            bookingWithDetails.Showtime.Room.Cinema is null)
+            return (false, "Booking data is incomplete (missing showtime/room/cinema).", null);
+
         var showtimeCinemaId = bookingWithDetails.Showtime.Room.Cinema.CinemaID;
 
         if (staffCinemaId != showtimeCinemaId)
@@ -90,16 +95,21 @@ public sealed class CheckInService : ICheckInService
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, string? BookingCode, DateTime? CheckedInAt)> CheckInAsync(
-        int bookingId,
+        string qrCode,
         int staffId,
         string? ipAddress,
         CancellationToken cancellationToken = default)
     {
-        var booking = await _bookingRepository.GetBookingWithFullDetailsForCheckInAsync(
-            bookingId,
-            cancellationToken);
+        var booking = await _bookingRepository.GetBookingByQRCodeAsync(qrCode, cancellationToken);
 
         if (booking is null)
+            return (false, "Booking not found.", null, null);
+
+        var bookingWithDetails = await _bookingRepository.GetBookingWithFullDetailsForCheckInAsync(
+            booking.BookingID,
+            cancellationToken);
+
+        if (bookingWithDetails is null)
             return (false, "Booking not found.", null, null);
 
         var staffCinemaId = await _bookingRepository.GetStaffCinemaIdAsync(staffId, cancellationToken);
@@ -107,26 +117,26 @@ public sealed class CheckInService : ICheckInService
         if (staffCinemaId is null)
             return (false, "Staff cinema assignment not found.", null, null);
 
-        var showtimeCinemaId = booking.Showtime.Room.Cinema.CinemaID;
+        var showtimeCinemaId = bookingWithDetails.Showtime.Room.Cinema.CinemaID;
 
         if (staffCinemaId != showtimeCinemaId)
             return (false, "You cannot check in tickets from another cinema.", null, null);
 
-        if (booking.Payment?.Status != PaymentStatus.Completed)
+        if (bookingWithDetails.Payment?.Status != PaymentStatus.Completed)
             return (false, "Booking has not been paid.", null, null);
 
-        if (booking.Status == BookingStatus.Cancelled)
+        if (bookingWithDetails.Status == BookingStatus.Cancelled)
             return (false, "Booking has been cancelled.", null, null);
 
-        var hasCompletedRefund = booking.Refunds.Any(r => r.Status == "completed");
+        var hasCompletedRefund = bookingWithDetails.Refunds.Any(r => r.Status == "completed");
         if (hasCompletedRefund)
             return (false, "Ticket has been refunded.", null, null);
 
-        if (booking.CheckedInAt.HasValue)
+        if (bookingWithDetails.CheckedInAt.HasValue)
             return (false, "Ticket has already been checked in.", null, null);
 
         var now = DateTime.UtcNow;
-        var showtimeStart = booking.Showtime.StartTime;
+        var showtimeStart = bookingWithDetails.Showtime.StartTime;
         var earliestCheckIn = showtimeStart.AddMinutes(-30);
         var latestCheckIn = showtimeStart.AddMinutes(15);
 
@@ -134,7 +144,7 @@ public sealed class CheckInService : ICheckInService
             return (false, "Check-in time has expired.", null, null);
 
         var success = await _bookingRepository.PerformCheckInAsync(
-            bookingId,
+            bookingWithDetails.BookingID,
             staffId,
             ipAddress,
             now,
@@ -143,7 +153,7 @@ public sealed class CheckInService : ICheckInService
         if (!success)
             return (false, "Failed to perform check-in.", null, null);
 
-        return (true, null, booking.BookingCode, now);
+        return (true, null, bookingWithDetails.BookingCode, now);
     }
 
     public async Task<CheckInHistoryResult> GetHistoryAsync(

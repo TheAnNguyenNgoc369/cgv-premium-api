@@ -32,6 +32,11 @@ public class RoomConfiguration : IEntityTypeConfiguration<Room>
             .HasForeignKey(r => r.CinemaID)
             .HasConstraintName("FK_Room_Cinema");
 
+        builder.HasOne(r => r.RoomType)
+            .WithMany(rt => rt.Rooms)
+            .HasForeignKey(r => r.RoomTypeID)
+            .HasConstraintName("FK_Room_RoomType");
+
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_Room_Capacity", "[Capacity] >= 0");

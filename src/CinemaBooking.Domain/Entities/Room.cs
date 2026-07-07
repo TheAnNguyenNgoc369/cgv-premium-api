@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace CinemaBooking.Domain.Entities;
 
 public class Room
