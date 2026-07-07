@@ -1,6 +1,7 @@
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
 namespace CinemaBooking.Infrastructure.Email;
@@ -13,15 +14,17 @@ public sealed class EmailQueue : IEmailQueue
     public Task<int> EnqueueAsync(
         int? userId,
         string toEmail,
+        string eventId,
         string eventType,
         string subject,
         string htmlBody,
         CancellationToken cancellationToken = default) =>
-        EnqueueAsync(userId, toEmail, eventType, subject, htmlBody, null, cancellationToken);
+        EnqueueAsync(userId, toEmail, eventId, eventType, subject, htmlBody, null, cancellationToken);
 
     public async Task<int> EnqueueAsync(
         int? userId,
         string toEmail,
+        string eventId,
         string eventType,
         string subject,
         string htmlBody,
@@ -29,14 +32,23 @@ public sealed class EmailQueue : IEmailQueue
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toEmail);
+        ArgumentException.ThrowIfNullOrWhiteSpace(eventId);
         ArgumentException.ThrowIfNullOrWhiteSpace(eventType);
         ArgumentException.ThrowIfNullOrWhiteSpace(subject);
         ArgumentException.ThrowIfNullOrWhiteSpace(htmlBody);
+
+        var existingEmailId = await _dbContext.EmailLogs
+            .Where(email => email.EventId == eventId)
+            .Select(email => email.EmailLogID)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (existingEmailId != 0)
+            return existingEmailId;
 
         var emailLog = new EmailLog
         {
             UserID = userId,
             ToEmail = toEmail,
+            EventId = eventId,
             Subject = subject,
             HtmlBody = htmlBody,
             InlineImagesJson = inlineImages is null ? null : JsonSerializer.Serialize(inlineImages),
@@ -47,7 +59,23 @@ public sealed class EmailQueue : IEmailQueue
         };
 
         _dbContext.EmailLogs.Add(emailLog);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            _dbContext.Entry(emailLog).State = EntityState.Detached;
+            existingEmailId = await _dbContext.EmailLogs
+                .Where(email => email.EventId == eventId)
+                .Select(email => email.EmailLogID)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (existingEmailId != 0)
+                return existingEmailId;
+
+            throw;
+        }
+
         return emailLog.EmailLogID;
     }
 }

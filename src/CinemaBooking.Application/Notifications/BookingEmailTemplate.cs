@@ -17,19 +17,19 @@ internal static class BookingEmailTemplate
         string paymentMethod,
         string ticketsHtml) => $"""
         {OpenCard()}
-            <p style="margin: 0 0 6px; color: #111111; font-size: 20px; font-weight: 700;">Xác nhận đặt vé thành công</p>
+            <p style="margin: 0 0 6px; color: #111111; font-size: 20px; font-weight: 700;">Ticket booking confirmed</p>
             <p style="margin: 0 0 24px; color: #555555; font-size: 14px; line-height: 1.6;">
-                Xin chào <strong>{Encode(fullName)}</strong>,<br />
-                Đơn <strong>{Encode(bookingCode)}</strong> đã thanh toán thành công.
+                Hello <strong>{Encode(fullName)}</strong>,<br />
+                The order <strong>{Encode(bookingCode)}</strong> has been sucessfully paid.
             </p>
-            {DetailRow("Phim", $"{Encode(movieTitle)} ({durationMinutes} phút)")}
-            {DetailRow("Định dạng", Encode(format))}
-            {DetailRow("Suất chiếu", Encode(showtime))}
-            {DetailRow("Rạp", $"{Encode(cinemaName)} - {Encode(roomName)}")}
-            {DetailRow("Thanh toán", $"{Encode(amount)} VND - {Encode(paymentMethod)}")}
-            <p style="margin: 24px 0 8px; color: #111111; font-size: 16px; font-weight: 700;">Vé điện tử</p>
+            {DetailRow("Movie", $"{Encode(movieTitle)} ({durationMinutes} phút)")}
+            {DetailRow("Format", Encode(format))}
+            {DetailRow("Showtime", Encode(showtime))}
+            {DetailRow("Cinema", $"{Encode(cinemaName)} - {Encode(roomName)}")}
+            {DetailRow("Payment", $"{Encode(amount)} VND - {Encode(paymentMethod)}")}
+            <p style="margin: 24px 0 8px; color: #111111; font-size: 16px; font-weight: 700;">Digital ticket</p>
             <div style="text-align: center;">{ticketsHtml}</div>
-            {Notice("Mỗi QR chỉ có hiệu lực cho đúng một vé và một lần check-in.")}
+            {Notice("Each QR code is valid for only one ticket and one check-in.")}
         {CloseCard()}
         """;
 
@@ -40,9 +40,9 @@ internal static class BookingEmailTemplate
         string contentId,
         string fileName) => $"""
         <div style="display: inline-block; width: 210px; margin: 8px; padding: 14px; vertical-align: top; border: 1px solid #e0e0e0; border-radius: 6px; text-align: center;">
-            <p style="margin: 0 0 4px; color: #111111; font-size: 16px; font-weight: 700;">Ghế {Encode(seatCode)}</p>
+            <p style="margin: 0 0 4px; color: #111111; font-size: 16px; font-weight: 700;">Seat {Encode(seatCode)}</p>
             <p style="margin: 0 0 10px; color: #777777; font-size: 13px;">{Encode(seatType)}</p>
-            <img src="cid:{Encode(contentId)}" alt="QR vé ghế {Encode(seatCode)}" width="180" height="180" style="display: block; margin: 0 auto 8px;" />
+            <img src="cid:{Encode(contentId)}" alt="QR code for seat tickets {Encode(seatCode)}" width="180" height="180" style="display: block; margin: 0 auto 8px;" />
             <p style="margin: 0; color: #999999; font-family: Consolas, 'Courier New', monospace; font-size: 10px; overflow-wrap: anywhere;">{Encode(qrCode)}</p>
         </div>
         """;
@@ -55,18 +55,18 @@ internal static class BookingEmailTemplate
         string refundAmount,
         string completedAt) => $"""
         {OpenCard()}
-            <p style="margin: 0 0 6px; color: #111111; font-size: 20px; font-weight: 700;">Hoàn tiền thành công</p>
+            <p style="margin: 0 0 6px; color: #111111; font-size: 20px; font-weight: 700;">Refund successful</p>
             <p style="margin: 0 0 24px; color: #555555; font-size: 14px; line-height: 1.6;">
-                Xin chào <strong>{Encode(fullName)}</strong>,<br />
-                Yêu cầu hoàn tiền cho đơn đặt vé của bạn đã được xử lý thành công.
+                Hello <strong>{Encode(fullName)}</strong>,<br />
+                Your refund request for your ticket order has been successfully processed.
             </p>
-            {DetailRow("Mã đặt vé", Encode(bookingCode))}
-            {DetailRow("Phim", Encode(movieTitle))}
-            {DetailRow("Suất chiếu ban đầu", Encode(originalShowtime))}
-            {DetailRow("Số tiền hoàn trả", $"{Encode(refundAmount)} VND")}
-            {DetailRow("Hình thức hoàn trả", "Cộng vào Ví CGV")}
-            {DetailRow("Hoàn tất lúc", Encode(completedAt))}
-            {Notice("Vui lòng kiểm tra số dư trong mục My Wallet trên Dashboard.")}
+            {DetailRow("Booking code", Encode(bookingCode))}
+            {DetailRow("Movie", Encode(movieTitle))}
+            {DetailRow("Original showtime", Encode(originalShowtime))}
+            {DetailRow("Refund amount", $"{Encode(refundAmount)} VND")}
+            {DetailRow("Refund method", "Add to wallet")}
+            {DetailRow("Completed at", Encode(completedAt))}
+            {Notice("Please check your balance in the EGift Wallet section at profile.")}
         {CloseCard()}
         """;
 

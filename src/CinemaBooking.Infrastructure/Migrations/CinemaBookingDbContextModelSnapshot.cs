@@ -352,6 +352,11 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("HtmlBody")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -391,6 +396,9 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.HasIndex("UserID")
                         .HasDatabaseName("IX_EmailLog_UserID");
+
+                    b.HasIndex("EventId")
+                        .IsUnique();
 
                     b.HasIndex("DeliveryStatus", "NextAttemptAt");
 

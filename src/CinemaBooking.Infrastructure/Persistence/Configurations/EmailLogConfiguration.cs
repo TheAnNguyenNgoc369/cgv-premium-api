@@ -13,6 +13,7 @@ public class EmailLogConfiguration : IEntityTypeConfiguration<EmailLog>
         builder.HasKey(e => e.EmailLogID);
 
         builder.Property(e => e.ToEmail).HasMaxLength(150).IsRequired();
+        builder.Property(e => e.EventId).HasMaxLength(100).IsRequired();
         builder.Property(e => e.Subject).HasMaxLength(250).IsRequired();
         builder.Property(e => e.HtmlBody).IsRequired();
         builder.Property(e => e.InlineImagesJson);
@@ -23,6 +24,7 @@ public class EmailLogConfiguration : IEntityTypeConfiguration<EmailLog>
         builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
 
         builder.HasIndex(e => e.UserID).HasDatabaseName("IX_EmailLog_UserID");
+        builder.HasIndex(e => e.EventId).IsUnique();
         builder.HasIndex(e => new { e.DeliveryStatus, e.NextAttemptAt });
 
         builder.HasOne(e => e.User)

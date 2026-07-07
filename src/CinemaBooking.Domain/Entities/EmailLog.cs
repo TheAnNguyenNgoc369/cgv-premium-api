@@ -5,6 +5,7 @@ public class EmailLog
     public int EmailLogID { get; set; }
     public int? UserID { get; set; }
     public string ToEmail { get; set; } = null!;
+    public string EventId { get; set; } = null!;
     public string Subject { get; set; } = null!;
     public string HtmlBody { get; set; } = null!;
     public string? InlineImagesJson { get; set; }

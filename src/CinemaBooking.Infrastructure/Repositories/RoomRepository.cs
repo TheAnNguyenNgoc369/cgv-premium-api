@@ -90,7 +90,7 @@ public sealed class RoomRepository : IRoomRepository
         _dbContext.Rooms.Add(room);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return room;
+        return (await GetByIdAsync(room.RoomID, cancellationToken))!;
     }
 
     public async Task<Room?> UpdateAsync(
@@ -118,7 +118,7 @@ public sealed class RoomRepository : IRoomRepository
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return room;
+        return await GetByIdAsync(roomId, cancellationToken);
     }
 
     public Task<bool> HasActiveOrUpcomingShowtimesAsync(

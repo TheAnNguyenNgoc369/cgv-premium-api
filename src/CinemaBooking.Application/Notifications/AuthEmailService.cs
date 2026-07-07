@@ -36,6 +36,6 @@ public sealed class AuthEmailService : IAuthEmailService
         CancellationToken cancellationToken)
     {
         await _emailQueue.EnqueueAsync(
-            userId, email, eventType, subject, htmlBody, cancellationToken);
+            userId, email, $"{eventType}:{userId}:{Guid.NewGuid():N}", eventType, subject, htmlBody, cancellationToken);
     }
 }

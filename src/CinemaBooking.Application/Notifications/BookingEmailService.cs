@@ -72,7 +72,7 @@ public sealed class BookingEmailService : IBookingEmailService
                 ticketsHtml.ToString());
 
             await _emailQueue.EnqueueAsync(
-                booking.UserID, booking.User.Email, "booking_confirmed",
+                booking.UserID, booking.User.Email, $"booking_confirmed:{booking.BookingID}", "booking_confirmed",
                 $"[CGV Premium] Xác nhận đặt vé thành công - {booking.BookingCode}",
                 html, images, cancellationToken);
         }
@@ -109,7 +109,7 @@ public sealed class BookingEmailService : IBookingEmailService
                 $"{localCompletedAt:dd/MM/yyyy HH:mm}");
 
             await _emailQueue.EnqueueAsync(
-                booking.UserID, booking.User.Email, "refund_processed",
+                booking.UserID, booking.User.Email, $"refund_processed:{booking.BookingID}", "refund_processed",
                 $"[CGV Premium] Xác nhận hoàn tiền thành công - Mã đơn hàng {booking.BookingCode}",
                 html, cancellationToken: cancellationToken);
         }

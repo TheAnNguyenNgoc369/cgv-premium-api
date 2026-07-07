@@ -29,5 +29,9 @@ public sealed class NotificationContractTests
         var notification = db.Model.FindEntityType(typeof(Notification))!;
         Assert.Contains(notification.GetIndexes(), index => index.IsUnique
             && index.Properties.Select(property => property.Name).SequenceEqual(["EventId", "UserID"]));
+
+        var emailLog = db.Model.FindEntityType(typeof(EmailLog))!;
+        Assert.Contains(emailLog.GetIndexes(), index => index.IsUnique
+            && index.Properties.Select(property => property.Name).SequenceEqual(["EventId"]));
     }
 }

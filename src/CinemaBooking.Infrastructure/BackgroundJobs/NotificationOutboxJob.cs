@@ -1,5 +1,6 @@
 using CinemaBooking.Application.Notifications;
 using CinemaBooking.Domain.Entities;
+using CinemaBooking.Infrastructure.Email;
 using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,24 +37,38 @@ public sealed class NotificationOutboxJob(IServiceScopeFactory scopeFactory, ILo
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                item.AttemptCount++; item.Status = item.AttemptCount >= 3 ? "failed" : "pending";
-                item.NextAttemptAt = DateTime.UtcNow.AddMinutes(item.AttemptCount switch { 1 => 1, 2 => 5, _ => 15 });
+                ScheduleRetry(item);
                 item.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
                 logger.LogError(ex, "Notification outbox event {EventId} failed", item.EventId);
             }
             await db.SaveChangesAsync(ct);
         }
     }
+
+    private static void ScheduleRetry(NotificationOutbox item)
+    {
+        if (item.AttemptCount >= EmailRetryPolicy.MaxRetryCount)
+        {
+            item.Status = "failed";
+            item.NextAttemptAt = null;
+            return;
+        }
+
+        item.AttemptCount++;
+        item.Status = "pending";
+        item.NextAttemptAt = DateTime.UtcNow.Add(EmailRetryPolicy.GetDelay(item.AttemptCount));
+    }
+
     private static async Task ProcessBookingAsync(CinemaBookingDbContext db, IBookingEmailService email, NotificationOutbox item, CancellationToken ct)
     {
         var booking = await db.Bookings.AsNoTracking().Include(x => x.User).FirstAsync(x => x.BookingID == item.ReferenceId, ct);
-        await AddNotificationAsync(db, item, booking.UserID!.Value, "Đặt vé thành công", $"Đơn {booking.BookingCode} đã thanh toán thành công.", "booking", "Booking", $"/bookings/{booking.BookingID}", ct);
+        await AddNotificationAsync(db, item, booking.UserID!.Value, "Booking successful", $"Order  {booking.BookingCode} has been successfully paid for.", "booking", "Booking", $"/bookings/{booking.BookingID}", ct);
         await email.QueueBookingConfirmedAsync(booking.BookingID, ct);
     }
     private static async Task ProcessRefundAsync(CinemaBookingDbContext db, IBookingEmailService email, NotificationOutbox item, CancellationToken ct)
     {
         var booking = await db.Bookings.AsNoTracking().FirstAsync(x => x.BookingID == item.ReferenceId, ct);
-        await AddNotificationAsync(db, item, booking.UserID!.Value, "Hoàn tiền thành công", $"Đơn {booking.BookingCode} đã được hoàn tiền.", "refund", "Refund", $"/bookings/{booking.BookingID}", ct);
+        await AddNotificationAsync(db, item, booking.UserID!.Value, "Refund successful", $"Order {booking.BookingCode} has been refunded.", "refund", "Refund", $"/bookings/{booking.BookingID}", ct);
         await email.QueueRefundProcessedAsync(booking.BookingID, item.Amount!.Value, item.OccurredAt!.Value, ct);
     }
     private static async Task AddNotificationAsync(CinemaBookingDbContext db, NotificationOutbox item, int userId, string title,
