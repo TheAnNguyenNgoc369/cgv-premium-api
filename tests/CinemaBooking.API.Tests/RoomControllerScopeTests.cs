@@ -47,8 +47,8 @@ public sealed class RoomControllerScopeTests
         public Task<List<Room>> GetRoomsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<List<Room>> GetRoomsByCinemaIdAsync(int cinemaId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Room?> GetRoomByIdAsync(int roomId, CancellationToken cancellationToken = default) => Task.FromResult<Room?>(room);
-        public Task<(bool Succeeded, string? ErrorMessage, Room? Room)> CreateRoomAsync(int cinemaId, string name, string type, string status, string? description, int? managerCinemaId = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<(bool Succeeded, string? ErrorMessage, Room? Room)> UpdateRoomAsync(int roomId, int cinemaId, string name, string type, string status, string? description, int? managerCinemaId = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<(bool Succeeded, string? ErrorMessage, Room? Room)> CreateRoomAsync(int cinemaId, string name, int roomTypeId, string status, string? description, int? managerCinemaId = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<(bool Succeeded, string? ErrorMessage, Room? Room)> UpdateRoomAsync(int roomId, int cinemaId, string name, int roomTypeId, string status, string? description, int? managerCinemaId = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<(bool Succeeded, string? ErrorMessage)> DeleteRoomAsync(int roomId, int? managerCinemaId = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

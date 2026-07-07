@@ -22,6 +22,7 @@ public sealed class ShowtimeRepository : IShowtimeRepository
         var query = _db.Showtimes.AsNoTracking()
             .Include(showtime => showtime.Movie)
             .Include(showtime => showtime.Room).ThenInclude(room => room.Cinema)
+            .Include(showtime => showtime.Room).ThenInclude(room => room.RoomType)
             .AsQueryable();
         if (onlyActiveLocations)
             query = query.Where(s => s.Room.Status == "active" && s.Room.Cinema.Status == "active");
@@ -58,7 +59,7 @@ public sealed class ShowtimeRepository : IShowtimeRepository
         _db.Movie.FirstOrDefaultAsync(m => m.MovieID == movieId, cancellationToken);
 
     public Task<Room?> GetRoomAsync(int roomId, CancellationToken cancellationToken = default) =>
-        _db.Rooms.Include(room => room.Cinema)
+        _db.Rooms.Include(room => room.Cinema).Include(room => room.RoomType)
             .FirstOrDefaultAsync(r => r.RoomID == roomId, cancellationToken);
 
     public Task<bool> HasConflictAsync(
@@ -191,12 +192,14 @@ public sealed class ShowtimeRepository : IShowtimeRepository
     public Task<Showtime?> GetShowtimeByIdAsync(int id, CancellationToken cancellationToken = default) =>
         _db.Showtimes.AsNoTracking()
             .Include(s => s.Movie).Include(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(s => s.Room).ThenInclude(r => r.RoomType)
             .FirstOrDefaultAsync(s => s.ShowtimeID == id && s.Room.Status == "active"
                 && s.Room.Cinema.Status == "active", cancellationToken);
 
     public Task<Showtime?> GetManagedShowtimeByIdAsync(
         int id, CancellationToken cancellationToken = default) =>
         _db.Showtimes.Include(s => s.Movie).Include(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(s => s.Room).ThenInclude(r => r.RoomType)
             .FirstOrDefaultAsync(s => s.ShowtimeID == id, cancellationToken);
 
     public Task<List<Seat>> GetSeatsByRoomAsync(

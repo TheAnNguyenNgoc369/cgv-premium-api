@@ -79,7 +79,7 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.ToTable("AdminActionLog", null, t =>
                         {
-                            t.HasCheckConstraint("CK_AdminActionLog_ActionType", "[ActionType] IN ('create_user','update_user','lock_user','unlock_user','change_role','delete_user','create_voucher','update_voucher','delete_voucher','create_showtime','update_showtime','delete_showtime','update_ticket_price','generate_seat','update_seat','delete_seat','create_cinema','update_cinema','delete_cinema','create_genre','update_genre','delete_genre','create_movie','update_movie','delete_movie','export_report')");
+                            t.HasCheckConstraint("CK_AdminActionLog_ActionType", "[ActionType] IN ('create_showtime_type','update_showtime_type','delete_showtime_type','generate_showtime_by_type','create_user','update_user','lock_user','unlock_user','change_role','delete_user','create_voucher','update_voucher','delete_voucher','create_showtime','update_showtime','delete_showtime','update_ticket_price','generate_seat','update_seat','delete_seat','create_cinema','update_cinema','delete_cinema','create_genre','update_genre','delete_genre','create_movie','update_movie','delete_movie','create_room_type','update_room_type','delete_room_type','export_report')");
                         });
                 });
 
@@ -356,19 +356,38 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
 
                     b.Property<string>("DeliveryStatus")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)")
-                        .HasDefaultValue("sent");
+                        .HasDefaultValue("pending");
 
                     b.Property<string>("EventType")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("HtmlBody")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("InlineImagesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("RetryCount")
                         .ValueGeneratedOnAdd()
@@ -377,6 +396,11 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.Property<DateTime?>("SentAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
 
                     b.Property<string>("ToEmail")
                         .IsRequired()
@@ -391,13 +415,18 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.HasIndex("UserID")
                         .HasDatabaseName("IX_EmailLog_UserID");
 
+                    b.HasIndex("EventId")
+                        .IsUnique();
+
+                    b.HasIndex("DeliveryStatus", "NextAttemptAt");
+
                     b.ToTable("EmailLog", null, t =>
                         {
-                            t.HasCheckConstraint("CK_EmailLog_DeliveryStatus", "[DeliveryStatus] IN ('sent', 'failed', 'retrying')");
+                            t.HasCheckConstraint("CK_EmailLog_DeliveryStatus", "[DeliveryStatus] IN ('pending', 'processing', 'sent', 'failed', 'retrying')");
 
                             t.HasCheckConstraint("CK_EmailLog_EventType", "[EventType] IN ('register','booking_confirmed','booking_cancelled','forgot_password','refund_processed','points_earned','reward_redeemed')");
 
-                            t.HasCheckConstraint("CK_EmailLog_RetryCount", "[RetryCount] >= 0");
+                            t.HasCheckConstraint("CK_EmailLog_RetryCount", "[RetryCount] BETWEEN 0 AND 3");
                         });
                 });
 
@@ -743,10 +772,27 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("NotificationID"));
 
+                    b.Property<string>("ActionUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<bool>("IsRead")
                         .ValueGeneratedOnAdd()
@@ -757,6 +803,16 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ReferenceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReferenceType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -773,13 +829,82 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.HasKey("NotificationID");
 
+                    b.HasIndex("EventId", "UserID")
+                        .IsUnique();
+
+                    b.HasIndex("UserID", "CreatedAt")
+                        .HasDatabaseName("IX_Notification_UserID_CreatedAt");
+
                     b.HasIndex("UserID", "IsRead")
                         .HasDatabaseName("IX_Notification_UserID_IsRead");
 
                     b.ToTable("Notification", null, t =>
                         {
-                            t.HasCheckConstraint("CK_Notification_Type", "[Type] IN ('booking', 'payment', 'refund', 'promotion', 'system')");
+                            t.HasCheckConstraint("CK_Notification_Type", "[Type] IN ('booking', 'payment', 'refund', 'promotion', 'system', 'account')");
                         });
+                });
+
+            modelBuilder.Entity("CinemaBooking.Domain.Entities.NotificationOutbox", b =>
+                {
+                    b.Property<long>("NotificationOutboxID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("NotificationOutboxID"));
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ReferenceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("pending");
+
+                    b.HasKey("NotificationOutboxID");
+
+                    b.HasIndex("EventId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.ToTable("NotificationOutbox", (string)null);
                 });
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.PasswordResetToken", b =>
@@ -1110,10 +1235,8 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("RoomType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                    b.Property<int>("RoomTypeID")
+                        .HasColumnType("int");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1127,6 +1250,8 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.HasIndex("CinemaID")
                         .HasDatabaseName("IX_Room_CinemaID");
 
+                    b.HasIndex("RoomTypeID");
+
                     b.HasIndex("CinemaID", "RoomName")
                         .IsUnique()
                         .HasDatabaseName("UQ_Room_CinemaID_RoomName");
@@ -1135,9 +1260,45 @@ namespace CinemaBooking.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_Room_Capacity", "[Capacity] >= 0");
 
-                            t.HasCheckConstraint("CK_Room_RoomType", "[RoomType] IN ('Standard', 'VIP', 'IMAX', '3D')");
-
                             t.HasCheckConstraint("CK_Room_Status", "[Status] IN ('active', 'maintenance', 'inactive')");
+                        });
+                });
+
+            modelBuilder.Entity("CinemaBooking.Domain.Entities.RoomType", b =>
+                {
+                    b.Property<int>("RoomTypeID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RoomTypeID"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("ExtraPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("TypeName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("RoomTypeID");
+
+                    b.HasIndex("TypeName")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_RoomType_TypeName");
+
+                    b.ToTable("RoomType", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_RoomType_ExtraPrice", "[ExtraPrice] >= 0");
                         });
                 });
 
@@ -1341,7 +1502,13 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Property<int>("MovieID")
                         .HasColumnType("int");
 
+                    b.Property<decimal>("RoomExtraPrice")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int>("RoomID")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ShowtimeTypeID")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("StartTime")
@@ -1359,6 +1526,8 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.HasIndex("MovieID")
                         .HasDatabaseName("IX_Showtime_MovieID");
 
+                    b.HasIndex("ShowtimeTypeID");
+
                     b.HasIndex("RoomID", "StartTime")
                         .HasDatabaseName("IX_Showtime_RoomID_StartTime");
 
@@ -1373,6 +1542,72 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                             t.HasCheckConstraint("CK_Showtime_Time", "[EndTime] > [StartTime]");
                         });
+                });
+
+            modelBuilder.Entity("CinemaBooking.Domain.Entities.ShowtimeType", b =>
+                {
+                    b.Property<int>("ShowtimeTypeID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ShowtimeTypeID"));
+
+                    b.Property<int>("CinemaID")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.HasKey("ShowtimeTypeID");
+
+                    b.HasIndex("CinemaID")
+                        .HasDatabaseName("IX_ShowtimeType_CinemaID");
+
+                    b.HasIndex("CinemaID", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_ShowtimeType_CinemaID_Name");
+
+                    b.ToTable("ShowtimeType", (string)null);
+                });
+
+            modelBuilder.Entity("CinemaBooking.Domain.Entities.ShowtimeTypeSlot", b =>
+                {
+                    b.Property<int>("SlotID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SlotID"));
+
+                    b.Property<int>("ShowtimeTypeID")
+                        .HasColumnType("int");
+
+                    b.Property<TimeSpan>("StartTime")
+                        .HasColumnType("time");
+
+                    b.HasKey("SlotID");
+
+                    b.HasIndex("ShowtimeTypeID", "StartTime")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ShowtimeTypeSlot_ShowtimeTypeID_StartTime");
+
+                    b.ToTable("ShowtimeTypeSlot", (string)null);
                 });
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Ticket", b =>
@@ -2073,7 +2308,16 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("FK_Room_Cinema");
 
+                    b.HasOne("CinemaBooking.Domain.Entities.RoomType", "RoomType")
+                        .WithMany("Rooms")
+                        .HasForeignKey("RoomTypeID")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("FK_Room_RoomType");
+
                     b.Navigation("Cinema");
+
+                    b.Navigation("RoomType");
                 });
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Seat", b =>
@@ -2150,9 +2394,39 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("FK_Showtime_Room");
 
+                    b.HasOne("CinemaBooking.Domain.Entities.ShowtimeType", "ShowtimeType")
+                        .WithMany("Showtimes")
+                        .HasForeignKey("ShowtimeTypeID")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("FK_Showtime_ShowtimeType");
+
                     b.Navigation("Movie");
 
                     b.Navigation("Room");
+
+                    b.Navigation("ShowtimeType");
+                });
+
+            modelBuilder.Entity("CinemaBooking.Domain.Entities.ShowtimeType", b =>
+                {
+                    b.HasOne("CinemaBooking.Domain.Entities.Cinema", "Cinema")
+                        .WithMany()
+                        .HasForeignKey("CinemaID")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Cinema");
+                });
+
+            modelBuilder.Entity("CinemaBooking.Domain.Entities.ShowtimeTypeSlot", b =>
+                {
+                    b.HasOne("CinemaBooking.Domain.Entities.ShowtimeType", "ShowtimeType")
+                        .WithMany("Slots")
+                        .HasForeignKey("ShowtimeTypeID")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("ShowtimeType");
                 });
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Ticket", b =>
@@ -2337,6 +2611,11 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Navigation("Showtimes");
                 });
 
+            modelBuilder.Entity("CinemaBooking.Domain.Entities.RoomType", b =>
+                {
+                    b.Navigation("Rooms");
+                });
+
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Seat", b =>
                 {
                     b.Navigation("BookingSeats");
@@ -2354,6 +2633,13 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Navigation("Bookings");
 
                     b.Navigation("SeatHolds");
+                });
+
+            modelBuilder.Entity("CinemaBooking.Domain.Entities.ShowtimeType", b =>
+                {
+                    b.Navigation("Showtimes");
+
+                    b.Navigation("Slots");
                 });
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.User", b =>

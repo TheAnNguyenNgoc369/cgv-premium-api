@@ -7,6 +7,7 @@ using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using CinemaBooking.Application.ActivityLogs;
 
 namespace CinemaBooking.API.Controllers;
 
@@ -16,13 +17,16 @@ public sealed class ShowtimeController : ControllerBase
 {
     private readonly IShowtimeService _showtimeService;
     private readonly IManagerCinemaScopeService _managerCinemaScopeService;
+    private readonly IActivityLogService _activityLogs;
 
     public ShowtimeController(
         IShowtimeService showtimeService,
-        IManagerCinemaScopeService managerCinemaScopeService)
+        IManagerCinemaScopeService managerCinemaScopeService,
+        IActivityLogService activityLogs)
     {
         _showtimeService = showtimeService;
         _managerCinemaScopeService = managerCinemaScopeService;
+        _activityLogs = activityLogs;
     }
 
     [HttpGet("showtimes")]
@@ -63,6 +67,8 @@ public sealed class ShowtimeController : ControllerBase
             request.MovieId, request.RoomId, request.StartTime.UtcDateTime,
             request.BasePrice, scope, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.CreateShowtime,
+            "Showtime", result.Showtime!.ShowtimeID, $"Created showtime {result.Showtime.ShowtimeID}", this.AuditIpAddress(), cancellationToken);
         var response = await ToManagementResponseAsync(result.Showtime!, cancellationToken);
         return CreatedAtAction(nameof(GetShowtimeById), new { id = response.ShowtimeId }, response);
     }
@@ -74,10 +80,16 @@ public sealed class ShowtimeController : ControllerBase
     {
         var scope = await GetRequiredManagerCinemaIdAsync(cancellationToken);
         if (!scope.HasValue) return CinemaScopeForbidden();
+        var previous = await _showtimeService.GetManagedShowtimeByIdAsync(id, cancellationToken);
         var result = await _showtimeService.UpdateShowtimeAsync(
             id, request.MovieId, request.RoomId, request.StartTime.UtcDateTime,
             request.BasePrice, request.Status, scope, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateShowtime,
+            "Showtime", id, $"Updated showtime {id}", this.AuditIpAddress(), cancellationToken);
+        if (previous is not null && previous.BasePrice != request.BasePrice)
+            await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateTicketPrice,
+                "Showtime", id, $"Updated ticket price for showtime {id}", this.AuditIpAddress(), cancellationToken);
         return Ok(await ToManagementResponseAsync(result.Showtime!, cancellationToken));
     }
 
@@ -89,6 +101,8 @@ public sealed class ShowtimeController : ControllerBase
         if (!scope.HasValue) return CinemaScopeForbidden();
         var result = await _showtimeService.DeleteShowtimeAsync(id, scope, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.DeleteShowtime,
+            "Showtime", id, $"Deleted showtime {id}", this.AuditIpAddress(), cancellationToken);
         return NoContent();
     }
 

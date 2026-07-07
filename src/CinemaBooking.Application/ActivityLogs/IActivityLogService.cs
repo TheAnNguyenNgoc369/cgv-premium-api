@@ -7,4 +7,6 @@ public interface IActivityLogService
         DateOnly? endDate, int page, int pageSize, CancellationToken cancellationToken);
     Task<ActivityLogDetail?> GetByIdAsync(int id, CancellationToken cancellationToken);
     IReadOnlyList<string> GetActionTypes();
+    Task RecordAsync(int actorId, string actionType, string targetTable, int targetId,
+        string description, string ipAddress, CancellationToken cancellationToken);
 }

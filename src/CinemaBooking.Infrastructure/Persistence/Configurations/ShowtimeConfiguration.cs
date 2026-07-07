@@ -13,6 +13,7 @@ public class ShowtimeConfiguration : IEntityTypeConfiguration<Showtime>
         builder.HasKey(s => s.ShowtimeID);
 
         builder.Property(s => s.BasePrice).HasColumnType("decimal(18,2)");
+        builder.Property(s => s.RoomExtraPrice).HasColumnType("decimal(18,2)");
         builder.Property(s => s.Status).HasMaxLength(30).IsRequired().HasDefaultValue("scheduled");
         builder.Property(s => s.CreatedAt).HasDefaultValueSql("GETDATE()");
 
@@ -29,6 +30,10 @@ public class ShowtimeConfiguration : IEntityTypeConfiguration<Showtime>
             .WithMany(r => r.Showtimes)
             .HasForeignKey(s => s.RoomID)
             .HasConstraintName("FK_Showtime_Room");
+
+        builder.HasOne(s => s.ShowtimeType).WithMany(x => x.Showtimes)
+            .HasForeignKey(s => s.ShowtimeTypeID)
+            .HasConstraintName("FK_Showtime_ShowtimeType");
 
         builder.ToTable(t =>
         {

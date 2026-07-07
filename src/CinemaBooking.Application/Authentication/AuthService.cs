@@ -4,6 +4,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Security;
+using CinemaBooking.Application.Notifications;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 
@@ -26,13 +27,16 @@ public sealed class AuthService : IAuthService
 
     private readonly IUserRepository _userRepository;
     private readonly IEmailSender _emailSender;
+    private readonly IAuthEmailService _authEmailService;
 
     public AuthService(
         IUserRepository userRepository,
-        IEmailSender emailSender)
+        IEmailSender emailSender,
+        IAuthEmailService authEmailService)
     {
         _userRepository = userRepository;
         _emailSender = emailSender;
+        _authEmailService = authEmailService;
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, int? UserId, bool VerificationEmailSent)> RegisterAsync(
@@ -89,13 +93,14 @@ public sealed class AuthService : IAuthService
             verificationToken,
             cancellationToken);
 
-        var verificationEmailSent = await _emailSender.SendAsync(
+        await _authEmailService.QueueVerificationAsync(
+            user.UserID,
             user.Email,
             "Verify your Cinema Booking account",
             BuildVerificationEmailBody(user.FullName, verificationToken.Token),
             cancellationToken);
 
-        return (true, null, user.UserID, verificationEmailSent);
+        return (true, null, user.UserID, true);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, User? User)> LoginAsync(
@@ -135,6 +140,14 @@ public sealed class AuthService : IAuthService
         if (string.Equals(user.Status, InactiveStatus, StringComparison.OrdinalIgnoreCase))
         {
             return (false, "Your account is currently inactive. Please contact our Administrator for assistance", null);
+        }
+
+        if (string.Equals(user.Status, UserStatuses.Unverified, StringComparison.OrdinalIgnoreCase)
+            && user.EmailVerifiedAt.HasValue)
+        {
+            user.Status = ActiveStatus;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _userRepository.SaveChangesAsync(cancellationToken);
         }
 
         if (string.Equals(user.Status, UserStatuses.Unverified, StringComparison.OrdinalIgnoreCase)
@@ -203,13 +216,20 @@ public sealed class AuthService : IAuthService
             verificationToken,
             cancellationToken);
 
-        var verificationEmailSent = await _emailSender.SendAsync(
-            user.Email,
-            "Verify your Cinema Booking account",
-            BuildVerificationEmailBody(user.FullName, verificationToken.Token),
-            cancellationToken);
-
-        if (!verificationEmailSent)
+        try
+        {
+            await _authEmailService.QueueVerificationAsync(
+                user.UserID,
+                user.Email,
+                "Verify your Cinema Booking account",
+                BuildVerificationEmailBody(user.FullName, verificationToken.Token),
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
         {
             await _userRepository.DeleteEmailVerificationTokenAsync(
                 verificationToken.Token,
@@ -273,13 +293,20 @@ public sealed class AuthService : IAuthService
             resetToken,
             cancellationToken);
 
-        var emailSent = await _emailSender.SendAsync(
-            user.Email,
-            "Reset your Cinema Booking password",
-            BuildResetPasswordEmailBody(user.FullName, resetToken.Token),
-            cancellationToken);
-
-        if (!emailSent)
+        try
+        {
+            await _authEmailService.QueuePasswordResetAsync(
+                user.UserID,
+                user.Email,
+                "Reset your Cinema Booking password",
+                BuildResetPasswordEmailBody(user.FullName, resetToken.Token),
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
         {
             await _userRepository.DeletePasswordResetTokenAsync(
                 resetToken.Token,
@@ -378,6 +405,13 @@ public sealed class AuthService : IAuthService
         }
 
         verificationToken.User.EmailVerifiedAt = now;
+        if (string.Equals(
+                verificationToken.User.Status,
+                UserStatuses.Unverified,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            verificationToken.User.Status = ActiveStatus;
+        }
         verificationToken.User.UpdatedAt = now;
         verificationToken.VerifiedAt = now;
         await _userRepository.SaveChangesAsync(cancellationToken);
@@ -426,7 +460,7 @@ public sealed class AuthService : IAuthService
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
         var encodedToken = WebUtility.HtmlEncode(token);
-        var verificationUrl = $"https://intent-legible-manatee.ngrok-free.app/registerEmail";
+        var verificationUrl = $"https://directly-washhouse-recovery.ngrok-free.dev/registerEmail";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
@@ -472,7 +506,7 @@ public sealed class AuthService : IAuthService
     private static string BuildResetPasswordEmailBody(string fullName, string token)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var resetUrl = $"https://intent-legible-manatee.ngrok-free.app/resetPassword?token={Uri.EscapeDataString(token)}";
+        var resetUrl = $"https://directly-washhouse-recovery.ngrok-free.dev/resetPassword?token={Uri.EscapeDataString(token)}";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">

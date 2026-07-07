@@ -332,7 +332,7 @@ public sealed class BookingService : IBookingService
             SeatRow = seat.SeatRow,
             SeatCol = seat.SeatCol,
             SeatTypeName = seat.SeatType!.TypeName,
-            Price = showtime.BasePrice + seat.SeatType.ExtraPrice
+            Price = showtime.BasePrice + showtime.RoomExtraPrice + seat.SeatType.ExtraPrice
         }).ToList();
 
         var seatsSubTotal = seatDetails.Sum(s => s.Price);

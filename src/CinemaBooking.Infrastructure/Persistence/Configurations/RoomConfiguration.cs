@@ -13,6 +13,10 @@ public class RoomConfiguration : IEntityTypeConfiguration<Room>
         builder.HasKey(r => r.RoomID);
 
         builder.Property(r => r.RoomName).HasMaxLength(50).IsRequired();
+        builder.HasOne(r => r.RoomType)
+            .WithMany(t => t.Rooms)
+            .HasForeignKey(r => r.RoomTypeID)
+            .HasConstraintName("FK_Room_RoomType");
         builder.Property(r => r.Capacity).HasDefaultValue(0);
         builder.Property(r => r.Description).HasMaxLength(500);
         builder.Property(r => r.Status).HasMaxLength(20).IsRequired().HasDefaultValue("active");

@@ -9,6 +9,7 @@ public interface IRoomRepository
     Task<Room?> GetByIdAsync(int roomId, CancellationToken cancellationToken = default);
 
     Task<bool> CinemaExistsAsync(int cinemaId, CancellationToken cancellationToken = default);
+    Task<bool> RoomTypeExistsAsync(int roomTypeId, CancellationToken cancellationToken = default);
 
     Task<bool> NameExistsInCinemaAsync(
         int cinemaId,

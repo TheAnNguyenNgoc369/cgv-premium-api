@@ -148,7 +148,11 @@ public sealed class BookingRepository : IBookingRepository
         return await _db.Bookings
             .Include(b => b.Showtime).ThenInclude(s => s.Movie)
             .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
-            .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
+            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.RoomType)
+            .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat).ThenInclude(s => s.SeatType)
+            .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket)
+            .Include(b => b.User)
+            .Include(b => b.Payment)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
             .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)
             .AsSplitQuery()

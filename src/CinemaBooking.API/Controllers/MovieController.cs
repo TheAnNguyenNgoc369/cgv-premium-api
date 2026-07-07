@@ -4,6 +4,7 @@ using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using CinemaBooking.Application.ActivityLogs;
 using MovieEntity = CinemaBooking.Domain.Entities.Movie;
 
 namespace CinemaBooking.API.Controllers;
@@ -12,13 +13,16 @@ namespace CinemaBooking.API.Controllers;
 [Route("api/movie")]
 public sealed class MovieController : ControllerBase
 {
+    private readonly IActivityLogService _activityLogs;
     private readonly IMovieService _movieService;
     private readonly CinemaBooking.Application.Genres.IGenreService _genreService;
 
-    public MovieController(IMovieService movieService, CinemaBooking.Application.Genres.IGenreService genreService)
+    public MovieController(IMovieService movieService, CinemaBooking.Application.Genres.IGenreService genreService,
+        IActivityLogService activityLogs)
     {
         _movieService = movieService;
         _genreService = genreService;
+        _activityLogs = activityLogs;
     }
 
     [HttpGet]
@@ -198,6 +202,8 @@ public sealed class MovieController : ControllerBase
         }
 
         var response = ToDetailResponse(result.Movie!);
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.CreateMovie,
+            "Movie", response.MovieId, $"Created movie {response.MovieId}", this.AuditIpAddress(), cancellationToken);
 
         return CreatedAtAction(
             nameof(GetMovieById),
@@ -239,6 +245,8 @@ public sealed class MovieController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateMovie,
+            "Movie", id, $"Updated movie {id}", this.AuditIpAddress(), cancellationToken);
         return Ok(ToDetailResponse(result.Movie!));
     }
 
@@ -266,6 +274,8 @@ public sealed class MovieController : ControllerBase
                 ? NotFound(new { success = false, message = result.ErrorMessage })
                 : BadRequest(new { success = false, message = result.ErrorMessage });
 
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateMovie,
+            "Movie", id, $"Updated poster for movie {id}", this.AuditIpAddress(), cancellationToken);
         return Ok(ToDetailResponse(result.Movie!));
     }
 
@@ -287,6 +297,8 @@ public sealed class MovieController : ControllerBase
             return Conflict(new { success = false, message = result.ErrorMessage });
         }
 
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.DeleteMovie,
+            "Movie", id, $"Deleted movie {id}", this.AuditIpAddress(), cancellationToken);
         return NoContent();
     }
 

@@ -4,6 +4,7 @@ using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using CinemaBooking.Application.ActivityLogs;
 
 namespace CinemaBooking.API.Controllers;
 
@@ -12,10 +13,12 @@ namespace CinemaBooking.API.Controllers;
 public sealed class GenreController : ControllerBase
 {
     private readonly IGenreService _genreService;
+    private readonly IActivityLogService _activityLogs;
 
-    public GenreController(IGenreService genreService)
+    public GenreController(IGenreService genreService, IActivityLogService activityLogs)
     {
         _genreService = genreService;
+        _activityLogs = activityLogs;
     }
 
     [HttpGet]
@@ -59,6 +62,8 @@ public sealed class GenreController : ControllerBase
         }
 
         var response = ToResponse(result.Genre!);
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.CreateGenre,
+            "Genre", response.GenreId, $"Created genre {response.GenreId}", this.AuditIpAddress(), cancellationToken);
 
         return CreatedAtAction(
             nameof(GetGenreById),
@@ -88,6 +93,8 @@ public sealed class GenreController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateGenre,
+            "Genre", id, $"Updated genre {id}", this.AuditIpAddress(), cancellationToken);
         return Ok(ToResponse(result.Genre!));
     }
 
@@ -109,6 +116,8 @@ public sealed class GenreController : ControllerBase
             return Conflict(new { success = false, message = result.ErrorMessage });
         }
 
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.DeleteGenre,
+            "Genre", id, $"Deleted genre {id}", this.AuditIpAddress(), cancellationToken);
         return NoContent();
     }
 
