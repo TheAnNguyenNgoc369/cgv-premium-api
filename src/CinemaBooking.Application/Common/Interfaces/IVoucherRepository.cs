@@ -11,4 +11,7 @@ public interface IVoucherRepository
     Task<Voucher> AddAsync(Voucher voucher, AdminActionLog log, CancellationToken cancellationToken);
     Task<Voucher?> UpdateAsync(Voucher voucher, AdminActionLog log, CancellationToken cancellationToken);
     Task<bool> DeactivateAsync(int id, AdminActionLog log, CancellationToken cancellationToken);
+    Task<List<Voucher>> GetRedeemableVouchersAsync(CancellationToken cancellationToken);
+    Task<Voucher?> GetForRedemptionAsync(int voucherId, CancellationToken cancellationToken);
+    Task<int> GetUserRedemptionCountAsync(int userId, int voucherId, CancellationToken cancellationToken);
 }

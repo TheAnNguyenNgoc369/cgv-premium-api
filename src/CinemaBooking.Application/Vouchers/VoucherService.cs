@@ -10,10 +10,13 @@ public sealed class VoucherService : IVoucherService
     private const string ImageFolder = "cgvp/vouchers";
     private static readonly string[] Categories = ["Discount", "Combo", "Cashback"];
     private readonly IVoucherRepository _repository;
+    private readonly IUserVoucherRepository _userVoucherRepository;
+    private readonly IUserRepository _userRepository;
     private readonly IImageStorageService _imageStorage;
 
-    public VoucherService(IVoucherRepository repository, IImageStorageService imageStorage)
-    { _repository = repository; _imageStorage = imageStorage; }
+    public VoucherService(IVoucherRepository repository, IUserVoucherRepository userVoucherRepository,
+        IUserRepository userRepository, IImageStorageService imageStorage)
+    { _repository = repository; _userVoucherRepository = userVoucherRepository; _userRepository = userRepository; _imageStorage = imageStorage; }
 
     public async Task<VoucherPage> GetAsync(string? search, int pageIndex, int pageSize, CancellationToken cancellationToken)
     {
@@ -80,6 +83,102 @@ public sealed class VoucherService : IVoucherService
     public async Task<VoucherResult> DeleteAsync(int adminId, int id, string? ip, CancellationToken ct) =>
         await _repository.DeactivateAsync(id, Log(adminId, AdminActionTypes.DeleteVoucher, id, ip), ct)
             ? new(true, null, null) : new(false, "Voucher not found", null, "not_found");
+
+    public async Task<RedeemableVouchersResult> GetRedeemableVouchersAsync(CancellationToken ct)
+    {
+        try
+        {
+            var vouchers = await _repository.GetRedeemableVouchersAsync(ct);
+            return new(true, vouchers);
+        }
+        catch (Exception ex)
+        {
+            return new(false, [], $"Failed to retrieve redeemable vouchers: {ex.Message}");
+        }
+    }
+
+    public async Task<RedeemVoucherResult> RedeemVoucherAsync(int userId, int voucherId, string? ip, CancellationToken ct)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, ct);
+        if (user is null) return new(false, 0, string.Empty, "User not found", "not_found");
+        if (user.Role != Roles.Customer) return new(false, 0, string.Empty, "Only customers can redeem vouchers", "forbidden");
+        if (user.Status != UserStatuses.Active) return new(false, 0, string.Empty, "User account is not active", "forbidden");
+
+        var voucher = await _repository.GetForRedemptionAsync(voucherId, ct);
+        if (voucher is null) return new(false, 0, string.Empty, "Voucher not found", "not_found");
+        if (!voucher.IsActive) return new(false, 0, string.Empty, "Voucher is not active", "validation");
+        if (!voucher.IsRedeemable) return new(false, 0, string.Empty, "Voucher is not redeemable", "validation");
+        if (!voucher.RequiredPoints.HasValue) return new(false, 0, string.Empty, "Voucher cannot be redeemed with points", "validation");
+
+        var now = DateTime.UtcNow;
+        if (now < voucher.ValidFrom) return new(false, 0, string.Empty, "Voucher is not yet valid", "validation");
+        if (now > voucher.ValidUntil) return new(false, 0, string.Empty, "Voucher has expired", "validation");
+
+        if (voucher.RemainingQuantity.HasValue && voucher.RemainingQuantity <= 0)
+            return new(false, 0, string.Empty, "Voucher is out of stock", "validation");
+
+        if (user.TotalPoints < voucher.RequiredPoints.Value)
+            return new(false, user.TotalPoints, string.Empty, $"Insufficient points. Required: {voucher.RequiredPoints.Value}, Available: {user.TotalPoints}", "validation");
+
+        if (voucher.ExchangeLimit.HasValue)
+        {
+            var redemptionCount = await _repository.GetUserRedemptionCountAsync(userId, voucherId, ct);
+            if (redemptionCount >= voucher.ExchangeLimit.Value)
+                return new(false, user.TotalPoints, string.Empty, $"Exchange limit reached. Maximum {voucher.ExchangeLimit.Value} redemptions per user", "validation");
+        }
+
+        var userVoucher = new UserVoucher
+        {
+            UserID = userId,
+            VoucherID = voucherId,
+            RedeemedAt = now,
+            ExpiredAt = voucher.ValidUntil,
+            Status = UserVoucherStatus.Available
+        };
+
+        var loyaltyPoint = new LoyaltyPoints
+        {
+            UserID = userId,
+            VoucherID = voucherId,
+            PointsDelta = -voucher.RequiredPoints.Value,
+            TransactionType = LoyaltyTransactionTypes.Exchange,
+            Description = $"Redeemed voucher: {voucher.VoucherCode}",
+            CreatedAt = now
+        };
+
+        var log = new AdminActionLog
+        {
+            AdminID = userId,
+            TargetTable = "UserVoucher",
+            ActionType = AdminActionTypes.RedeemVoucher,
+            Description = $"User redeemed voucher {voucher.VoucherCode}",
+            IPAddress = ip,
+            CreatedAt = now
+        };
+
+        try
+        {
+            await _userVoucherRepository.RedeemVoucherAsync(userVoucher, loyaltyPoint, voucher.RequiredPoints.Value, log, ct);
+            return new(true, user.TotalPoints - voucher.RequiredPoints.Value, voucher.VoucherCode);
+        }
+        catch (Exception ex)
+        {
+            return new(false, user.TotalPoints, string.Empty, $"Failed to redeem voucher: {ex.Message}", "error");
+        }
+    }
+
+    public async Task<UserVouchersResult> GetUserVouchersAsync(int userId, CancellationToken ct)
+    {
+        try
+        {
+            var vouchers = await _userVoucherRepository.GetUserVouchersAsync(userId, ct);
+            return new(true, vouchers);
+        }
+        catch (Exception ex)
+        {
+            return new(false, [], $"Failed to retrieve user vouchers: {ex.Message}");
+        }
+    }
 
     private static AdminActionLog Log(int adminId, string action, int? id, string? ip) => new()
     { AdminID = adminId, TargetTable = "Voucher", TargetID = id, ActionType = action, Description = $"{action} voucher", IPAddress = ip, CreatedAt = DateTime.UtcNow };

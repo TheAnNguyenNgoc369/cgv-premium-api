@@ -12,4 +12,5 @@ public static class LoyaltyTransactionTypes
     public const string Redeemed = "redeem";
     public const string Expired = "expire";
     public const string Adjusted = "adjust";
+    public const string Exchange = "exchange";
 }

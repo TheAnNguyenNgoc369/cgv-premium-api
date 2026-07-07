@@ -10,3 +10,9 @@ public sealed record VoucherCommand(
     string? Description, bool IsActive);
 
 public sealed record VoucherResult(bool Succeeded, string? Error, Voucher? Voucher, string ErrorType = "validation");
+
+public sealed record RedeemableVouchersResult(bool Succeeded, List<Voucher> Vouchers, string? Error = null);
+
+public sealed record RedeemVoucherResult(bool Succeeded, int RemainingPoints, string VoucherCode, string? Error = null, string ErrorType = "validation");
+
+public sealed record UserVouchersResult(bool Succeeded, List<UserVoucher> Vouchers, string? Error = null);

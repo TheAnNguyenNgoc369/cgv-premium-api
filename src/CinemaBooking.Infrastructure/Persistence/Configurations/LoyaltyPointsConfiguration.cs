@@ -33,6 +33,12 @@ public class LoyaltyPointsConfiguration : IEntityTypeConfiguration<LoyaltyPoints
             .HasForeignKey(p => p.BookingID)
             .HasConstraintName("FK_LoyaltyPoints_Booking");
 
-        builder.ToTable(t => t.HasCheckConstraint("CK_LoyaltyPoints_TransactionType", "[TransactionType] IN ('earn', 'redeem', 'expire', 'adjust')"));
+        builder.HasOne(p => p.Voucher)
+            .WithMany(v => v.LoyaltyPointsTransactions)
+            .HasForeignKey(p => p.VoucherID)
+            .HasConstraintName("FK_LoyaltyPoints_Voucher")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.ToTable(t => t.HasCheckConstraint("CK_LoyaltyPoints_TransactionType", "[TransactionType] IN ('earn', 'redeem', 'expire', 'adjust', 'exchange')"));
     }
 }

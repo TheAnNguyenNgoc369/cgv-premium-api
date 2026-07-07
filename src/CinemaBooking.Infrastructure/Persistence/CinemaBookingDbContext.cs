@@ -40,6 +40,7 @@ public class CinemaBookingDbContext : DbContext
     public DbSet<Voucher> Vouchers => Set<Voucher>();
     public DbSet<BookingVoucher> BookingVouchers => Set<BookingVoucher>();
     public DbSet<LoyaltyPoints> LoyaltyPoints => Set<LoyaltyPoints>();
+    public DbSet<UserVoucher> UserVouchers => Set<UserVoucher>();
     public DbSet<AdminActionLog> AdminActionLogs => Set<AdminActionLog>();
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
     public DbSet<Notification> Notifications => Set<Notification>();

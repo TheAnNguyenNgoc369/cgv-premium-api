@@ -22,3 +22,38 @@ public sealed record VoucherResponse(int VoucherId, string VoucherCode, string? 
     decimal DiscountValue, decimal? MinOrderValue, int? MaxUses, int UsedCount, DateTimeOffset ValidFrom,
     DateTimeOffset ValidUntil, string? ImageUrl, string? Description, bool IsActive, string Status, DateTime CreatedAt);
 public sealed record VoucherPageResponse(IReadOnlyList<VoucherResponse> Items, int PageIndex, int PageSize, int TotalItems, int TotalPages);
+
+public sealed record RedeemableVoucherResponse(
+    int VoucherId,
+    string VoucherCode,
+    string? Category,
+    string DiscountType,
+    decimal DiscountValue,
+    int RequiredPoints,
+    int? RemainingQuantity,
+    int? ExchangeLimit,
+    DateTimeOffset ValidFrom,
+    DateTimeOffset ValidUntil,
+    string? ImageUrl,
+    string? Description);
+
+public sealed record RedeemVoucherRequest(int VoucherId);
+
+public sealed record RedeemVoucherResponse(
+    bool Success,
+    int RemainingPoints,
+    string VoucherCode,
+    string? Message = null);
+
+public sealed record UserVoucherResponse(
+    int UserVoucherId,
+    int VoucherId,
+    string VoucherCode,
+    string DiscountType,
+    decimal DiscountValue,
+    string Status,
+    DateTimeOffset RedeemedAt,
+    DateTimeOffset ExpiredAt,
+    DateTimeOffset? UsedAt,
+    string? ImageUrl);
+
