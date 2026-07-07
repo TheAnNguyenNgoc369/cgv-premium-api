@@ -60,7 +60,7 @@ public sealed class CheckInService : ICheckInService
             Room = new CheckInLookupResult.RoomInfo
             {
                 Name = bookingWithDetails.Showtime.Room.RoomName,
-                RoomType = bookingWithDetails.Showtime.Room.RoomType
+                RoomType = bookingWithDetails.Showtime.Room.RoomType.TypeName
             },
             Showtime = new CheckInLookupResult.ShowtimeInfo
             {
