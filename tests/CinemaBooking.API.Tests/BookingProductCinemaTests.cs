@@ -174,6 +174,19 @@ public sealed class BookingProductAvailabilityTests
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task UpdateBookingStatusAsync(int bookingId, string status,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Booking?> GetBookingByQRCodeAsync(string qrCode,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Booking?> GetBookingWithFullDetailsForCheckInAsync(int bookingId,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<int?> GetStaffCinemaIdAsync(int staffId,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> PerformCheckInAsync(int bookingId, int staffId, string? ipAddress,
+            DateTime checkedInAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<(List<Booking> Bookings, int TotalCount)> GetCheckInHistoryAsync(
+            int? staffId, int? cinemaId, DateTime? from, DateTime? to, int page, int pageSize,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task UpdateBookingQRCodeAsync(int bookingId, string qrCode,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IDbContextTransaction> BeginTransactionAsync(
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }

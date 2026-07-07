@@ -10,6 +10,12 @@ public class CinemaBookingDbContext : DbContext
     {
     }
 
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.ConfigureWarnings(warnings =>
+            warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+    }
+
     public DbSet<Cinema> Cinemas => Set<Cinema>();
     public DbSet<LoyaltyTier> LoyaltyTiers => Set<LoyaltyTier>();
     public DbSet<User> Users => Set<User>();

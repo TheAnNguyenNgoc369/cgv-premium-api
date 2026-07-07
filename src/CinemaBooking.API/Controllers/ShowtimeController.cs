@@ -139,7 +139,7 @@ public sealed class ShowtimeController : ControllerBase
         new(showtime.ShowtimeID,
             new(showtime.MovieID, showtime.Movie.Title, showtime.Movie.AgeRating,
                 showtime.Movie.DurationMin, showtime.Movie.PosterURL),
-            new(showtime.RoomID, showtime.Room.RoomName, showtime.Room.RoomType, showtime.Room.Capacity),
+            new(showtime.RoomID, showtime.Room.RoomName, showtime.Room.RoomType.TypeName, showtime.Room.Capacity),
             AsUtc(showtime.StartTime), AsUtc(showtime.EndTime), showtime.BasePrice,
             EnumValueMapper.ToApiValue(showtime.Status),
             await _showtimeService.IsSoldOutAsync(showtime, cancellationToken));
@@ -149,7 +149,7 @@ public sealed class ShowtimeController : ControllerBase
         new(showtime.ShowtimeID,
             new(showtime.MovieID, showtime.Movie.Title, showtime.Movie.AgeRating,
                 showtime.Movie.DurationMin, showtime.Movie.PosterURL),
-            new(showtime.RoomID, showtime.Room.RoomName, showtime.Room.RoomType, showtime.Room.Capacity),
+            new(showtime.RoomID, showtime.Room.RoomName, showtime.Room.RoomType.TypeName, showtime.Room.Capacity),
             new CinemaSummaryResponse(
                 showtime.Room.CinemaID,
                 showtime.Room.Cinema.CinemaName,

@@ -84,6 +84,11 @@ public interface IBookingRepository
         int pageSize,
         CancellationToken cancellationToken = default);
 
+    Task UpdateBookingQRCodeAsync(
+        int bookingId,
+        string qrCode,
+        CancellationToken cancellationToken = default);
+
     Task<List<Booking>> GetBookingsByUserAsync(
         int userId,
         CancellationToken cancellationToken = default);

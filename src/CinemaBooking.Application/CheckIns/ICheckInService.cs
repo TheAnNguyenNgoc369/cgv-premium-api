@@ -8,7 +8,7 @@ public interface ICheckInService
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, string? BookingCode, DateTime? CheckedInAt)> CheckInAsync(
-        int bookingId,
+        string qrCode,
         int staffId,
         string? ipAddress,
         CancellationToken cancellationToken = default);

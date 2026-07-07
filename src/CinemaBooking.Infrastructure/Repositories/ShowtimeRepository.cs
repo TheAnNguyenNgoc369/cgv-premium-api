@@ -69,10 +69,10 @@ public sealed class ShowtimeRepository : IShowtimeRepository
             && s.StartTime < endTime && s.EndTime > startTime, cancellationToken);
 
     public Task<bool> HasRoomTypeStartConflictAsync(
-        int cinemaId, string roomType, DateTime startTime, int? excludingShowtimeId = null,
+        int cinemaId, int roomTypeId, DateTime startTime, int? excludingShowtimeId = null,
         CancellationToken cancellationToken = default) =>
         _db.Showtimes.AnyAsync(s => s.Room.CinemaID == cinemaId
-            && s.Room.RoomType == roomType
+            && s.Room.RoomTypeID == roomTypeId
             && s.StartTime == startTime
             && s.Status != "cancelled"
             && (!excludingShowtimeId.HasValue || s.ShowtimeID != excludingShowtimeId.Value),

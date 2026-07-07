@@ -22,7 +22,7 @@ public interface IShowtimeRepository
     Task<bool> HasConflictAsync(int roomId, DateTime startTime, DateTime endTime,
         int? excludingShowtimeId = null, CancellationToken cancellationToken = default);
     Task<bool> HasRoomTypeStartConflictAsync(
-        int cinemaId, string roomType, DateTime startTime,
+        int cinemaId, int roomTypeId, DateTime startTime,
         int? excludingShowtimeId = null, CancellationToken cancellationToken = default);
     Task<bool> HasActiveBookingOrHoldAsync(int showtimeId, DateTime now,
         CancellationToken cancellationToken = default);

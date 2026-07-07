@@ -171,6 +171,7 @@ public sealed class BookingRepository : IBookingRepository
             .Include(b => b.User)
             .Include(b => b.Showtime).ThenInclude(s => s.Movie)
             .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.RoomType)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat).ThenInclude(s => s.SeatType)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
@@ -289,6 +290,19 @@ public sealed class BookingRepository : IBookingRepository
             .ToListAsync(cancellationToken);
 
         return (bookings, totalCount);
+    }
+
+    public async Task UpdateBookingQRCodeAsync(
+        int bookingId,
+        string qrCode,
+        CancellationToken cancellationToken = default)
+    {
+        var booking = await _db.Bookings.FindAsync(new object[] { bookingId }, cancellationToken);
+        if (booking is not null)
+        {
+            booking.QRCode = qrCode;
+            await _db.SaveChangesAsync(cancellationToken);
+        }
     }
 
     public async Task<List<Booking>> GetBookingsByUserAsync(

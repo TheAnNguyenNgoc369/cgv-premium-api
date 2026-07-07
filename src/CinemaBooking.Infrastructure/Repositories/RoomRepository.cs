@@ -91,7 +91,7 @@ public sealed class RoomRepository : IRoomRepository
         int roomId,
         int cinemaId,
         string roomName,
-        string roomType,
+        int roomTypeId,
         string status,
         string? description,
         CancellationToken cancellationToken = default)
@@ -106,7 +106,7 @@ public sealed class RoomRepository : IRoomRepository
 
         room.CinemaID = cinemaId;
         room.RoomName = roomName;
-        room.RoomType = roomType;
+        room.RoomTypeID = roomTypeId;
         room.Status = status;
         room.Description = description;
 

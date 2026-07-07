@@ -106,7 +106,7 @@ public sealed class CheckInsController : ControllerBase
         var ipAddress = GetClientIpAddress();
 
         var result = await _checkInService.CheckInAsync(
-            request.BookingId,
+            request.QRCode,
             staffId,
             ipAddress,
             cancellationToken);

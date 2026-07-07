@@ -195,7 +195,7 @@ public sealed class ShowtimeService : IShowtimeService
 
             if (normalizedStatus != "cancelled"
                 && await _showtimeRepository.HasRoomTypeStartConflictAsync(
-                    room.CinemaID, room.RoomType, startTime, existing?.ShowtimeID, cancellationToken))
+                    room.CinemaID, room.RoomTypeID, startTime, existing?.ShowtimeID, cancellationToken))
                 return (false,
                     "Another showtime with the same room type already starts at this time in the cinema",
                     (Showtime?)null);
@@ -260,6 +260,6 @@ public sealed class ShowtimeService : IShowtimeService
             seat.IsGap ? seat.Status : bookedSeatIds.Contains(seat.SeatID) ? SeatStatus.Booked
                 : heldSeatIds.Contains(seat.SeatID) ? SeatStatus.Held : SeatStatus.Available,
             seat.IsGap)).ToList();
-        return (new SeatMapResult(showtime.ShowtimeID, showtime.Room.RoomName, showtime.Room.RoomType, seatResults), null);
+        return (new SeatMapResult(showtime.ShowtimeID, showtime.Room.RoomName, showtime.Room.RoomType.TypeName, seatResults), null);
     }
 }
