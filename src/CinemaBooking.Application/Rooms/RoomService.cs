@@ -8,12 +8,10 @@ namespace CinemaBooking.Application.Rooms;
 public sealed class RoomService : IRoomService
 {
     private readonly IRoomRepository _roomRepository;
-    private readonly IRoomTypeRepository _roomTypeRepository;
 
-    public RoomService(IRoomRepository roomRepository, IRoomTypeRepository roomTypeRepository)
+    public RoomService(IRoomRepository roomRepository)
     {
         _roomRepository = roomRepository;
-        _roomTypeRepository = roomTypeRepository;
     }
 
     public Task<List<Room>> GetRoomsAsync(CancellationToken cancellationToken = default)
@@ -59,17 +57,10 @@ public sealed class RoomService : IRoomService
             return (false, validation.ErrorMessage, null);
         }
 
-        var roomTypeId = await _roomTypeRepository.GetRoomTypeIdByNameAsync(
-            validation.RoomType!, cancellationToken);
-
-        if (roomTypeId is null)
-            return (false, "Invalid room type", null);
-
         var room = new Room
         {
             CinemaID = cinemaId,
             RoomName = name.Trim(),
-            RoomTypeID = roomTypeId.Value,
             RoomTypeID = roomTypeId,
             Capacity = 0,
             Status = validation.Status!,
@@ -114,17 +105,10 @@ public sealed class RoomService : IRoomService
             return (false, validation.ErrorMessage, null);
         }
 
-        var roomTypeId = await _roomTypeRepository.GetRoomTypeIdByNameAsync(
-            validation.RoomType!, cancellationToken);
-
-        if (roomTypeId is null)
-            return (false, "Invalid room type", null);
-
         var updatedRoom = await _roomRepository.UpdateAsync(
             roomId,
             cinemaId,
             name.Trim(),
-            roomTypeId.Value,
             roomTypeId,
             validation.Status!,
             NormalizeNullable(description),
