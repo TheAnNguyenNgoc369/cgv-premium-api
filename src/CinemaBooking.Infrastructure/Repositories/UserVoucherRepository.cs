@@ -32,27 +32,32 @@ public sealed class UserVoucherRepository : IUserVoucherRepository
         AdminActionLog log,
         CancellationToken ct)
     {
-        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        var strategy = _db.Database.CreateExecutionStrategy();
 
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserID == userVoucher.UserID, ct);
-        if (user is null) throw new InvalidOperationException("User not found");
-
-        var voucher = await _db.Vouchers.FirstOrDefaultAsync(v => v.VoucherID == userVoucher.VoucherID, ct);
-        if (voucher is null) throw new InvalidOperationException("Voucher not found");
-
-        user.TotalPoints -= pointsToDeduct;
-        user.UpdatedAt = DateTime.UtcNow;
-
-        if (voucher.RemainingQuantity.HasValue)
+        await strategy.ExecuteAsync(async () =>
         {
-            voucher.RemainingQuantity--;
-        }
+            await using var transaction = await _db.Database.BeginTransactionAsync(ct);
 
-        await _db.Set<UserVoucher>().AddAsync(userVoucher, ct);
-        await _db.LoyaltyPoints.AddAsync(loyaltyPoint, ct);
-        _db.AdminActionLogs.Add(log);
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserID == userVoucher.UserID, ct);
+            if (user is null) throw new InvalidOperationException("User not found");
 
-        await _db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
+            var voucher = await _db.Vouchers.FirstOrDefaultAsync(v => v.VoucherID == userVoucher.VoucherID, ct);
+            if (voucher is null) throw new InvalidOperationException("Voucher not found");
+
+            user.TotalPoints -= pointsToDeduct;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            if (voucher.RemainingQuantity.HasValue)
+            {
+                voucher.RemainingQuantity--;
+            }
+
+            await _db.Set<UserVoucher>().AddAsync(userVoucher, ct);
+            await _db.LoyaltyPoints.AddAsync(loyaltyPoint, ct);
+            _db.AdminActionLogs.Add(log);
+
+            await _db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        });
     }
 }
