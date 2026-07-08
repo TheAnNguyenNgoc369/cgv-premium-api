@@ -135,7 +135,7 @@ public sealed class RefundService : IRefundService
             var walletAfterRefund = await _walletRepository.GetWalletByUserIdAsync(
                 booking.UserID.Value, cancellationToken);
 
-            var transaction = new WalletTransaction
+            await _walletRepository.CreateTransactionAsync(new WalletTransaction
             {
                 WalletID = wallet.WalletID,
                 Amount = refund.Amount,
@@ -145,8 +145,7 @@ public sealed class RefundService : IRefundService
                 RefundID = refund.RefundID,
                 Description = $"Refund booking {booking.BookingCode}",
                 CreatedAt = now
-            };
-            await _walletRepository.CreateTransactionAsync(transaction, cancellationToken);
+            }, cancellationToken);
 
             await _paymentRepository.UpdatePaymentForRefundAsync(
                 booking.Payment.PaymentID,
@@ -183,6 +182,8 @@ public sealed class RefundService : IRefundService
 
         await _notificationOutbox.EnqueueRefundCompletedAsync(
             bookingId, result.RefundAmount, now, cancellationToken);
+        await _notificationOutbox.EnqueueWalletRefundAsync(
+            booking.UserID!.Value, result.RefundAmount, now, cancellationToken);
 
         return (true, null, result);
     }
