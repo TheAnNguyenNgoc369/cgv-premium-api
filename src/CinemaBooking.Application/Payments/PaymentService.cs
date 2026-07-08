@@ -319,6 +319,7 @@ public sealed class PaymentService : IPaymentService
                 booking.UserID.Value, booking.FinalAmount, cancellationToken))
             return Error(PaymentErrorType.Validation, "Insufficient wallet balance.");
 
+        var transactionTime = DateTime.UtcNow;
         var result = await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             await _walletRepository.DeductBalanceAsync(
@@ -356,8 +357,8 @@ public sealed class PaymentService : IPaymentService
                 BalanceAfter = wallet.Balance,
                 TransactionType = WalletTransactionType.Payment,
                 BookingID = booking.BookingID,
-                Description = $"Payment for booking {booking.BookingCode}",
-                CreatedAt = DateTime.UtcNow
+                Description = $"Wallet payment for booking {booking.BookingCode}",
+                CreatedAt = transactionTime
             }, cancellationToken);
 
             await FinalizeSuccessfulBookingAsync(booking, cancellationToken);
@@ -370,6 +371,8 @@ public sealed class PaymentService : IPaymentService
                 CalculatePointsEarned(booking.FinalAmount)));
         }, cancellationToken);
         await _notificationOutbox.EnqueueBookingSuccessAsync(booking.BookingID, cancellationToken);
+        await _notificationOutbox.EnqueueWalletPaymentAsync(
+            booking.UserID.Value, booking.FinalAmount, transactionTime, cancellationToken);
         return result;
     }
 
