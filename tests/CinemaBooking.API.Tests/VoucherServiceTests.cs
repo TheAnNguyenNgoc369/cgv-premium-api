@@ -61,10 +61,34 @@ public sealed class VoucherServiceTests
         public Task<List<UserVoucher>> GetUserVouchersAsync(int userId, CancellationToken ct) => Task.FromResult(new List<UserVoucher>());
         public Task<UserVoucher?> GetUserVoucherAsync(int userId, int voucherId, CancellationToken ct) => Task.FromResult<UserVoucher?>(null);
         public Task AddUserVoucherAsync(UserVoucher userVoucher, CancellationToken ct) => Task.CompletedTask;
+        public Task<UserVoucher?> GetByIdAsync(int id, CancellationToken ct) => throw new NotSupportedException();
+        public Task RedeemVoucherAsync(UserVoucher userVoucher, LoyaltyPoints loyaltyPoints, int pointsRedeemed, AdminActionLog actionLog, CancellationToken ct) => throw new NotSupportedException();
     }
 
     private sealed class StubUserRepository : IUserRepository
     {
         public Task<User?> GetByIdAsync(int id, CancellationToken ct) => Task.FromResult<User?>(null);
+        public Task<User?> GetProfileByIdAsync(int id, CancellationToken ct) => throw new NotSupportedException();
+        public Task<bool> EmailExistsAsync(string email, CancellationToken ct) => throw new NotSupportedException();
+        public Task<User?> GetByEmailAsync(string email, CancellationToken ct) => throw new NotSupportedException();
+        public Task<User?> UpdateProfileAsync(int userId, string fullName, string? phoneNumber, CancellationToken ct) => throw new NotSupportedException();
+        public Task<User?> UpdateAvatarAsync(int userId, string? avatarUrl, string? publicId, CancellationToken ct) => throw new NotSupportedException();
+        public Task<Wallet?> GetWalletByUserIdAsync(int userId, CancellationToken ct) => throw new NotSupportedException();
+        public Task<bool> DeleteAsync(int userId, CancellationToken ct) => throw new NotSupportedException();
+        public Task AddUserWithWalletAsync(User user, Wallet wallet, CancellationToken ct) => throw new NotSupportedException();
+        public Task AddUserWithWalletAndVerificationTokenAsync(User user, Wallet wallet, EmailVerificationToken token, CancellationToken ct) => throw new NotSupportedException();
+        public Task AddEmailVerificationTokenAsync(EmailVerificationToken token, CancellationToken ct) => throw new NotSupportedException();
+        public Task<EmailVerificationToken?> GetEmailVerificationTokenAsync(string token, CancellationToken ct) => throw new NotSupportedException();
+        public Task<EmailVerificationToken?> GetLatestEmailVerificationTokenAsync(int userId, CancellationToken ct) => throw new NotSupportedException();
+        public Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken ct) => throw new NotSupportedException();
+        public Task<PasswordResetToken?> GetLatestPasswordResetTokenAsync(int userId, CancellationToken ct) => throw new NotSupportedException();
+        public Task ReplaceUnusedPasswordResetTokensAsync(int userId, PasswordResetToken newToken, CancellationToken ct) => throw new NotSupportedException();
+        public Task ReplaceUnverifiedEmailVerificationTokensAsync(int userId, EmailVerificationToken newToken, CancellationToken ct) => throw new NotSupportedException();
+        public Task DeleteEmailVerificationTokenAsync(string token, CancellationToken ct) => throw new NotSupportedException();
+        public Task DeletePasswordResetTokenAsync(string token, CancellationToken ct) => throw new NotSupportedException();
+        public Task<bool> TryResetPasswordAsync(string token, string newPasswordHash, DateTime now, CancellationToken ct) => throw new NotSupportedException();
+        public Task<bool> TryIncrementTokenVersionAsync(int userId, int expectedVersion, CancellationToken ct) => throw new NotSupportedException();
+        public Task<bool> TryUpdatePasswordHashAsync(int userId, string oldPasswordHash, string newPasswordHash, CancellationToken ct) => throw new NotSupportedException();
+        public Task SaveChangesAsync(CancellationToken ct) => throw new NotSupportedException();
     }
 }

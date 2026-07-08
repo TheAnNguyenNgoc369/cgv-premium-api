@@ -79,7 +79,9 @@ public sealed class CheckInsController : ControllerBase
                 Row = s.Row,
                 Column = s.Column,
                 SeatType = s.SeatType,
-                TicketPrice = s.TicketPrice
+                TicketPrice = s.TicketPrice,
+                IsCheckedIn = s.IsCheckedIn,
+                CheckedInAt = s.CheckedInAt
             }).ToList(),
             Products = result.Data.Products.Select(p => new CheckInLookupResponse.ProductInfo
             {

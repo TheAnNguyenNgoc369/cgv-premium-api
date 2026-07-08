@@ -20,8 +20,6 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.Property(b => b.PointsRedeemed).HasDefaultValue(0);
         builder.Property(b => b.Status).HasMaxLength(30).IsRequired().HasDefaultValue("pending");
         builder.Property(b => b.QRCode).HasMaxLength(100);
-        builder.Property(b => b.CheckedInAt);
-        builder.Property(b => b.CheckedInByUserId);
         builder.Property(b => b.BookingDate).HasDefaultValueSql("GETDATE()");
         builder.Property(b => b.UpdatedAt).HasDefaultValueSql("GETDATE()");
 
@@ -30,7 +28,6 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.HasIndex(b => b.UserID).HasDatabaseName("IX_Booking_UserID");
         builder.HasIndex(b => b.ShowtimeID).HasDatabaseName("IX_Booking_ShowtimeID");
         builder.HasIndex(b => b.Status).HasDatabaseName("IX_Booking_Status");
-        builder.HasIndex(b => b.CheckedInByUserId).HasDatabaseName("IX_Booking_CheckedInByUserId");
 
         builder.HasOne(b => b.User)
             .WithMany(u => u.Bookings)
@@ -47,13 +44,6 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
             .WithMany(u => u.StaffBookings)
             .HasForeignKey(b => b.CreatedByStaffID)
             .HasConstraintName("FK_Booking_CreatedByStaff");
-
-        builder.HasOne(b => b.CheckedInByUser)
-            .WithMany()
-            .HasForeignKey(b => b.CheckedInByUserId)
-            .IsRequired(false)
-            .OnDelete(Microsoft.EntityFrameworkCore.DeleteBehavior.Restrict)
-            .HasConstraintName("FK_Booking_CheckedInByUser");
 
         builder.ToTable(t =>
         {
