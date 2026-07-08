@@ -139,29 +139,34 @@ public sealed class UserRepository : IUserRepository
             return false;
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        var wallet = await _dbContext.Wallets
-            .FirstOrDefaultAsync(w => w.UserID == userId, cancellationToken);
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
 
-        if (wallet is not null)
+        return await strategy.ExecuteAsync(async () =>
         {
-            _dbContext.Wallets.Remove(wallet);
-        }
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+            var wallet = await _dbContext.Wallets
+                .FirstOrDefaultAsync(w => w.UserID == userId, cancellationToken);
 
-        _dbContext.Users.Remove(user);
+            if (wallet is not null)
+            {
+                _dbContext.Wallets.Remove(wallet);
+            }
 
-        try
-        {
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return true;
-        }
-        catch (DbUpdateException)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            _dbContext.ChangeTracker.Clear();
-            return false;
-        }
+            _dbContext.Users.Remove(user);
+
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return true;
+            }
+            catch (DbUpdateException)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                _dbContext.ChangeTracker.Clear();
+                return false;
+            }
+        });
     }
 
     public async Task AddUserWithWalletAsync(
@@ -169,16 +174,21 @@ public sealed class UserRepository : IUserRepository
         Wallet wallet,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
 
-        _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        wallet.UserID = user.UserID;
-        _dbContext.Wallets.Add(wallet);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            _dbContext.Users.Add(user);
+            await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await transaction.CommitAsync(cancellationToken);
+            wallet.UserID = user.UserID;
+            _dbContext.Wallets.Add(wallet);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+        });
     }
 
     public async Task AddUserWithWalletAndVerificationTokenAsync(
@@ -187,19 +197,24 @@ public sealed class UserRepository : IUserRepository
         EmailVerificationToken verificationToken,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
 
-        _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        wallet.UserID = user.UserID;
-        verificationToken.UserID = user.UserID;
+            _dbContext.Users.Add(user);
+            await _dbContext.SaveChangesAsync(cancellationToken);
 
-        _dbContext.Wallets.Add(wallet);
-        _dbContext.EmailVerificationTokens.Add(verificationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            wallet.UserID = user.UserID;
+            verificationToken.UserID = user.UserID;
 
-        await transaction.CommitAsync(cancellationToken);
+            _dbContext.Wallets.Add(wallet);
+            _dbContext.EmailVerificationTokens.Add(verificationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+        });
     }
 
     public Task AddEmailVerificationTokenAsync(
@@ -310,51 +325,56 @@ public sealed class UserRepository : IUserRepository
         DateTime resetAt,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
 
-        var userId = await _dbContext.PasswordResetTokens
-            .AsNoTracking()
-            .Where(t => t.Token == token)
-            .Select(t => (int?)t.UserID)
-            .SingleOrDefaultAsync(cancellationToken);
-
-        if (!userId.HasValue)
+        return await strategy.ExecuteAsync(async () =>
         {
-            await transaction.RollbackAsync(cancellationToken);
-            return false;
-        }
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        var consumedTokenCount = await _dbContext.PasswordResetTokens
-            .Where(t => t.Token == token
-                && !t.UsedAt.HasValue
-                && t.ExpiresAt > resetAt)
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(t => t.UsedAt, resetAt),
-                cancellationToken);
+            var userId = await _dbContext.PasswordResetTokens
+                .AsNoTracking()
+                .Where(t => t.Token == token)
+                .Select(t => (int?)t.UserID)
+                .SingleOrDefaultAsync(cancellationToken);
 
-        if (consumedTokenCount == 0)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            return false;
-        }
+            if (!userId.HasValue)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return false;
+            }
 
-        var updatedUserCount = await _dbContext.Users
-            .Where(u => u.UserID == userId.Value)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(u => u.PasswordHash, passwordHash)
-                    .SetProperty(u => u.UpdatedAt, resetAt)
-                    .SetProperty(u => u.TokenVersion, u => u.TokenVersion + 1),
-                cancellationToken);
+            var consumedTokenCount = await _dbContext.PasswordResetTokens
+                .Where(t => t.Token == token
+                    && !t.UsedAt.HasValue
+                    && t.ExpiresAt > resetAt)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(t => t.UsedAt, resetAt),
+                    cancellationToken);
 
-        if (updatedUserCount != 1)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            return false;
-        }
+            if (consumedTokenCount == 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return false;
+            }
 
-        await transaction.CommitAsync(cancellationToken);
-        return true;
+            var updatedUserCount = await _dbContext.Users
+                .Where(u => u.UserID == userId.Value)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(u => u.PasswordHash, passwordHash)
+                        .SetProperty(u => u.UpdatedAt, resetAt)
+                        .SetProperty(u => u.TokenVersion, u => u.TokenVersion + 1),
+                    cancellationToken);
+
+            if (updatedUserCount != 1)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return false;
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        });
     }
 
     public async Task<bool> TryIncrementTokenVersionAsync(

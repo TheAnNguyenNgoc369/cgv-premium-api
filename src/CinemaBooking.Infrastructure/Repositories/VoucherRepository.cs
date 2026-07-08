@@ -25,14 +25,18 @@ public sealed class VoucherRepository : IVoucherRepository
     public Task<bool> HasTransactionsAsync(int id, CancellationToken ct) => _db.BookingVouchers.AnyAsync(v => v.VoucherID == id, ct);
     public async Task<Voucher> AddAsync(Voucher voucher, AdminActionLog log, CancellationToken ct)
     {
-        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
-        _db.Vouchers.Add(voucher);
-        await _db.SaveChangesAsync(ct);
-        log.TargetID = voucher.VoucherID;
-        _db.AdminActionLogs.Add(log);
-        await _db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        return voucher;
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+            _db.Vouchers.Add(voucher);
+            await _db.SaveChangesAsync(ct);
+            log.TargetID = voucher.VoucherID;
+            _db.AdminActionLogs.Add(log);
+            await _db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return voucher;
+        });
     }
     public async Task<Voucher?> UpdateAsync(Voucher voucher, AdminActionLog log, CancellationToken ct)
     { _db.AdminActionLogs.Add(log); await _db.SaveChangesAsync(ct); return voucher; }
