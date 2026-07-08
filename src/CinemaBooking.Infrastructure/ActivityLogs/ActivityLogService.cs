@@ -11,6 +11,7 @@ public sealed class ActivityLogService : IActivityLogService
     private static readonly TimeZoneInfo Vietnam = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
     private static readonly IReadOnlyDictionary<string, string> Modules = new Dictionary<string, string>
     {
+        [AdminActionTypes.CreateUser]="UserManagement", [AdminActionTypes.UpdateUser]="UserManagement",
         [AdminActionTypes.LockUser]="UserManagement", [AdminActionTypes.UnlockUser]="UserManagement",
         [AdminActionTypes.ChangeRole]="UserManagement", [AdminActionTypes.DeleteUser]="UserManagement",
         [AdminActionTypes.CreateVoucher]="Voucher", [AdminActionTypes.UpdateVoucher]="Voucher", [AdminActionTypes.DeleteVoucher]="Voucher",
@@ -22,7 +23,8 @@ public sealed class ActivityLogService : IActivityLogService
         [AdminActionTypes.CreateCinema]="Cinema", [AdminActionTypes.UpdateCinema]="Cinema", [AdminActionTypes.DeleteCinema]="Cinema",
         [AdminActionTypes.CreateGenre]="Genre", [AdminActionTypes.UpdateGenre]="Genre", [AdminActionTypes.DeleteGenre]="Genre",
         [AdminActionTypes.CreateMovie]="Movie", [AdminActionTypes.UpdateMovie]="Movie", [AdminActionTypes.DeleteMovie]="Movie",
-        [AdminActionTypes.ExportReport]="Report"
+        [AdminActionTypes.ExportReport]="Report", [AdminActionTypes.Refund]="Refund",
+        [AdminActionTypes.CheckIn]="CheckIn", [AdminActionTypes.RedeemVoucher]="Voucher"
         ,[AdminActionTypes.CreateRoomType]="RoomType", [AdminActionTypes.UpdateRoomType]="RoomType", [AdminActionTypes.DeleteRoomType]="RoomType"
     };
     private readonly CinemaBookingDbContext _db;

@@ -348,8 +348,14 @@ public sealed class ShowtimeServiceTests
             Task.FromResult((new List<Showtime>(), 0));
         public Task<bool> HasActiveBookingOrHoldAsync(int showtimeId, DateTime now,
             CancellationToken cancellationToken = default) => Task.FromResult(HasActiveBookingOrHold);
+        public Task<bool> HasSuccessfulBookingAsync(int showtimeId,
+            CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task<bool> HasAnyBookingOrHoldAsync(int showtimeId,
             CancellationToken cancellationToken = default) => Task.FromResult(HasAnyBookingOrHold);
+        public Task<List<Showtime>> GetShowtimesByRangeAsync(
+            DateTime startUtc, DateTime endUtc, int? cinemaId, bool onlyActiveLocations,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new List<Showtime>());
         public Task<IReadOnlySet<int>> GetSoldOutShowtimeIdsAsync(
             IReadOnlyCollection<int> showtimeIds, DateTime now,
             CancellationToken cancellationToken = default) =>

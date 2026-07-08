@@ -104,6 +104,9 @@ public sealed class ShowtimeService : IShowtimeService
 
         if (!hasProtectedChanges && manualStatus == "cancelled")
         {
+            if (await _showtimeRepository.HasSuccessfulBookingAsync(id, cancellationToken))
+                return (false, "Showtime has successful bookings", null);
+
             existing.Status = "cancelled";
             var cancelled = await _showtimeRepository.UpdateAsync(existing, cancellationToken);
             return cancelled is null ? (false, "Showtime not found", null) : (true, null, cancelled);
@@ -130,6 +133,37 @@ public sealed class ShowtimeService : IShowtimeService
         Showtime showtime, CancellationToken cancellationToken = default) =>
         (await _showtimeRepository.GetSoldOutShowtimeIdsAsync(
             [showtime.ShowtimeID], DateTime.UtcNow, cancellationToken)).Contains(showtime.ShowtimeID);
+
+    public async Task<(bool Succeeded, string? ErrorMessage, IReadOnlyList<Showtime> Items, IReadOnlySet<int> SoldOutShowtimeIds)>
+        GetShowtimesByRangeAsync(
+            DateOnly startDate,
+            DateOnly endDate,
+            int? cinemaId = null,
+            int? managerCinemaId = null,
+            CancellationToken cancellationToken = default)
+    {
+        if (endDate < startDate)
+            return (false, "endDate must be greater than or equal to startDate", [], new HashSet<int>());
+
+        if (managerCinemaId.HasValue)
+        {
+            if (cinemaId.HasValue && cinemaId != managerCinemaId)
+                return (false, CinemaScopeMessages.AccessDenied, [], new HashSet<int>());
+            cinemaId = managerCinemaId;
+        }
+
+        var (fromUtc, _) = CinemaBooking.Shared.Time.VietnamTime.GetUtcDayRange(startDate);
+        var (_, toUtc) = CinemaBooking.Shared.Time.VietnamTime.GetUtcDayRange(endDate);
+        var items = await _showtimeRepository.GetShowtimesByRangeAsync(
+            fromUtc,
+            toUtc,
+            cinemaId,
+            onlyActiveLocations: !managerCinemaId.HasValue,
+            cancellationToken);
+        var soldOutIds = await _showtimeRepository.GetSoldOutShowtimeIdsAsync(
+            items.Select(item => item.ShowtimeID).ToArray(), DateTime.UtcNow, cancellationToken);
+        return (true, null, items, soldOutIds);
+    }
 
     private async Task<(bool Succeeded, string? ErrorMessage, Showtime? Showtime)> SaveAsync(
         Showtime? existing, int movieId, int roomId, DateTime startTime,
@@ -223,6 +257,17 @@ public sealed class ShowtimeService : IShowtimeService
 
     private static string CalculateStatus(DateTime startTime, DateTime now) =>
         now < startTime ? "scheduled" : "completed";
+
+    public string GetDisplayStatus(Showtime showtime, DateTime now)
+    {
+        if (showtime.Status == "cancelled")
+            return "cancelled";
+
+        return now < showtime.EndTime ? "scheduled" : "completed";
+    }
+
+    public bool IsActive(Showtime showtime, DateTime now) =>
+        showtime.Status != "cancelled" && now < showtime.EndTime;
 
     private static string? NormalizeManualStatus(string? status)
     {

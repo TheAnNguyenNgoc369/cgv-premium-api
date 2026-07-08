@@ -24,7 +24,7 @@ public sealed class ShowtimeTypeService(IShowtimeTypeRepository repository) : IS
     {
         var value = await repository.GetAsync(id, true, ct); if (value is null) return new(false, "Showtime type not found.", null); if (scope.HasValue && value.CinemaID != scope) return new(false, "Access denied.", null);
         var error = await ValidateTemplate(value.CinemaID, name, slots, id, scope, ct); if (error is not null) return new(false, error, null);
-        value.Name = name.Trim(); value.IsActive = active; value.UpdatedAt = DateTime.UtcNow; value.Slots.Clear(); foreach (var slot in slots.Distinct().Order()) value.Slots.Add(new() { StartTime = slot }); await repository.SaveAsync(ct); return new(true, null, value);
+        value.Name = name.Trim(); value.IsActive = active; value.UpdatedAt = DateTime.UtcNow; repository.ReplaceSlots(value, slots.Distinct().Order()); await repository.SaveAsync(ct); return new(true, null, value);
     }
     public async Task<ShowtimeTypeWriteResult> DeleteAsync(int id, int? scope, CancellationToken ct)
     { var value = await repository.GetAsync(id, true, ct); if (value is null) return new(false, "Showtime type not found.", null); if (scope.HasValue && value.CinemaID != scope) return new(false, "Access denied.", null); value.IsActive = false; value.UpdatedAt = DateTime.UtcNow; await repository.SaveAsync(ct); return new(true, null, value); }

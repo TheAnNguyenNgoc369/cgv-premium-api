@@ -80,11 +80,11 @@ public sealed class RefundService : IRefundService
         if (booking.Payment is null)
             return (false, "Booking has no payment record.", null);
 
-        if (booking.Payment.Status != PaymentStatus.Completed)
-            return (false, "Booking has not been paid.", null);
-
         if (booking.Payment.Status == PaymentStatus.Refunded)
             return (false, "Booking has already been refunded.", null);
+
+        if (booking.Payment.Status != PaymentStatus.Completed)
+            return (false, "Booking has not been paid.", null);
 
         var hasUsedTicket = booking.BookingSeats
             .Any(bs => bs.Ticket is not null && bs.Ticket.Status == "used");
@@ -115,6 +115,15 @@ public sealed class RefundService : IRefundService
 
         var result = await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
+            if (!await _paymentRepository.TryMarkCompletedPaymentAsRefundedAsync(
+                    booking.Payment.PaymentID,
+                    booking.FinalAmount,
+                    reason,
+                    requestedBy,
+                    now,
+                    cancellationToken))
+                return null;
+
             var refund = new Refund
             {
                 BookingID = bookingId,
@@ -147,13 +156,6 @@ public sealed class RefundService : IRefundService
                 CreatedAt = now
             }, cancellationToken);
 
-            await _paymentRepository.UpdatePaymentForRefundAsync(
-                booking.Payment.PaymentID,
-                refund.Amount,
-                reason,
-                requestedBy,
-                cancellationToken);
-
             await _bookingRepository.UpdateBookingStatusAsync(
                 bookingId,
                 BookingStatus.Refunded,
@@ -179,6 +181,9 @@ public sealed class RefundService : IRefundService
                 Status = BookingStatus.Refunded
             };
         }, cancellationToken);
+
+        if (result is null)
+            return (false, "Booking has already been refunded.", null);
 
         await _notificationOutbox.EnqueueRefundCompletedAsync(
             bookingId, result.RefundAmount, now, cancellationToken);

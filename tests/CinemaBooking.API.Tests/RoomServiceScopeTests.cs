@@ -71,6 +71,8 @@ public sealed class RoomServiceScopeTests
             CancellationToken cancellationToken = default) => Task.FromResult<Room?>(null);
         public Task<bool> HasActiveOrUpcomingShowtimesAsync(
             int roomId, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task<bool> HasUpcomingShowtimesAsync(
+            int roomId, DateTime now, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task<bool> HasAnyShowtimesAsync(
             int roomId, CancellationToken cancellationToken = default) =>
             Task.FromResult(HasAnyShowtimes);

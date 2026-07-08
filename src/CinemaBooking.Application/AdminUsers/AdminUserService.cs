@@ -76,13 +76,16 @@ public sealed class AdminUserService : IAdminUserService
         var email = command.Email.Trim();
         if (await _repository.EmailExistsAsync(email, cancellationToken: cancellationToken))
             return Conflict<User>("Email is already registered");
+        var phone = command.Phone.Trim();
+        if (await _repository.PhoneExistsAsync(phone, cancellationToken: cancellationToken))
+            return Conflict<User>("Phone is already registered");
 
         var now = DateTime.UtcNow;
         var user = new User
         {
             FullName = command.FullName.Trim(),
             Email = email,
-            Phone = command.Phone.Trim(),
+            Phone = phone,
             PasswordHash = PasswordHasher.Hash(command.Password),
             Role = roleResult.Value!,
             Status = statusResult.Item2!,
@@ -112,18 +115,21 @@ public sealed class AdminUserService : IAdminUserService
         var email = command.Email.Trim();
         if (await _repository.EmailExistsAsync(email, userId, cancellationToken))
             return Conflict<User>("Email is already registered");
+        var phone = command.Phone.Trim();
+        if (await _repository.PhoneExistsAsync(phone, userId, cancellationToken))
+            return Conflict<User>("Phone is already registered");
 
         var changedFields = new List<string>();
         if (existing.FullName != command.FullName.Trim()) changedFields.Add("FullName");
         if (!string.Equals(existing.Email, email, StringComparison.OrdinalIgnoreCase)) changedFields.Add("Email");
-        if (existing.Phone != command.Phone.Trim()) changedFields.Add("Phone");
+        if (existing.Phone != phone) changedFields.Add("Phone");
         if (existing.CinemaID != command.CinemaId) changedFields.Add("CinemaID");
         var description = changedFields.Count == 0
             ? "Profile update requested; no values changed."
             : $"Updated fields: {string.Join(", ", changedFields)}.";
         var log = BuildLog(adminId, userId, AdminActionTypes.UpdateUser, description, ipAddress);
         var user = await _repository.UpdateAsync(
-            userId, command.FullName.Trim(), email, command.Phone.Trim(), command.CinemaId,
+            userId, command.FullName.Trim(), email, phone, command.CinemaId,
             log, cancellationToken);
         return user is null ? NotFound<User>() : AdminUserResult<User>.Success(user);
     }

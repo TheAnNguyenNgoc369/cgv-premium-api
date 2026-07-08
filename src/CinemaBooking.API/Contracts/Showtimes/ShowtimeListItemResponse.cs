@@ -11,4 +11,5 @@ public sealed record ShowtimeListItemResponse(
     DateTime EndTime,
     decimal BasePrice,
     string Status,
+    bool IsActive,
     bool IsSoldOut);

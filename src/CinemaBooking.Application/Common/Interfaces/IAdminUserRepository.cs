@@ -11,6 +11,8 @@ public interface IAdminUserRepository
     Task<User?> GetByIdAsync(int userId, CancellationToken cancellationToken = default);
     Task<bool> EmailExistsAsync(string email, int? excludingUserId = null,
         CancellationToken cancellationToken = default);
+    Task<bool> PhoneExistsAsync(string phone, int? excludingUserId = null,
+        CancellationToken cancellationToken = default);
     Task<bool> CinemaExistsAsync(int cinemaId, CancellationToken cancellationToken = default);
     Task<bool> HasDeletionBlockingDataAsync(
         int userId,

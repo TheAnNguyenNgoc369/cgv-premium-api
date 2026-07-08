@@ -4,9 +4,11 @@ using System.Net;
 using System.Text.RegularExpressions;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Security;
+using CinemaBooking.Application.Configuration;
 using CinemaBooking.Application.Notifications;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
+using Microsoft.Extensions.Options;
 
 namespace CinemaBooking.Application.Authentication;
 
@@ -28,15 +30,18 @@ public sealed class AuthService : IAuthService
     private readonly IUserRepository _userRepository;
     private readonly IEmailSender _emailSender;
     private readonly IAuthEmailService _authEmailService;
+    private readonly FrontendSettings _frontendSettings;
 
     public AuthService(
         IUserRepository userRepository,
         IEmailSender emailSender,
-        IAuthEmailService authEmailService)
+        IAuthEmailService authEmailService,
+        IOptions<FrontendSettings>? frontendSettings = null)
     {
         _userRepository = userRepository;
         _emailSender = emailSender;
         _authEmailService = authEmailService;
+        _frontendSettings = frontendSettings?.Value ?? new FrontendSettings { BaseUrl = "http://localhost:5173" };
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, int? UserId, bool VerificationEmailSent)> RegisterAsync(
@@ -58,6 +63,11 @@ public sealed class AuthService : IAuthService
         if (await _userRepository.EmailExistsAsync(normalizedEmail, cancellationToken))
         {
             return (false, "Email is already in use.", null, false);
+        }
+
+        if (await _userRepository.PhoneExistsAsync(normalizedPhone, cancellationToken: cancellationToken))
+        {
+            return (false, "Phone is already in use.", null, false);
         }
 
         var now = DateTime.UtcNow;
@@ -97,7 +107,7 @@ public sealed class AuthService : IAuthService
             user.UserID,
             user.Email,
             "Verify your Cinema Booking account",
-            BuildVerificationEmailBody(user.FullName, verificationToken.Token),
+            BuildVerificationEmailBody(user.FullName, verificationToken.Token, _frontendSettings.BaseUrl),
             cancellationToken);
 
         return (true, null, user.UserID, true);
@@ -222,7 +232,7 @@ public sealed class AuthService : IAuthService
                 user.UserID,
                 user.Email,
                 "Verify your Cinema Booking account",
-                BuildVerificationEmailBody(user.FullName, verificationToken.Token),
+                BuildVerificationEmailBody(user.FullName, verificationToken.Token, _frontendSettings.BaseUrl),
                 cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -299,7 +309,7 @@ public sealed class AuthService : IAuthService
                 user.UserID,
                 user.Email,
                 "Reset your Cinema Booking password",
-                BuildResetPasswordEmailBody(user.FullName, resetToken.Token),
+                BuildResetPasswordEmailBody(user.FullName, resetToken.Token, _frontendSettings.BaseUrl),
                 cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -456,11 +466,11 @@ public sealed class AuthService : IAuthService
             .Replace('/', '_');
     }
 
-    private static string BuildVerificationEmailBody(string fullName, string token)
+    private static string BuildVerificationEmailBody(string fullName, string token, string frontendBaseUrl)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
         var encodedToken = WebUtility.HtmlEncode(token);
-        var verificationUrl = $"https://directly-washhouse-recovery.ngrok-free.dev/registerEmail";
+        var verificationUrl = $"{frontendBaseUrl.TrimEnd('/')}/registerEmail";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
@@ -503,10 +513,10 @@ public sealed class AuthService : IAuthService
             """;
     }
 
-    private static string BuildResetPasswordEmailBody(string fullName, string token)
+    private static string BuildResetPasswordEmailBody(string fullName, string token, string frontendBaseUrl)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var resetUrl = $"https://directly-washhouse-recovery.ngrok-free.dev/resetPassword?token={Uri.EscapeDataString(token)}";
+        var resetUrl = $"{frontendBaseUrl.TrimEnd('/')}/resetPassword?token={Uri.EscapeDataString(token)}";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">

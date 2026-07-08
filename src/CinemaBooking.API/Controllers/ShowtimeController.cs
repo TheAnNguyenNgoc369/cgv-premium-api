@@ -73,6 +73,42 @@ public sealed class ShowtimeController : ControllerBase
         return CreatedAtAction(nameof(GetShowtimeById), new { id = response.ShowtimeId }, response);
     }
 
+    [HttpGet("showtimes/range")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetShowtimesByRange(
+        [FromQuery] DateOnly? startDate,
+        [FromQuery] DateOnly? endDate,
+        [FromQuery] int? cinemaId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!startDate.HasValue)
+            return BadRequest(new { success = false, message = "startDate is required" });
+        if (!endDate.HasValue)
+            return BadRequest(new { success = false, message = "endDate is required" });
+
+        var scope = await GetManagerCinemaIdAsync(cancellationToken);
+        if (scope.Forbidden) return CinemaScopeForbidden();
+
+        var result = await _showtimeService.GetShowtimesByRangeAsync(
+            startDate.Value,
+            endDate.Value,
+            cinemaId,
+            scope.CinemaId,
+            cancellationToken);
+
+        if (!result.Succeeded)
+            return result.ErrorMessage == CinemaScopeMessages.AccessDenied
+                ? CinemaScopeForbidden()
+                : BadRequest(new { success = false, message = result.ErrorMessage });
+
+        var items = result.Items
+            .Select(showtime => ToListResponse(
+                showtime,
+                result.SoldOutShowtimeIds.Contains(showtime.ShowtimeID)))
+            .ToList();
+        return Ok(new ShowtimeRangeResponse(items));
+    }
+
     [HttpPut("showtimes/{id:int}")]
     [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> UpdateShowtime(
@@ -155,7 +191,8 @@ public sealed class ShowtimeController : ControllerBase
                 showtime.Movie.DurationMin, showtime.Movie.PosterURL),
             new(showtime.RoomID, showtime.Room.RoomName, showtime.Room.RoomType.TypeName, showtime.Room.Capacity),
             AsUtc(showtime.StartTime), AsUtc(showtime.EndTime), showtime.BasePrice,
-            EnumValueMapper.ToApiValue(showtime.Status),
+            EnumValueMapper.ToApiValue(_showtimeService.GetDisplayStatus(showtime, DateTime.UtcNow)),
+            _showtimeService.IsActive(showtime, DateTime.UtcNow),
             await _showtimeService.IsSoldOutAsync(showtime, cancellationToken));
 
     private static ShowtimeListItemResponse ToListResponse(
@@ -172,7 +209,11 @@ public sealed class ShowtimeController : ControllerBase
                 showtime.Room.Cinema.Longitude.HasValue ? decimal.ToDouble(showtime.Room.Cinema.Longitude.Value) : null,
                 EnumValueMapper.ToApiValue(showtime.Room.Cinema.Status)),
             AsUtc(showtime.StartTime), AsUtc(showtime.EndTime), showtime.BasePrice,
-            EnumValueMapper.ToApiValue(showtime.Status), isSoldOut);
+            EnumValueMapper.ToApiValue(showtime.Status == "cancelled"
+                ? "cancelled"
+                : DateTime.UtcNow < showtime.EndTime ? "scheduled" : "completed"),
+            showtime.Status != "cancelled" && DateTime.UtcNow < showtime.EndTime,
+            isSoldOut);
 
     private IActionResult MapWriteError(string? message) => message switch
     {
@@ -181,6 +222,7 @@ public sealed class ShowtimeController : ControllerBase
         "Showtime conflicts with another showtime in the same room"
             or "Another showtime with the same room type already starts at this time in the cinema"
             or "Showtime has active bookings or seat holds"
+            or "Showtime has successful bookings"
             or "Showtime has booking or seat hold history" =>
             Conflict(new { success = false, message }),
         CinemaScopeMessages.AccessDenied => CinemaScopeForbidden(),

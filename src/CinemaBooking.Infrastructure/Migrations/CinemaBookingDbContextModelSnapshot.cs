@@ -79,7 +79,7 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.ToTable("AdminActionLog", null, t =>
                         {
-                            t.HasCheckConstraint("CK_AdminActionLog_ActionType", "[ActionType] IN ('create_showtime_type','update_showtime_type','delete_showtime_type','generate_showtime_by_type','create_user','update_user','lock_user','unlock_user','change_role','delete_user','create_voucher','update_voucher','delete_voucher','create_showtime','update_showtime','delete_showtime','update_ticket_price','generate_seat','update_seat','delete_seat','create_cinema','update_cinema','delete_cinema','create_genre','update_genre','delete_genre','create_movie','update_movie','delete_movie','create_room_type','update_room_type','delete_room_type','export_report')");
+                            t.HasCheckConstraint("CK_AdminActionLog_ActionType", "[ActionType] IN ('create_showtime_type','update_showtime_type','delete_showtime_type','generate_showtime_by_type','create_user','update_user','lock_user','unlock_user','change_role','delete_user','create_voucher','update_voucher','delete_voucher','create_showtime','update_showtime','delete_showtime','update_ticket_price','generate_seat','update_seat','delete_seat','create_cinema','update_cinema','delete_cinema','create_genre','update_genre','delete_genre','create_movie','update_movie','delete_movie','create_room_type','update_room_type','delete_room_type','export_report','refund','check_in','redeem_voucher')");
                         });
                 });
 
@@ -1733,6 +1733,11 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasDatabaseName("UQ_Users_Email");
 
                     b.HasIndex("LoyaltyTierID");
+
+                    b.HasIndex("Phone")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_Users_Phone")
+                        .HasFilter("[Phone] IS NOT NULL");
 
                     b.HasIndex("Role", "Status")
                         .HasDatabaseName("IX_Users_Role_Status");

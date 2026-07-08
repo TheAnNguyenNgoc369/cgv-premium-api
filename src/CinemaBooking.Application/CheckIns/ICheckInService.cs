@@ -20,5 +20,9 @@ public interface ICheckInService
         DateTime? to,
         int page,
         int pageSize,
+        int currentUserId,
+        bool isAdmin,
+        bool isManager,
+        bool isStaff,
         CancellationToken cancellationToken = default);
 }

@@ -1,6 +1,7 @@
 using CinemaBooking.API.Contracts.Movies;
 using CinemaBooking.Application.Movie;
 using CinemaBooking.Application.Common.Enums;
+using CinemaBooking.Shared.Time;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -311,7 +312,8 @@ public sealed class MovieController : ControllerBase
             EnumValueMapper.ToApiValue(movie.AgeRating),
             movie.PosterURL,
             movie.DurationMin,
-            EnumValueMapper.ToApiValue(movie.Status));
+            EnumValueMapper.ToApiValue(movie.Status),
+            IsNew(movie));
     }
 
     private static MovieListWithSalesResponse ToListWithSalesResponse(
@@ -326,6 +328,7 @@ public sealed class MovieController : ControllerBase
             movie.PosterURL,
             movie.DurationMin,
             EnumValueMapper.ToApiValue(movie.Status),
+            IsNew(movie),
             sales?.TicketsSold ?? 0,
             sales?.IsTopSelling ?? false,
             sales?.SalesRank);
@@ -347,6 +350,18 @@ public sealed class MovieController : ControllerBase
             movie.PosterURL,
             movie.PosterPublicId,
             movie.TrailerURL,
-            EnumValueMapper.ToApiValue(movie.Status));
+            EnumValueMapper.ToApiValue(movie.Status),
+            IsNew(movie));
+    }
+
+    private static bool IsNew(MovieEntity movie)
+    {
+        const int newMovieWindowDays = 14;
+        if (!movie.ShowingFrom.HasValue)
+            return false;
+
+        var today = VietnamTime.GetDate(DateTime.UtcNow);
+        var showingFrom = movie.ShowingFrom.Value;
+        return showingFrom <= today && showingFrom >= today.AddDays(-newMovieWindowDays);
     }
 }

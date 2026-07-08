@@ -2,9 +2,12 @@ using CinemaBooking.API.Contracts.Images;
 using CinemaBooking.API.Contracts.Users;
 using CinemaBooking.API.Contracts.Cinemas;
 using CinemaBooking.Application.Common.Enums;
+using CinemaBooking.Application.Membership;
 using CinemaBooking.Application.Users;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
+using System.ComponentModel.DataAnnotations;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -16,10 +19,14 @@ namespace CinemaBooking.API.Controllers;
 public sealed class UserController : ControllerBase
 {
     private readonly IUserService _userService;
+    private readonly IMembershipService _membershipService;
 
-    public UserController(IUserService userService)
+    public UserController(
+        IUserService userService,
+        IMembershipService membershipService)
     {
         _userService = userService;
+        _membershipService = membershipService;
     }
 
     [HttpGet("profile")]
@@ -37,7 +44,9 @@ public sealed class UserController : ControllerBase
             return NotFound();
         }
 
-        return Ok(ToProfileResponseWithCinema(user));
+        var membership = await _membershipService.GetMyMembershipAsync(userId, cancellationToken);
+
+        return Ok(ToProfileResponseWithCinema(user, membership.TotalRefunds, membership.UsedRefunds));
     }
 
     [HttpPut("profile")]
@@ -71,7 +80,9 @@ public sealed class UserController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
-        return Ok(ToProfileResponse(result.User!));
+        var membership = await _membershipService.GetMyMembershipAsync(userId, cancellationToken);
+
+        return Ok(ToProfileResponse(result.User!, membership.TotalRefunds, membership.UsedRefunds));
     }
 
     [HttpPut("profile/avatar")]
@@ -108,11 +119,13 @@ public sealed class UserController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
+        var membership = await _membershipService.GetMyMembershipAsync(userId, cancellationToken);
+
         return Ok(new
         {
             secureUrl = result.User!.AvatarURL,
             publicId = result.User.AvatarPublicId,
-            user = ToProfileResponse(result.User)
+            user = ToProfileResponse(result.User, membership.TotalRefunds, membership.UsedRefunds)
         });
     }
 
@@ -161,6 +174,43 @@ public sealed class UserController : ControllerBase
         });
     }
 
+    [HttpGet("~/api/users/lookup")]
+    [Authorize(Roles = $"{Roles.Staff},{Roles.Admin}")]
+    public async Task<IActionResult> Lookup(
+        [FromQuery] string? email,
+        [FromQuery] string? phone,
+        CancellationToken cancellationToken)
+    {
+        var normalizedEmail = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+        var normalizedPhone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
+
+        if (normalizedEmail is null && normalizedPhone is null)
+        {
+            return BadRequest(new { success = false, message = "email or phone is required." });
+        }
+
+        if (normalizedEmail is not null && !new EmailAddressAttribute().IsValid(normalizedEmail))
+        {
+            return BadRequest(new { success = false, message = "email is invalid." });
+        }
+
+        if (normalizedPhone is not null && !Regex.IsMatch(normalizedPhone, @"^0[0-9]{9}$"))
+        {
+            return BadRequest(new { success = false, message = "phone must contain 10 digits and start with 0." });
+        }
+
+        var user = await _userService.LookupCustomerAsync(normalizedEmail, normalizedPhone, cancellationToken);
+
+        if (user is null)
+        {
+            return NotFound(new { success = false, message = "User not found." });
+        }
+
+        var membership = await _membershipService.GetMyMembershipAsync(user.UserID, cancellationToken);
+
+        return Ok(ToLookupResponse(user, membership));
+    }
+
     [HttpPut("password")]
     public async Task<IActionResult> ChangePassword(
         [FromBody] ChangePasswordRequest model,
@@ -197,7 +247,10 @@ public sealed class UserController : ControllerBase
         return int.TryParse(userIdValue, out userId);
     }
 
-    private static object ToProfileResponse(User user)
+    private static object ToProfileResponse(
+        User user,
+        int totalRefunds,
+        int usedRefunds)
     {
         return new
         {
@@ -209,11 +262,16 @@ public sealed class UserController : ControllerBase
             user.Status,
             user.AvatarURL,
             user.TotalPoints,
+            total_refunds = totalRefunds,
+            used_refunds = usedRefunds,
             user.CreatedAt
         };
     }
 
-    private static object ToProfileResponseWithCinema(User user)
+    private static object ToProfileResponseWithCinema(
+        User user,
+        int totalRefunds,
+        int usedRefunds)
     {
         return new
         {
@@ -225,6 +283,8 @@ public sealed class UserController : ControllerBase
             user.Status,
             user.AvatarURL,
             user.TotalPoints,
+            total_refunds = totalRefunds,
+            used_refunds = usedRefunds,
             user.CreatedAt,
             cinema = user.Role is Roles.Manager or Roles.Staff && user.Cinema is not null
                 ? new CinemaSummaryResponse(
@@ -236,5 +296,32 @@ public sealed class UserController : ControllerBase
                     EnumValueMapper.ToApiValue(user.Cinema.Status))
                 : null
         };
+    }
+
+    private static UserLookupResponse ToLookupResponse(
+        User user,
+        MembershipInfo membership)
+    {
+        return new UserLookupResponse(
+            true,
+            "User found.",
+            new UserLookupResponse.UserInfo(
+                user.UserID,
+                user.FullName,
+                user.Email,
+                user.Phone,
+                user.Role,
+                user.Status,
+                user.AvatarURL,
+                new UserLookupResponse.UserMembershipInfo(
+                    membership.CurrentTier,
+                    membership.TotalPoints,
+                    membership.DiscountPercent,
+                    membership.NextTier,
+                    membership.PointsToNextTier),
+                user.Wallet is null
+                    ? null
+                    : new UserLookupResponse.UserWalletInfo(user.Wallet.WalletID, user.Wallet.Balance),
+                null));
     }
 }

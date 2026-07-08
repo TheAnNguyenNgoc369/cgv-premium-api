@@ -52,6 +52,25 @@ public sealed class AdminUserServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_ExistingPhone_ReturnsConflict()
+    {
+        var repository = new StubAdminUserRepository { PhoneExists = true };
+        var service = CreateService(repository);
+
+        var result = await service.CreateAsync(
+            1,
+            new AdminUserCreateCommand(
+                "New User", "new@example.com", "0901234567", "Password@123",
+                Roles.Staff, null, 1),
+            "127.0.0.1");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(AdminUserErrorType.Conflict, result.ErrorType);
+        Assert.Equal("Phone is already registered", result.ErrorMessage);
+        Assert.Null(repository.AddedUser);
+    }
+
+    [Fact]
     public async Task DeleteAsync_UserHasBookings_DeactivatesInsteadOfDeleting()
     {
         var repository = new StubAdminUserRepository
@@ -197,6 +216,7 @@ public sealed class AdminUserServiceTests
     {
         public User? User { get; set; }
         public bool HasDeletionBlockingData { get; set; }
+        public bool PhoneExists { get; set; }
         public bool TryDeleteResult { get; set; } = true;
         public User? AddedUser { get; private set; }
         public Wallet? AddedWallet { get; private set; }
@@ -217,6 +237,10 @@ public sealed class AdminUserServiceTests
         public Task<bool> EmailExistsAsync(
             string email, int? excludingUserId = null,
             CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+        public Task<bool> PhoneExistsAsync(
+            string phone, int? excludingUserId = null,
+            CancellationToken cancellationToken = default) => Task.FromResult(PhoneExists);
 
         public Task<bool> CinemaExistsAsync(
             int cinemaId, CancellationToken cancellationToken = default) => Task.FromResult(true);

@@ -32,7 +32,9 @@ public sealed record MembershipInfo(
     int PointsToNextTier,
     int TotalPoints,
     decimal TotalSpent,
-    decimal DiscountPercent
+    decimal DiscountPercent,
+    int TotalRefunds,
+    int UsedRefunds
 );
 
 public sealed record LoyaltyPointHistory(

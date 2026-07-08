@@ -31,6 +31,17 @@ public sealed class UserService : IUserService
         return _userRepository.GetProfileByIdAsync(userId, cancellationToken);
     }
 
+    public Task<User?> LookupCustomerAsync(
+        string? email,
+        string? phone,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+        var normalizedPhone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
+
+        return _userRepository.LookupCustomerAsync(normalizedEmail, normalizedPhone, cancellationToken);
+    }
+
     public async Task<(bool Succeeded, string? ErrorMessage, User? User)> UpdateProfileAsync(
         int userId,
         string fullName,
@@ -53,6 +64,13 @@ public sealed class UserService : IUserService
         var normalizedPhone = string.IsNullOrWhiteSpace(phone)
             ? null
             : phone.Trim();
+
+        if (normalizedPhone is not null
+            && await _userRepository.PhoneExistsAsync(normalizedPhone, userId, cancellationToken))
+        {
+            return (false, "Phone is already in use.", null);
+        }
+
         var updatedUser = await _userRepository.UpdateProfileAsync(
             userId,
             normalizedFullName,

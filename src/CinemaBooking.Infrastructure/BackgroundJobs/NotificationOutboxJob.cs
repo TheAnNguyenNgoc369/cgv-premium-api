@@ -15,33 +15,84 @@ public sealed class NotificationOutboxJob(IServiceScopeFactory scopeFactory, ILo
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            await ProcessBatchAsync(stoppingToken);
+            try
+            {
+                await ProcessBatchAsync(stoppingToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogError(exception, "Notification outbox batch failed. The job will retry on the next interval.");
+            }
+
             await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
         }
     }
+
     private async Task ProcessBatchAsync(CancellationToken ct)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<CinemaBookingDbContext>();
         var email = scope.ServiceProvider.GetRequiredService<IBookingEmailService>();
         var now = DateTime.UtcNow;
-        var events = await db.NotificationOutbox.Where(x => x.Status != "processed" && (x.NextAttemptAt == null || x.NextAttemptAt <= now))
-            .OrderBy(x => x.CreatedAt).Take(20).ToListAsync(ct);
+        var processingLeaseExpiresAt = now.AddMinutes(5);
+        var candidateIds = await db.NotificationOutbox
+            .Where(x =>
+                (x.Status == "pending" || x.Status == "processing")
+                && (x.NextAttemptAt == null || x.NextAttemptAt <= now))
+            .OrderBy(x => x.CreatedAt)
+            .Select(x => x.NotificationOutboxID)
+            .Take(20)
+            .ToListAsync(ct);
+
+        var claimedIds = new List<long>();
+        foreach (var eventId in candidateIds)
+        {
+            var affectedRows = await db.NotificationOutbox
+                .Where(x => x.NotificationOutboxID == eventId
+                    && (x.Status == "pending" || x.Status == "processing")
+                    && (x.NextAttemptAt == null || x.NextAttemptAt <= now))
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(x => x.Status, "processing")
+                        .SetProperty(x => x.NextAttemptAt, processingLeaseExpiresAt),
+                    ct);
+
+            if (affectedRows == 1)
+                claimedIds.Add(eventId);
+        }
+
+        var events = await db.NotificationOutbox
+            .Where(x => claimedIds.Contains(x.NotificationOutboxID))
+            .OrderBy(x => x.CreatedAt)
+            .ToListAsync(ct);
         foreach (var item in events)
         {
             try
             {
                 if (item.EventType == "BookingSuccess") await ProcessBookingAsync(db, email, item, ct);
                 else if (item.EventType == "RefundCompleted") await ProcessRefundAsync(db, email, item, ct);
-                item.Status = "processed"; item.ProcessedAt = DateTime.UtcNow; item.LastError = null;
+                item.Status = "processed"; item.ProcessedAt = DateTime.UtcNow; item.LastError = null; item.NextAttemptAt = null;
+
+                await db.SaveChangesAsync(ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                ScheduleRetry(item);
-                item.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
                 logger.LogError(ex, "Notification outbox event {EventId} failed", item.EventId);
+
+                try
+                {
+                    ScheduleRetry(item);
+                    item.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (Exception saveException) when (saveException is not OperationCanceledException)
+                {
+                    logger.LogError(
+                        saveException,
+                        "Failed to persist retry state for notification outbox event {EventId}",
+                        item.EventId);
+                }
             }
-            await db.SaveChangesAsync(ct);
         }
     }
 

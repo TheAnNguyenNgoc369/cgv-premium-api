@@ -26,7 +26,15 @@ public interface IShowtimeRepository
         int? excludingShowtimeId = null, CancellationToken cancellationToken = default);
     Task<bool> HasActiveBookingOrHoldAsync(int showtimeId, DateTime now,
         CancellationToken cancellationToken = default);
+    Task<bool> HasSuccessfulBookingAsync(int showtimeId,
+        CancellationToken cancellationToken = default);
     Task<bool> HasAnyBookingOrHoldAsync(int showtimeId,
+        CancellationToken cancellationToken = default);
+    Task<List<Showtime>> GetShowtimesByRangeAsync(
+        DateTime startUtc,
+        DateTime endUtc,
+        int? cinemaId,
+        bool onlyActiveLocations,
         CancellationToken cancellationToken = default);
     Task<IReadOnlySet<int>> GetSoldOutShowtimeIdsAsync(
         IReadOnlyCollection<int> showtimeIds, DateTime now,

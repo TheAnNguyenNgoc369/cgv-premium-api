@@ -1,6 +1,7 @@
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
+using CinemaBooking.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
 
 namespace CinemaBooking.Infrastructure.Repositories;
@@ -25,9 +26,36 @@ public sealed class UserRepository : IUserRepository
             .FirstOrDefaultAsync(user => user.UserID == userId, cancellationToken);
     }
 
+    public Task<User?> LookupCustomerAsync(
+        string? email,
+        string? phone,
+        CancellationToken cancellationToken = default)
+    {
+        var users = _dbContext.Users
+            .Include(user => user.LoyaltyTier)
+            .Include(user => user.Wallet)
+            .AsNoTracking()
+            .Where(user => user.Role == Roles.Customer);
+
+        return !string.IsNullOrWhiteSpace(email)
+            ? users.FirstOrDefaultAsync(user => user.Email == email, cancellationToken)
+            : users.FirstOrDefaultAsync(user => user.Phone == phone, cancellationToken);
+    }
+
     public Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default)
     {
         return _dbContext.Users.AnyAsync(u => u.Email == email, cancellationToken);
+    }
+
+    public Task<bool> PhoneExistsAsync(
+        string phone,
+        int? excludingUserId = null,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Users.AnyAsync(
+            user => user.Phone == phone
+                && (!excludingUserId.HasValue || user.UserID != excludingUserId.Value),
+            cancellationToken);
     }
 
     public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)

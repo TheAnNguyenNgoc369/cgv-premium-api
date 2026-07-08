@@ -30,7 +30,9 @@ public sealed class MembershipController : ControllerBase
             PointsToNextTier: membership.PointsToNextTier,
             TotalPoints: membership.TotalPoints,
             TotalSpent: membership.TotalSpent,
-            DiscountPercent: membership.DiscountPercent
+            DiscountPercent: membership.DiscountPercent,
+            TotalRefunds: membership.TotalRefunds,
+            UsedRefunds: membership.UsedRefunds
         );
 
         return Ok(response);
@@ -45,7 +47,8 @@ public sealed class MembershipController : ControllerBase
             TierID: t.TierID,
             TierName: t.TierName,
             MinPoints: t.MinPoints,
-            DiscountRate: t.DiscountRate
+            DiscountRate: t.DiscountRate,
+            TotalRefunds: t.MaxRefundPerMonth
         )).ToList();
 
         return Ok(response);

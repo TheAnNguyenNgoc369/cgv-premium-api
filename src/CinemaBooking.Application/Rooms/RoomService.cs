@@ -105,6 +105,13 @@ public sealed class RoomService : IRoomService
             return (false, validation.ErrorMessage, null);
         }
 
+        if (existingRoom.Status != "inactive"
+            && validation.Status == "inactive"
+            && await _roomRepository.HasUpcomingShowtimesAsync(roomId, DateTime.UtcNow, cancellationToken))
+        {
+            return (false, "Room has upcoming showtimes", null);
+        }
+
         var updatedRoom = await _roomRepository.UpdateAsync(
             roomId,
             cinemaId,

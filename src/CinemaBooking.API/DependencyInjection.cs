@@ -2,17 +2,20 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using CinemaBooking.API.Configuration;
 using CinemaBooking.API.OpenApi;
 using CinemaBooking.API.Services;
 using CinemaBooking.API.Serialization;
 using CinemaBooking.Application;
+using CinemaBooking.Application.Configuration;
 using CinemaBooking.Application.Payments.VNPay;
 using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -126,6 +129,31 @@ public static class DependencyInjection
         services.AddApplicationServices();
         services.AddScoped<JwtTokenService>();
         services.AddScoped<ITokenRevocationService, DatabaseTokenRevocationService>();
+        services.AddSingleton<IAuthRequestRateLimiter, AuthRequestRateLimiter>();
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy(
+                AuthRateLimitPolicyNames.Login,
+                httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                    GetClientPartitionKey(httpContext, "login"),
+                    _ => CreateFixedWindowOptions(10)));
+            options.AddPolicy(
+                AuthRateLimitPolicyNames.Register,
+                httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                    GetClientPartitionKey(httpContext, "register"),
+                    _ => CreateFixedWindowOptions(5)));
+            options.AddPolicy(
+                AuthRateLimitPolicyNames.EmailAction,
+                httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                    GetClientPartitionKey(httpContext, "email-action"),
+                    _ => CreateFixedWindowOptions(5)));
+            options.AddPolicy(
+                AuthRateLimitPolicyNames.Verify,
+                httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                    GetClientPartitionKey(httpContext, "verify"),
+                    _ => CreateFixedWindowOptions(10)));
+        });
 
         if (environment.IsDevelopment())
         {
@@ -154,6 +182,14 @@ public static class DependencyInjection
         services.AddOptions<EmailSettings>()
             .Bind(configuration.GetRequiredSection(EmailSettings.SectionName))
             .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<FrontendSettings>()
+            .Bind(configuration.GetRequiredSection(FrontendSettings.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(settings => Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp),
+                "Frontend:BaseUrl must be an absolute HTTP or HTTPS URL.")
             .ValidateOnStart();
 
         services.AddOptions<VNPaySettings>()
@@ -214,8 +250,13 @@ public static class DependencyInjection
 
                     OnAuthenticationFailed = context =>
                     {
-                        Console.WriteLine("JWT ERROR:");
-                        Console.WriteLine(context.Exception.Message);
+                        var logger = context.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("JwtAuthentication");
+                        logger.LogWarning(
+                            context.Exception,
+                            "JWT authentication failed for request {Path}.",
+                            context.HttpContext.Request.Path);
 
                         return Task.CompletedTask;
                     }
@@ -231,5 +272,22 @@ public static class DependencyInjection
         });
 
         return services;
+    }
+
+    private static string GetClientPartitionKey(HttpContext httpContext, string action)
+    {
+        var remoteIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return $"{action}:{remoteIp}";
+    }
+
+    private static FixedWindowRateLimiterOptions CreateFixedWindowOptions(int permitLimit)
+    {
+        return new FixedWindowRateLimiterOptions
+        {
+            AutoReplenishment = true,
+            PermitLimit = permitLimit,
+            QueueLimit = 0,
+            Window = TimeSpan.FromMinutes(1)
+        };
     }
 }
