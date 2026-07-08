@@ -91,6 +91,13 @@ public sealed class ShowtimeRepository : IShowtimeRepository
             && h.ExpiresAt > now, cancellationToken);
     }
 
+    public Task<bool> HasSuccessfulBookingAsync(
+        int showtimeId, CancellationToken cancellationToken = default) =>
+        _db.Bookings.AnyAsync(b => b.ShowtimeID == showtimeId
+            && (b.Status == BookingStatus.Paid || b.Status == BookingStatus.Used
+                || b.Status == BookingStatus.PartiallyRefunded),
+            cancellationToken);
+
     public async Task<bool> HasAnyBookingOrHoldAsync(
         int showtimeId, CancellationToken cancellationToken = default)
     {
@@ -99,6 +106,32 @@ public sealed class ShowtimeRepository : IShowtimeRepository
             return true;
         return await _db.SeatHolds.AnyAsync(
             hold => hold.ShowtimeID == showtimeId, cancellationToken);
+    }
+
+    public Task<List<Showtime>> GetShowtimesByRangeAsync(
+        DateTime startUtc,
+        DateTime endUtc,
+        int? cinemaId,
+        bool onlyActiveLocations,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _db.Showtimes.AsNoTracking()
+            .Include(showtime => showtime.Movie)
+            .Include(showtime => showtime.Room).ThenInclude(room => room.Cinema)
+            .Include(showtime => showtime.Room).ThenInclude(room => room.RoomType)
+            .Where(showtime => showtime.StartTime >= startUtc && showtime.StartTime < endUtc);
+
+        if (cinemaId.HasValue)
+            query = query.Where(showtime => showtime.Room.CinemaID == cinemaId.Value);
+
+        if (onlyActiveLocations)
+            query = query.Where(showtime => showtime.Room.Status == "active"
+                && showtime.Room.Cinema.Status == "active");
+
+        return query
+            .OrderBy(showtime => showtime.StartTime)
+            .ThenBy(showtime => showtime.ShowtimeID)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlySet<int>> GetSoldOutShowtimeIdsAsync(

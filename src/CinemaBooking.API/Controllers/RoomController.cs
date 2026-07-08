@@ -1,4 +1,5 @@
 using CinemaBooking.API.Contracts.Rooms;
+using CinemaBooking.API.Contracts.RoomTypes;
 using CinemaBooking.Application.Rooms;
 using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Application.Common.Security;
@@ -166,8 +167,11 @@ public sealed class RoomController : ControllerBase
             room.RoomID,
             room.CinemaID,
             room.RoomName,
-            room.RoomTypeID,
-            room.RoomType.TypeName,
+            new RoomTypeResponse(
+                room.RoomType.RoomTypeID,
+                room.RoomType.TypeName,
+                room.RoomType.ExtraPrice,
+                room.RoomType.Description),
             room.Capacity,
             EnumValueMapper.ToApiValue(room.Status),
             room.Description,

@@ -31,10 +31,26 @@ public sealed class ShowtimeTypeRepository(CinemaBookingDbContext db) : IShowtim
     public Task<bool> HasConflictAsync(int roomId, DateTime start, DateTime end, CancellationToken ct) =>
         db.Showtimes.AnyAsync(x => x.RoomID == roomId && x.Status != "cancelled" && x.StartTime < end && x.EndTime > start, ct);
     public async Task AddAsync(ShowtimeType value, CancellationToken ct) { db.ShowtimeTypes.Add(value); await db.SaveChangesAsync(ct); }
+    public void ReplaceSlots(ShowtimeType value, IEnumerable<TimeSpan> slots)
+    {
+        db.ShowtimeTypeSlots.RemoveRange(value.Slots);
+        value.Slots.Clear();
+        foreach (var slot in slots)
+            value.Slots.Add(new ShowtimeTypeSlot { StartTime = slot });
+    }
     public Task SaveAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
     public async Task AddShowtimesAsync(IEnumerable<Showtime> values, CancellationToken ct) { db.Showtimes.AddRange(values); await db.SaveChangesAsync(ct); }
     public async Task<T> TransactionAsync<T>(Func<Task<T>> action, CancellationToken ct)
-    { await using var tx = await db.Database.BeginTransactionAsync(ct); var result = await action(); await tx.CommitAsync(ct); return result; }
+    {
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            var result = await action();
+            await tx.CommitAsync(ct);
+            return result;
+        });
+    }
     public async Task LockScheduleAsync(int roomId, int cinemaId, CancellationToken ct)
     {
         await db.Rooms.FromSqlInterpolated($"SELECT * FROM [Room] WITH (UPDLOCK, HOLDLOCK) WHERE RoomID = {roomId}").LoadAsync(ct);

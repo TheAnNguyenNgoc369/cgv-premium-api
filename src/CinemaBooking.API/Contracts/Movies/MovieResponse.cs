@@ -1,4 +1,6 @@
-﻿namespace CinemaBooking.API.Contracts.Movies;
+using System.Text.Json.Serialization;
+
+namespace CinemaBooking.API.Contracts.Movies;
 
 public sealed record MovieListResponse(
     int MovieId,
@@ -7,7 +9,8 @@ public sealed record MovieListResponse(
     string AgeRating,
     string? PosterUrl,
     int DurationMinutes,
-    string Status
+    string Status,
+    [property: JsonPropertyName("is_new")] bool IsNew
 );
 
 public sealed record MovieDetailResponse(
@@ -24,5 +27,6 @@ public sealed record MovieDetailResponse(
     string? PosterUrl,
     string? PosterPublicId,
     string? TrailerUrl,
-    string Status
+    string Status,
+    [property: JsonPropertyName("is_new")] bool IsNew
 );

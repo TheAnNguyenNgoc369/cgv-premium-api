@@ -44,63 +44,71 @@ public sealed class SeatHoldExpirationJob : BackgroundService
 
     private async Task ExpireHoldsAsync(CancellationToken cancellationToken)
     {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<CinemaBookingDbContext>();
-        var now = DateTime.UtcNow;
+        await using var strategyScope = _scopeFactory.CreateAsyncScope();
+        var strategyContext = strategyScope.ServiceProvider.GetRequiredService<CinemaBookingDbContext>();
+        var strategy = strategyContext.Database.CreateExecutionStrategy();
+        var expiredCount = 0;
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        var expiredBookingIds = await dbContext.SeatHolds
-            .Where(hold => hold.Status == SeatHoldStatus.Confirmed
-                && hold.ExpiresAt <= now
-                && hold.BookingID.HasValue)
-            .Select(hold => hold.BookingID!.Value)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-
-        var bookings = await dbContext.Bookings
-            .Include(booking => booking.BookingFnBs)
-            .Include(booking => booking.BookingVoucher)
-            .Include(booking => booking.Payment).ThenInclude(payment => payment!.PaymentSessions)
-            .AsSplitQuery()
-            .Where(booking => expiredBookingIds.Contains(booking.BookingID)
-                && (booking.Status == BookingStatus.Pending
-                    || booking.Status == BookingStatus.PaymentFailed))
-            .ToListAsync(cancellationToken);
-
-        foreach (var booking in bookings)
+        await strategy.ExecuteAsync(async () =>
         {
-            booking.Status = BookingStatus.Expired;
-            booking.UpdatedAt = now;
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<CinemaBookingDbContext>();
+            var now = DateTime.UtcNow;
 
-            if (booking.BookingVoucher is not null)
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+            var expiredBookingIds = await dbContext.SeatHolds
+                .Where(hold => hold.Status == SeatHoldStatus.Confirmed
+                    && hold.ExpiresAt <= now
+                    && hold.BookingID.HasValue)
+                .Select(hold => hold.BookingID!.Value)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var bookings = await dbContext.Bookings
+                .Include(booking => booking.BookingFnBs)
+                .Include(booking => booking.BookingVoucher)
+                .Include(booking => booking.Payment).ThenInclude(payment => payment!.PaymentSessions)
+                .AsSplitQuery()
+                .Where(booking => expiredBookingIds.Contains(booking.BookingID)
+                    && (booking.Status == BookingStatus.Pending
+                        || booking.Status == BookingStatus.PaymentFailed))
+                .ToListAsync(cancellationToken);
+
+            foreach (var booking in bookings)
             {
-                var voucher = await dbContext.Vouchers.FindAsync(
-                    new object[] { booking.BookingVoucher.VoucherID }, cancellationToken);
-                if (voucher is not null && voucher.UsedCount > 0)
-                    voucher.UsedCount--;
+                booking.Status = BookingStatus.Expired;
+                booking.UpdatedAt = now;
+
+                if (booking.BookingVoucher is not null)
+                {
+                    var voucher = await dbContext.Vouchers.FindAsync(
+                        new object[] { booking.BookingVoucher.VoucherID }, cancellationToken);
+                    if (voucher is not null && voucher.UsedCount > 0)
+                        voucher.UsedCount--;
+                }
+
+                if (booking.Payment is not null)
+                {
+                    if (booking.Payment.Status == PaymentStatus.Pending)
+                        booking.Payment.Status = PaymentStatus.Expired;
+                    foreach (var session in booking.Payment.PaymentSessions)
+                        session.Status = "expired";
+                }
             }
 
-            if (booking.Payment is not null)
-            {
-                if (booking.Payment.Status == PaymentStatus.Pending)
-                    booking.Payment.Status = PaymentStatus.Expired;
-                foreach (var session in booking.Payment.PaymentSessions)
-                    session.Status = "expired";
-            }
-        }
+            expiredCount = await dbContext.SeatHolds
+                .Where(hold => hold.Status == SeatHoldStatus.Holding
+                        || hold.Status == SeatHoldStatus.Confirmed)
+                .Where(hold => hold.ExpiresAt <= now)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        hold => hold.Status,
+                        SeatHoldStatus.Expired),
+                    cancellationToken);
 
-        var expiredCount = await dbContext.SeatHolds
-            .Where(hold => hold.Status == SeatHoldStatus.Holding
-                    || hold.Status == SeatHoldStatus.Confirmed)
-            .Where(hold => hold.ExpiresAt <= now)
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(
-                    hold => hold.Status,
-                    SeatHoldStatus.Expired),
-                cancellationToken);
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        });
 
         if (expiredCount > 0)
             _logger.LogInformation("Expired {SeatHoldCount} seat holds", expiredCount);

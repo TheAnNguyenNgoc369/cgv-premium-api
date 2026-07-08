@@ -47,83 +47,94 @@ public sealed class ShowtimeCompletionJob : BackgroundService
     internal async Task CompleteShowtimesAndAwardPointsAsync(
         CancellationToken cancellationToken = default)
     {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<CinemaBookingDbContext>();
-        var now = DateTime.UtcNow;
+        await using var strategyScope = _scopeFactory.CreateAsyncScope();
+        var strategyContext = strategyScope.ServiceProvider.GetRequiredService<CinemaBookingDbContext>();
+        var strategy = strategyContext.Database.CreateExecutionStrategy();
+        var completedShowtimeCount = 0;
+        var processedBookingCount = 0;
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable, cancellationToken);
-
-        var completedShowtimeCount = await dbContext.Showtimes
-            .Where(showtime => showtime.Status == "scheduled" && showtime.EndTime <= now)
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(showtime => showtime.Status, "completed"),
-                cancellationToken);
-
-        var eligibleBookings = await dbContext.Bookings
-            .Include(booking => booking.User)
-            .Where(booking => booking.Status == BookingStatus.Paid
-                && booking.UserID.HasValue
-                && booking.Showtime.Status == "completed"
-                && !booking.LoyaltyPoints.Any(point =>
-                    point.TransactionType == LoyaltyTransactionTypes.Earned))
-            .ToListAsync(cancellationToken);
-
-        if (eligibleBookings.Count > 0)
+        await strategy.ExecuteAsync(async () =>
         {
-            var tiers = await dbContext.LoyaltyTiers
-                .OrderBy(tier => tier.MinPoints)
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<CinemaBookingDbContext>();
+            var now = DateTime.UtcNow;
+
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable, cancellationToken);
+
+            completedShowtimeCount = await dbContext.Showtimes
+                .Where(showtime => showtime.Status == "scheduled" && showtime.EndTime <= now)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(showtime => showtime.Status, "completed"),
+                    cancellationToken);
+
+            var eligibleBookings = await dbContext.Bookings
+                .Include(booking => booking.User)
+                .Where(booking => booking.Status == BookingStatus.Paid
+                    && booking.UserID.HasValue
+                    && booking.Showtime.Status == "completed"
+                    && !booking.LoyaltyPoints.Any(point =>
+                        point.TransactionType == LoyaltyTransactionTypes.Earned))
                 .ToListAsync(cancellationToken);
 
-            foreach (var booking in eligibleBookings)
+            processedBookingCount = eligibleBookings.Count;
+
+            if (eligibleBookings.Count > 0)
             {
-                var pointsEarned = (int)(booking.FinalAmount * MembershipTiers.PointsPerVnd);
-                if (pointsEarned <= 0)
-                    continue;
+                var tiers = await dbContext.LoyaltyTiers
+                    .OrderBy(tier => tier.MinPoints)
+                    .ToListAsync(cancellationToken);
 
-                booking.PointsEarned = pointsEarned;
-                booking.User!.TotalPoints += pointsEarned;
-                booking.User.UpdatedAt = now;
-                booking.User.LoyaltyTierID = tiers
-                    .Where(tier => booking.User.TotalPoints >= tier.MinPoints)
-                    .OrderByDescending(tier => tier.MinPoints)
-                    .Select(tier => (int?)tier.TierID)
-                    .FirstOrDefault();
-
-                dbContext.LoyaltyPoints.Add(new LoyaltyPoints
+                foreach (var booking in eligibleBookings)
                 {
-                    UserID = booking.UserID.GetValueOrDefault(),
-                    BookingID = booking.BookingID,
-                    PointsDelta = pointsEarned,
-                    TransactionType = LoyaltyTransactionTypes.Earned,
-                    Description = $"Earned {pointsEarned} points after showtime completion",
-                    CreatedAt = now
-                });
+                    var pointsEarned = (int)(booking.FinalAmount * MembershipTiers.PointsPerVnd);
+                    if (pointsEarned <= 0)
+                        continue;
+
+                    booking.PointsEarned = pointsEarned;
+                    booking.User!.TotalPoints += pointsEarned;
+                    booking.User.UpdatedAt = now;
+                    booking.User.LoyaltyTierID = tiers
+                        .Where(tier => booking.User.TotalPoints >= tier.MinPoints)
+                        .OrderByDescending(tier => tier.MinPoints)
+                        .Select(tier => (int?)tier.TierID)
+                        .FirstOrDefault();
+
+                    dbContext.LoyaltyPoints.Add(new LoyaltyPoints
+                    {
+                        UserID = booking.UserID.GetValueOrDefault(),
+                        BookingID = booking.BookingID,
+                        PointsDelta = pointsEarned,
+                        TransactionType = LoyaltyTransactionTypes.Earned,
+                        Description = $"Earned {pointsEarned} points after showtime completion",
+                        CreatedAt = now
+                    });
+                }
+
+                try
+                {
+                    await dbContext.Database.ExecuteSqlRawAsync(
+                        "EXEC sys.sp_set_session_context @key=N'SkipLoyaltyPointTrigger', @value=1",
+                        cancellationToken);
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                }
+                finally
+                {
+                    await dbContext.Database.ExecuteSqlRawAsync(
+                        "EXEC sys.sp_set_session_context @key=N'SkipLoyaltyPointTrigger', @value=NULL",
+                        CancellationToken.None);
+                }
             }
 
-            try
-            {
-                await dbContext.Database.ExecuteSqlRawAsync(
-                    "EXEC sys.sp_set_session_context @key=N'SkipLoyaltyPointTrigger', @value=1",
-                    cancellationToken);
-                await dbContext.SaveChangesAsync(cancellationToken);
-            }
-            finally
-            {
-                await dbContext.Database.ExecuteSqlRawAsync(
-                    "EXEC sys.sp_set_session_context @key=N'SkipLoyaltyPointTrigger', @value=NULL",
-                    CancellationToken.None);
-            }
-        }
+            await transaction.CommitAsync(cancellationToken);
+        });
 
-        await transaction.CommitAsync(cancellationToken);
-
-        if (completedShowtimeCount > 0 || eligibleBookings.Count > 0)
+        if (completedShowtimeCount > 0 || processedBookingCount > 0)
         {
             _logger.LogInformation(
                 "Completed {ShowtimeCount} showtimes and processed {BookingCount} loyalty bookings",
                 completedShowtimeCount,
-                eligibleBookings.Count);
+                processedBookingCount);
         }
     }
 }

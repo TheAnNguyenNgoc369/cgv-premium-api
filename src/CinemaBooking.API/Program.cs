@@ -47,7 +47,9 @@ builder.Services.AddCors(options =>
 builder.Services.AddDbContext<CinemaBookingDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
-        sqlOptions => sqlOptions.CommandTimeout(120) // Gives it 2 minutes to run the scripts
+        sqlOptions => sqlOptions
+            .CommandTimeout(120)
+            .EnableRetryOnFailure()
     ));
 
 var app = builder.Build();

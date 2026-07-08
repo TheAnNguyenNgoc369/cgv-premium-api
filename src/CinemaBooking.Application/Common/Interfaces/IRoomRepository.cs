@@ -36,6 +36,11 @@ public interface IRoomRepository
         int roomId,
         CancellationToken cancellationToken = default);
 
+    Task<bool> HasUpcomingShowtimesAsync(
+        int roomId,
+        DateTime now,
+        CancellationToken cancellationToken = default);
+
     Task<bool> HasAnyShowtimesAsync(
         int roomId,
         CancellationToken cancellationToken = default);

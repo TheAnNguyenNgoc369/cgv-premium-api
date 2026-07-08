@@ -12,6 +12,7 @@ public interface IShowtimeTypeRepository
     Task<Room?> GetRoomAsync(int id, CancellationToken ct);
     Task<bool> HasConflictAsync(int roomId, DateTime start, DateTime end, CancellationToken ct);
     Task AddAsync(ShowtimeType value, CancellationToken ct);
+    void ReplaceSlots(ShowtimeType value, IEnumerable<TimeSpan> slots);
     Task SaveAsync(CancellationToken ct);
     Task AddShowtimesAsync(IEnumerable<Showtime> values, CancellationToken ct);
     Task<T> TransactionAsync<T>(Func<Task<T>> action, CancellationToken ct);

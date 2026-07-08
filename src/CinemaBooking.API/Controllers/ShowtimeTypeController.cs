@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 namespace CinemaBooking.API.Controllers;
 
-[ApiController, Route("api/showtime-types"), Authorize(Roles = Roles.Admin + "," + Roles.Manager)]
+[ApiController, Route("api/showtime-types"), Authorize(Roles = Roles.Manager)]
 public sealed class ShowtimeTypeController(IShowtimeTypeService service, IManagerCinemaScopeService scopes, IActivityLogService logs) : ControllerBase
 {
  [HttpGet] public async Task<IActionResult> List(int? cinemaId,bool? isActive,int page=1,int pageSize=10,CancellationToken ct=default){var s=await Scope(ct);if(s.Forbidden)return Denied();var r=await service.ListAsync(cinemaId,isActive,page,pageSize,s.CinemaId,ct);if(!r.Succeeded)return Error(r.Error!);var p=r.Page!;return Ok(new{items=p.Items.Select(Summary),page,pageSize,totalItems=p.TotalItems,totalPages=(int)Math.Ceiling(p.TotalItems/(double)pageSize)});}

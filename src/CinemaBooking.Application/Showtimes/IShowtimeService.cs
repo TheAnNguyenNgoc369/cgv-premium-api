@@ -27,6 +27,14 @@ public interface IShowtimeService
         int id, int? managerCinemaId = null, CancellationToken cancellationToken = default);
     Task<bool> IsSoldOutAsync(Showtime showtime, CancellationToken cancellationToken = default);
 
+    Task<(bool Succeeded, string? ErrorMessage, IReadOnlyList<Showtime> Items, IReadOnlySet<int> SoldOutShowtimeIds)>
+        GetShowtimesByRangeAsync(
+            DateOnly startDate,
+            DateOnly endDate,
+            int? cinemaId = null,
+            int? managerCinemaId = null,
+            CancellationToken cancellationToken = default);
+
     Task<Showtime?> GetShowtimeByIdAsync(
         int id,
         CancellationToken cancellationToken = default);
@@ -38,5 +46,9 @@ public interface IShowtimeService
     Task<(SeatMapResult? SeatMap, string? ErrorMessage)> GetSeatMapAsync(
         int showtimeId,
         CancellationToken cancellationToken = default);
+
+    string GetDisplayStatus(Showtime showtime, DateTime now);
+
+    bool IsActive(Showtime showtime, DateTime now);
 }
 

@@ -13,12 +13,12 @@ namespace CinemaBooking.API.Tests;
 public sealed class ShowtimeTypeContractTests
 {
     [Fact]
-    public void Module_RequiresAdminOrManager()
+    public void Module_RequiresManager()
     {
         var attribute = Assert.Single(typeof(ShowtimeTypeController)
             .GetCustomAttributes(typeof(AuthorizeAttribute), true)
             .Cast<AuthorizeAttribute>());
-        Assert.Equal($"{Roles.Admin},{Roles.Manager}", attribute.Roles);
+        Assert.Equal(Roles.Manager, attribute.Roles);
     }
 
     [Theory]
@@ -65,5 +65,13 @@ public sealed class ShowtimeTypeContractTests
         Assert.Contains(AdminActionTypes.UpdateShowtimeType, actions);
         Assert.Contains(AdminActionTypes.DeleteShowtimeType, actions);
         Assert.Contains(AdminActionTypes.GenerateShowtimeByType, actions);
+    }
+
+    [Fact]
+    public void ActivityLog_AllowsUpdateUserAction()
+    {
+        var service = new ActivityLogService(null!);
+        var actions = service.GetActionTypes();
+        Assert.Contains(AdminActionTypes.UpdateUser, actions);
     }
 }

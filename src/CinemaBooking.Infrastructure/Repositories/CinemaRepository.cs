@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
+using CinemaBooking.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
 
 namespace CinemaBooking.Infrastructure.Repositories;
@@ -102,6 +103,33 @@ public sealed class CinemaRepository : ICinemaRepository
         return await _db.Users
             .AnyAsync(u => u.CinemaID == cinemaId, cancellationToken);
     }
+
+    public Task<bool> HasActiveAssignedStaffAsync(
+        int cinemaId,
+        CancellationToken cancellationToken = default) =>
+        _db.Users.AsNoTracking()
+            .AnyAsync(u => u.CinemaID == cinemaId
+                && u.Status == UserStatuses.Active
+                && (u.Role == Roles.Manager || u.Role == Roles.Staff),
+                cancellationToken);
+
+    public Task<bool> HasAssignedStaffAsync(
+        int cinemaId,
+        CancellationToken cancellationToken = default) =>
+        _db.Users.AsNoTracking()
+            .AnyAsync(u => u.CinemaID == cinemaId
+                && (u.Role == Roles.Manager || u.Role == Roles.Staff),
+                cancellationToken);
+
+    public Task<bool> HasUpcomingShowtimesAsync(
+        int cinemaId,
+        DateTime now,
+        CancellationToken cancellationToken = default) =>
+        _db.Showtimes.AsNoTracking()
+            .AnyAsync(s => s.Room.CinemaID == cinemaId
+                && s.Status == "scheduled"
+                && s.StartTime > now,
+                cancellationToken);
 
     public async Task<Cinema?> SoftDeleteAsync(
         int cinemaId,

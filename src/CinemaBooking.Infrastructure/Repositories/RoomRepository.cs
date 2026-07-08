@@ -131,6 +131,18 @@ public sealed class RoomRepository : IRoomRepository
                 && s.Status == "scheduled", cancellationToken);
     }
 
+    public Task<bool> HasUpcomingShowtimesAsync(
+        int roomId,
+        DateTime now,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Showtimes
+            .AsNoTracking()
+            .AnyAsync(s => s.RoomID == roomId
+                && s.Status == "scheduled"
+                && s.StartTime > now, cancellationToken);
+    }
+
     public Task<bool> HasAnyShowtimesAsync(
         int roomId,
         CancellationToken cancellationToken = default) =>
