@@ -3,7 +3,6 @@ using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Contracts.Payment;
 using CinemaBooking.Application.Invoices;
 using CinemaBooking.Application.Notifications;
-using CinemaBooking.Application.Payments.VNPay;
 using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Application.Tickets;
 using CinemaBooking.Domain.Entities;
@@ -13,14 +12,12 @@ namespace CinemaBooking.Application.Payments;
 
 public sealed class PaymentService : IPaymentService
 {
-    private const int VNPaySessionExpiryMinutes = 15;
     private const int PayOSSessionExpiryMinutes = 15;
     private const int FailedPaymentHoldMinutes = 5;
 
     private readonly IPaymentRepository _paymentRepository;
     private readonly IWalletRepository _walletRepository;
     private readonly IBookingRepository _bookingRepository;
-    private readonly IVNPayService _vnpayService;
     private readonly IPayOSService _payOSService;
     private readonly IInvoiceService _invoiceService;
     private readonly ITicketService _ticketService;
@@ -31,7 +28,6 @@ public sealed class PaymentService : IPaymentService
         IPaymentRepository paymentRepository,
         IWalletRepository walletRepository,
         IBookingRepository bookingRepository,
-        IVNPayService vnpayService,
         IPayOSService payOSService,
         IInvoiceService invoiceService,
         ITicketService ticketService,
@@ -41,7 +37,6 @@ public sealed class PaymentService : IPaymentService
         _paymentRepository = paymentRepository;
         _walletRepository = walletRepository;
         _bookingRepository = bookingRepository;
-        _vnpayService = vnpayService;
         _payOSService = payOSService;
         _invoiceService = invoiceService;
         _ticketService = ticketService;
@@ -62,7 +57,8 @@ public sealed class PaymentService : IPaymentService
             return Error(PaymentErrorType.Validation, method.ErrorMessage!);
 
         var booking = await _bookingRepository.GetBookingByIdAsync(request.BookingId, cancellationToken);
-        var accessError = ValidateBookingForPayment(booking, actorUserId, isStaff);
+        var accessError = await ValidateBookingForPaymentAsync(
+            booking, actorUserId, isStaff, cancellationToken);
         if (accessError is not null)
             return accessError;
 
@@ -81,7 +77,6 @@ public sealed class PaymentService : IPaymentService
         return method.DatabaseValue switch
         {
             PaymentMethod.Wallet => await ProcessWalletPaymentAsync(booking!, existingPayment, cancellationToken),
-            PaymentMethod.VNPay => await ProcessVNPayPaymentAsync(booking!, existingPayment, ipAddress, cancellationToken),
             PaymentMethod.PayOS => await ProcessPayOSPaymentAsync(booking!, existingPayment, cancellationToken),
             PaymentMethod.Cash => await ProcessCashPaymentAsync(booking!, existingPayment, cancellationToken),
             _ => Error(PaymentErrorType.Validation, method.ErrorMessage ?? "Payment method is not supported.")
@@ -90,6 +85,7 @@ public sealed class PaymentService : IPaymentService
 
     public async Task<PaymentOperationResult> ConfirmCashPaymentAsync(
         ConfirmCashPaymentRequest request,
+        int staffUserId,
         CancellationToken cancellationToken = default)
     {
         var payment = await _paymentRepository.GetPaymentByIdAsync(request.PaymentId, cancellationToken);
@@ -100,81 +96,24 @@ public sealed class PaymentService : IPaymentService
         if (payment.PaymentMethod != PaymentMethod.Cash)
             return Error(PaymentErrorType.Conflict, "Payment is not a cash payment.");
 
+        var accessError = await ValidateStaffCinemaAccessAsync(
+            payment.Booking, staffUserId, cancellationToken);
+        if (accessError is not null)
+            return accessError;
+
         var result = await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
-            await CompletePaymentAsync(payment, null, cancellationToken);
+            if (!await CompletePaymentAsync(payment, null, cancellationToken))
+                return Error(PaymentErrorType.Conflict, "Payment is not pending.");
+
             var updated = await _paymentRepository.GetPaymentByIdAsync(request.PaymentId, cancellationToken);
             return PaymentOperationResult.Success(MapToPaymentResponse(updated)!);
         }, cancellationToken);
-        await _notificationOutbox.EnqueueBookingSuccessAsync(payment.BookingID, cancellationToken);
-        return result;
-    }
 
-    public async Task<VNPayCallbackResult> ProcessVNPayCallbackAsync(
-        Dictionary<string, string> vnpayData,
-        CancellationToken cancellationToken = default)
-    {
-        var (isValid, responseCode, transactionNo) = await _vnpayService.ProcessCallbackAsync(
-            vnpayData, cancellationToken);
-        if (!isValid)
-            return new(false, "Invalid signature from VNPay");
-        if (!vnpayData.TryGetValue("vnp_TxnRef", out var txnRef))
-            return new(false, "Missing transaction reference");
-
-        var paymentId = ExtractPaymentIdFromTxnRef(txnRef);
-        if (paymentId == 0)
-            return new(false, $"Invalid transaction reference format: {txnRef}");
-
-        var payment = await _paymentRepository.GetPaymentByIdAsync(paymentId, cancellationToken);
-        if (payment is null)
-            return new(false, $"Payment {paymentId} not found");
-        if (payment.Status != PaymentStatus.Pending)
-            return new(true, "Payment already processed", payment.PaymentID, payment.BookingID,
-                EnumValueMapper.ToApiValue(payment.Status));
-
-        var isSuccess = responseCode == VNPayResponseCode.Success;
-        var completed = await _unitOfWork.ExecuteInTransactionAsync(async () =>
-        {
-            if (isSuccess)
-            {
-                if (!await _paymentRepository.TryCompletePendingPaymentAsync(
-                        paymentId, DateTime.UtcNow, transactionNo, cancellationToken))
-                    return false;
-
-                await FinalizeSuccessfulBookingAsync(payment.Booking, cancellationToken);
-                await _invoiceService.CreateInvoiceAsync(payment.BookingID, cancellationToken);
-                await _paymentRepository.UpdatePaymentSessionsForPaymentAsync(
-                    paymentId, "completed", cancellationToken);
-            }
-            else
-            {
-                await _paymentRepository.UpdatePaymentStatusAsync(
-                    paymentId, PaymentStatus.Failed, null, transactionNo, cancellationToken);
-                await _bookingRepository.UpdateBookingStatusAsync(
-                    payment.BookingID, BookingStatus.PaymentFailed, cancellationToken);
-                await _bookingRepository.ExtendBookingHoldsAsync(
-                    payment.BookingID, DateTime.UtcNow.AddMinutes(FailedPaymentHoldMinutes), cancellationToken);
-                await _paymentRepository.UpdatePaymentSessionsForPaymentAsync(
-                    paymentId, "expired", cancellationToken);
-            }
-
-            return true;
-        }, cancellationToken);
-
-        if (isSuccess && !completed)
-            return new(true, "Payment already processed", payment.PaymentID, payment.BookingID,
-                EnumValueMapper.ToApiValue(PaymentStatus.Completed),
-                EnumValueMapper.ToApiValue(BookingStatus.Paid));
-
-        if (isSuccess)
+        if (result.Succeeded)
             await _notificationOutbox.EnqueueBookingSuccessAsync(payment.BookingID, cancellationToken);
 
-        var bookingStatus = isSuccess ? BookingStatus.Paid : BookingStatus.PaymentFailed;
-        var paymentStatus = isSuccess ? PaymentStatus.Completed : PaymentStatus.Failed;
-        return new(true,
-            isSuccess ? "Payment completed successfully" : $"Payment failed with code: {responseCode}",
-            payment.PaymentID, payment.BookingID, EnumValueMapper.ToApiValue(paymentStatus),
-            EnumValueMapper.ToApiValue(bookingStatus));
+        return result;
     }
 
     public async Task<PayOSWebhookResult> ProcessPayOSWebhookAsync(
@@ -250,12 +189,13 @@ public sealed class PaymentService : IPaymentService
         CancellationToken cancellationToken = default)
     {
         var payment = await _paymentRepository.GetPaymentByIdAsync(paymentId, cancellationToken);
-        var accessResult = MapAccessiblePayment(payment, actorUserId, isStaff);
+        var accessResult = await MapAccessiblePaymentAsync(
+            payment, actorUserId, isStaff, cancellationToken);
         if (!accessResult.Succeeded)
             return accessResult;
 
         payment = await SynchronizePendingPayOSPaymentAsync(payment, cancellationToken);
-        return MapAccessiblePayment(payment, actorUserId, isStaff);
+        return await MapAccessiblePaymentAsync(payment, actorUserId, isStaff, cancellationToken);
     }
 
     public async Task<PaymentOperationResult> GetPaymentByBookingIdAsync(
@@ -265,12 +205,13 @@ public sealed class PaymentService : IPaymentService
         CancellationToken cancellationToken = default)
     {
         var payment = await _paymentRepository.GetPaymentByBookingIdAsync(bookingId, cancellationToken);
-        var accessResult = MapAccessiblePayment(payment, actorUserId, isStaff);
+        var accessResult = await MapAccessiblePaymentAsync(
+            payment, actorUserId, isStaff, cancellationToken);
         if (!accessResult.Succeeded)
             return accessResult;
 
         payment = await SynchronizePendingPayOSPaymentAsync(payment, cancellationToken);
-        return MapAccessiblePayment(payment, actorUserId, isStaff);
+        return await MapAccessiblePaymentAsync(payment, actorUserId, isStaff, cancellationToken);
     }
 
     private async Task<Payment?> SynchronizePendingPayOSPaymentAsync(
@@ -325,15 +266,13 @@ public sealed class PaymentService : IPaymentService
         if (!booking.UserID.HasValue)
             return Error(PaymentErrorType.Validation, "Guest bookings cannot use wallet payment.");
 
-        if (!await _walletRepository.CheckSufficientBalanceAsync(
-                booking.UserID.Value, booking.FinalAmount, cancellationToken))
-            return Error(PaymentErrorType.Validation, "Insufficient wallet balance.");
-
         var transactionTime = DateTime.UtcNow;
         var result = await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
-            await _walletRepository.DeductBalanceAsync(
-                booking.UserID.Value, booking.FinalAmount, cancellationToken);
+            if (!await _walletRepository.TryDeductBalanceAsync(
+                    booking.UserID.Value, booking.FinalAmount, cancellationToken))
+                return Error(PaymentErrorType.Validation, "Insufficient wallet balance.");
+
             Payment payment;
             if (existingPayment is null)
             {
@@ -384,52 +323,6 @@ public sealed class PaymentService : IPaymentService
         await _notificationOutbox.EnqueueWalletPaymentAsync(
             booking.UserID.Value, booking.FinalAmount, transactionTime, cancellationToken);
         return result;
-    }
-
-    private async Task<PaymentOperationResult> ProcessVNPayPaymentAsync(
-        Booking booking,
-        Payment? existingPayment,
-        string ipAddress,
-        CancellationToken cancellationToken)
-    {
-        return await _unitOfWork.ExecuteInTransactionAsync(async () =>
-        {
-            Payment payment;
-            if (existingPayment is null)
-            {
-                payment = await _paymentRepository.CreatePaymentAsync(new Payment
-                {
-                    BookingID = booking.BookingID,
-                    PaymentMethod = PaymentMethod.VNPay,
-                    Amount = booking.FinalAmount,
-                    Status = PaymentStatus.Pending,
-                    CreatedAt = DateTime.UtcNow
-                }, cancellationToken);
-            }
-            else
-            {
-                payment = existingPayment;
-                await _paymentRepository.ResetPaymentForRetryAsync(
-                    payment.PaymentID, PaymentMethod.VNPay, booking.FinalAmount, cancellationToken);
-                await _bookingRepository.UpdateBookingStatusAsync(
-                    booking.BookingID, BookingStatus.Pending, cancellationToken);
-            }
-            var expiresAt = DateTime.UtcNow.AddMinutes(VNPaySessionExpiryMinutes);
-            var url = await _vnpayService.CreatePaymentUrlAsync(payment, booking, ipAddress, cancellationToken);
-            var session = await _paymentRepository.CreatePaymentSessionAsync(new PaymentSession
-            {
-                PaymentID = payment.PaymentID,
-                GatewayName = PaymentMethod.VNPay,
-                QRCodeURL = url,
-                ExpiresAt = expiresAt,
-                Status = "waiting",
-                CreatedAt = DateTime.UtcNow
-            }, cancellationToken);
-            return PaymentOperationResult.Success(new VNPayPaymentResponse(
-                true, payment.PaymentID, booking.BookingID,
-                EnumValueMapper.ToApiValue(PaymentMethod.VNPay), booking.FinalAmount,
-                EnumValueMapper.ToApiValue(PaymentStatus.Pending), url, session.SessionID, expiresAt));
-        }, cancellationToken);
     }
 
     private async Task<PaymentOperationResult> ProcessCashPaymentAsync(
@@ -543,16 +436,18 @@ public sealed class PaymentService : IPaymentService
         }
     }
 
-    private async Task CompletePaymentAsync(
+    private async Task<bool> CompletePaymentAsync(
         Payment payment,
         string? transactionCode,
         CancellationToken cancellationToken)
     {
-        await _paymentRepository.UpdatePaymentStatusAsync(
-            payment.PaymentID, PaymentStatus.Completed, DateTime.UtcNow,
-            transactionCode, cancellationToken);
+        if (!await _paymentRepository.TryCompletePendingPaymentAsync(
+                payment.PaymentID, DateTime.UtcNow, transactionCode, cancellationToken))
+            return false;
+
         await FinalizeSuccessfulBookingAsync(payment.Booking, cancellationToken);
         await _invoiceService.CreateInvoiceAsync(payment.BookingID, cancellationToken);
+        return true;
     }
 
     private async Task FinalizeSuccessfulBookingAsync(Booking booking, CancellationToken cancellationToken)
@@ -571,30 +466,59 @@ public sealed class PaymentService : IPaymentService
         return Guid.NewGuid().ToString("N").ToUpperInvariant();
     }
 
-    private static PaymentOperationResult? ValidateBookingForPayment(
+    private async Task<PaymentOperationResult?> ValidateBookingForPaymentAsync(
         Booking? booking,
         int actorUserId,
-        bool isStaff)
+        bool isStaff,
+        CancellationToken cancellationToken)
     {
         if (booking is null)
             return Error(PaymentErrorType.NotFound, "Booking not found.");
         if (!isStaff && booking.UserID != actorUserId)
             return Error(PaymentErrorType.Forbidden, "You cannot access another customer's booking.");
+        if (isStaff)
+        {
+            var accessError = await ValidateStaffCinemaAccessAsync(
+                booking, actorUserId, cancellationToken);
+            if (accessError is not null)
+                return accessError;
+        }
         if (booking.Status != BookingStatus.Pending && booking.Status != BookingStatus.PaymentFailed)
             return Error(PaymentErrorType.Conflict, "Booking is not pending.");
         return null;
     }
 
-    private static PaymentOperationResult MapAccessiblePayment(
+    private async Task<PaymentOperationResult> MapAccessiblePaymentAsync(
         Payment? payment,
         int actorUserId,
-        bool isStaff)
+        bool isStaff,
+        CancellationToken cancellationToken)
     {
         if (payment is null)
             return Error(PaymentErrorType.NotFound, "Payment not found.");
         if (!isStaff && payment.Booking.UserID != actorUserId)
             return Error(PaymentErrorType.Forbidden, "You cannot access another customer's payment.");
+        if (isStaff)
+        {
+            var accessError = await ValidateStaffCinemaAccessAsync(
+                payment.Booking, actorUserId, cancellationToken);
+            if (accessError is not null)
+                return accessError;
+        }
         return PaymentOperationResult.Success(MapToPaymentResponse(payment)!);
+    }
+
+    private async Task<PaymentOperationResult?> ValidateStaffCinemaAccessAsync(
+        Booking booking,
+        int staffUserId,
+        CancellationToken cancellationToken)
+    {
+        var staffCinemaId = await _bookingRepository.GetStaffCinemaIdAsync(staffUserId, cancellationToken);
+        if (!staffCinemaId.HasValue
+            || booking.Showtime.Room.CinemaID != staffCinemaId.Value)
+            return Error(PaymentErrorType.Forbidden, "You cannot access bookings outside your assigned cinema.");
+
+        return null;
     }
 
     private static PaymentOperationResult Error(PaymentErrorType type, string message) =>
@@ -607,12 +531,6 @@ public sealed class PaymentService : IPaymentService
             EnumValueMapper.ToApiValue(payment.Status), payment.PaidAt, payment.CreatedAt);
 
     private static int CalculatePointsEarned(decimal amount) => (int)(amount / 1000m);
-
-    private static int ExtractPaymentIdFromTxnRef(string txnRef)
-    {
-        var parts = txnRef.Split('_');
-        return parts.Length >= 2 && int.TryParse(parts[1], out var paymentId) ? paymentId : 0;
-    }
 
     private static long CreatePayOSOrderCode() =>
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() * 1_000_000L

@@ -1,5 +1,6 @@
 using CinemaBooking.API.Contracts.Bookings;
 using CinemaBooking.Application.Bookings;
+using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -13,10 +14,14 @@ namespace CinemaBooking.API.Controllers;
 public sealed class BookingController : ControllerBase
 {
     private readonly IBookingService _bookingService;
+    private readonly IBookingRepository _bookingRepository;
 
-    public BookingController(IBookingService bookingService)
+    public BookingController(
+        IBookingService bookingService,
+        IBookingRepository bookingRepository)
     {
         _bookingService = bookingService;
+        _bookingRepository = bookingRepository;
     }
 
     [HttpPost("seat-holds")]
@@ -26,7 +31,7 @@ public sealed class BookingController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
 
         var userId = GetCurrentUserId();
 
@@ -58,7 +63,7 @@ public sealed class BookingController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
 
         var result = await _bookingService.ReleaseSeatHoldsAsync(
             GetCurrentUserId(), request.ShowtimeId, request.SeatIds, cancellationToken);
@@ -75,7 +80,7 @@ public sealed class BookingController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
 
         var currentUserId = GetCurrentUserId();
         var isStaff = User.IsInRole(Roles.Staff);
@@ -102,7 +107,7 @@ public sealed class BookingController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
 
         if (!User.IsInRole(Roles.Customer) && !User.IsInRole(Roles.Staff))
         {
@@ -152,6 +157,15 @@ public sealed class BookingController : ControllerBase
         var currentUserId = GetCurrentUserId();
         if (booking.UserID != currentUserId && !User.IsInRole(Roles.Admin) && !User.IsInRole(Roles.Staff))
             return Forbid();
+
+        if (User.IsInRole(Roles.Staff))
+        {
+            var staffCinemaId = await _bookingRepository.GetStaffCinemaIdAsync(
+                currentUserId, cancellationToken);
+            if (!staffCinemaId.HasValue
+                || booking.Showtime.Room.CinemaID != staffCinemaId.Value)
+                return Forbid();
+        }
 
         return Ok(MapToResponse(booking));
     }

@@ -9,7 +9,6 @@ using CinemaBooking.API.Services;
 using CinemaBooking.API.Serialization;
 using CinemaBooking.Application;
 using CinemaBooking.Application.Configuration;
-using CinemaBooking.Application.Payments.VNPay;
 using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -190,11 +189,6 @@ public static class DependencyInjection
             .Validate(settings => Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri)
                 && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp),
                 "Frontend:BaseUrl must be an absolute HTTP or HTTPS URL.")
-            .ValidateOnStart();
-
-        services.AddOptions<VNPaySettings>()
-            .Bind(configuration.GetRequiredSection("VNPay"))
-            .ValidateDataAnnotations()
             .ValidateOnStart();
 
         services.AddOptions<PayOSSettings>()

@@ -164,10 +164,7 @@ public sealed class PaymentFlowRegressionTests
 
         public Task<PaymentOperationResult> ConfirmCashPaymentAsync(
             ConfirmCashPaymentRequest request,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-        public Task<VNPayCallbackResult> ProcessVNPayCallbackAsync(
-            Dictionary<string, string> vnpayData,
+            int staffUserId,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<PayOSWebhookResult> ProcessPayOSWebhookAsync(

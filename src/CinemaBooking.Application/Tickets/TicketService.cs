@@ -24,7 +24,11 @@ public sealed class TicketService : ITicketService
         if (booking is null)
             return;
 
-        foreach (var bookingSeat in booking.BookingSeats)
+        var ticketedBookingSeatIds = await _ticketRepository.GetTicketedBookingSeatIdsAsync(
+            bookingId, cancellationToken);
+
+        foreach (var bookingSeat in booking.BookingSeats
+            .Where(bookingSeat => !ticketedBookingSeatIds.Contains(bookingSeat.BookingSeatID)))
         {
             var ticket = new Ticket
             {

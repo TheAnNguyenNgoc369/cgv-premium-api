@@ -25,14 +25,13 @@ public sealed class PaymentController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
 
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
         var userId = GetCurrentUserId();
         var isStaff = User.IsInRole(Roles.Staff);
 
         var result = await _paymentService.InitiatePaymentAsync(
-            request, userId, isStaff, ipAddress, cancellationToken);
+            request, userId, isStaff, cancellationToken: cancellationToken);
         return MapResult(result);
     }
 
@@ -43,24 +42,12 @@ public sealed class PaymentController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
 
-        var result = await _paymentService.ConfirmCashPaymentAsync(request, cancellationToken);
+        var result = await _paymentService.ConfirmCashPaymentAsync(
+            request, GetCurrentUserId(), cancellationToken);
 
         return MapResult(result);
-    }
-
-    [HttpPost("vnpay/callback")]
-    [AllowAnonymous]
-    public async Task<IActionResult> ProcessVNPayCallback(CancellationToken cancellationToken)
-    {
-        var vnpayData = Request.Query.ToDictionary(
-            kvp => kvp.Key,
-            kvp => kvp.Value.ToString());
-
-        var result = await _paymentService.ProcessVNPayCallbackAsync(vnpayData, cancellationToken);
-
-        return Ok(result);
     }
 
     [HttpPost("payos/webhook")]

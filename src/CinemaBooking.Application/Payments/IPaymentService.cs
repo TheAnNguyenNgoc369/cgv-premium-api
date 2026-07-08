@@ -14,10 +14,7 @@ public interface IPaymentService
 
     Task<PaymentOperationResult> ConfirmCashPaymentAsync(
         ConfirmCashPaymentRequest request,
-        CancellationToken cancellationToken = default);
-
-    Task<VNPayCallbackResult> ProcessVNPayCallbackAsync(
-        Dictionary<string, string> vnpayData,
+        int staffUserId,
         CancellationToken cancellationToken = default);
 
     Task<PayOSWebhookResult> ProcessPayOSWebhookAsync(

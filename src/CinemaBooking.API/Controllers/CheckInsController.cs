@@ -28,7 +28,7 @@ public sealed class CheckInsController : ControllerBase
             return Forbid();
 
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
 
         var staffId = GetCurrentUserId();
         var result = await _checkInService.LookupAsync(
@@ -108,7 +108,7 @@ public sealed class CheckInsController : ControllerBase
             return Forbid();
 
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
 
         var staffId = GetCurrentUserId();
         var ipAddress = GetClientIpAddress();

@@ -56,7 +56,7 @@ public sealed class UserController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
         }
 
         if (!TryGetCurrentUserId(out var userId))
@@ -218,7 +218,7 @@ public sealed class UserController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
         }
 
         if (!TryGetCurrentUserId(out var userId))

@@ -47,7 +47,7 @@ public sealed class SeatTypeController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
         }
 
         var result = await _seatTypeService.CreateSeatTypeAsync(
@@ -77,7 +77,7 @@ public sealed class SeatTypeController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
         }
 
         var result = await _seatTypeService.UpdateSeatTypeAsync(
