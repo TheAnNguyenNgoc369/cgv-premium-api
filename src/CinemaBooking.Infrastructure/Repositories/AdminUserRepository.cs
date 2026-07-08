@@ -64,6 +64,14 @@ public sealed class AdminUserRepository : IAdminUserRepository
             && (!excludingUserId.HasValue || user.UserID != excludingUserId.Value),
             cancellationToken);
 
+    public Task<bool> PhoneExistsAsync(
+        string phone, int? excludingUserId = null,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.Users.AnyAsync(user =>
+            user.Phone == phone
+            && (!excludingUserId.HasValue || user.UserID != excludingUserId.Value),
+            cancellationToken);
+
     public Task<bool> CinemaExistsAsync(
         int cinemaId, CancellationToken cancellationToken = default) =>
         _dbContext.Cinemas.AnyAsync(cinema => cinema.CinemaID == cinemaId, cancellationToken);

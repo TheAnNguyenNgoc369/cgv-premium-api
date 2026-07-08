@@ -23,6 +23,19 @@ public sealed class AuthAccountStatusTests
     }
 
     [Fact]
+    public async Task RegisterAsync_ExistingPhone_ReturnsPhoneInUse()
+    {
+        var service = new AuthService(
+            new StubUserRepository { PhoneExists = true }, new StubEmailSender(), new StubAuthEmailService());
+
+        var result = await service.RegisterAsync(
+            "Existing Phone", "phone@example.com", "0901234567", "Password@123");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Phone is already in use.", result.ErrorMessage);
+    }
+
+    [Fact]
     public async Task LoginAsync_InactiveUser_ReturnsContactAdministratorMessage()
     {
         const string password = "Password@123";
@@ -116,17 +129,22 @@ public sealed class AuthAccountStatusTests
     private sealed class StubUserRepository : IUserRepository
     {
         public bool EmailExists { get; init; }
+        public bool PhoneExists { get; init; }
         public User? User { get; init; }
         public EmailVerificationToken? VerificationToken { get; init; }
         public bool SaveChangesCalled { get; private set; }
 
         public Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default) =>
             Task.FromResult(EmailExists);
+        public Task<bool> PhoneExistsAsync(string phone, int? excludingUserId = null,
+            CancellationToken cancellationToken = default) => Task.FromResult(PhoneExists);
         public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default) =>
             Task.FromResult(User);
         public Task<bool> TryUpdatePasswordHashAsync(int userId, string expectedPasswordHash,
             string newPasswordHash, CancellationToken cancellationToken = default) => Task.FromResult(true);
         public Task<User?> GetProfileByIdAsync(int userId, CancellationToken cancellationToken = default) => Unsupported<User?>();
+        public Task<User?> LookupCustomerAsync(string? email, string? phone,
+            CancellationToken cancellationToken = default) => Unsupported<User?>();
         public Task<User?> GetByIdAsync(int userId, CancellationToken cancellationToken = default) => Unsupported<User?>();
         public Task<User?> UpdateProfileAsync(int userId, string fullName, string? phone,
             CancellationToken cancellationToken = default) => Unsupported<User?>();

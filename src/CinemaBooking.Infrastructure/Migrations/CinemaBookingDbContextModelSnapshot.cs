@@ -1734,6 +1734,11 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.HasIndex("LoyaltyTierID");
 
+                    b.HasIndex("Phone")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_Users_Phone")
+                        .HasFilter("[Phone] IS NOT NULL");
+
                     b.HasIndex("Role", "Status")
                         .HasDatabaseName("IX_Users_Role_Status");
 

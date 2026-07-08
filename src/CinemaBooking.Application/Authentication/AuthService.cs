@@ -60,6 +60,11 @@ public sealed class AuthService : IAuthService
             return (false, "Email is already in use.", null, false);
         }
 
+        if (await _userRepository.PhoneExistsAsync(normalizedPhone, cancellationToken: cancellationToken))
+        {
+            return (false, "Phone is already in use.", null, false);
+        }
+
         var now = DateTime.UtcNow;
         var user = new User
         {
