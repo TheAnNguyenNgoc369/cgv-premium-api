@@ -15,10 +15,19 @@ public sealed class NotificationOutboxJob(IServiceScopeFactory scopeFactory, ILo
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            await ProcessBatchAsync(stoppingToken);
+            try
+            {
+                await ProcessBatchAsync(stoppingToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogError(exception, "Notification outbox batch failed. The job will retry on the next interval.");
+            }
+
             await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
         }
     }
+
     private async Task ProcessBatchAsync(CancellationToken ct)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
@@ -34,14 +43,27 @@ public sealed class NotificationOutboxJob(IServiceScopeFactory scopeFactory, ILo
                 if (item.EventType == "BookingSuccess") await ProcessBookingAsync(db, email, item, ct);
                 else if (item.EventType == "RefundCompleted") await ProcessRefundAsync(db, email, item, ct);
                 item.Status = "processed"; item.ProcessedAt = DateTime.UtcNow; item.LastError = null;
+
+                await db.SaveChangesAsync(ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                ScheduleRetry(item);
-                item.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
                 logger.LogError(ex, "Notification outbox event {EventId} failed", item.EventId);
+
+                try
+                {
+                    ScheduleRetry(item);
+                    item.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (Exception saveException) when (saveException is not OperationCanceledException)
+                {
+                    logger.LogError(
+                        saveException,
+                        "Failed to persist retry state for notification outbox event {EventId}",
+                        item.EventId);
+                }
             }
-            await db.SaveChangesAsync(ct);
         }
     }
 

@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Diagnostics;
+using CinemaBooking.API.Configuration;
 using CinemaBooking.API.Contracts.Auth;
 using CinemaBooking.API.Contracts.Cinemas;
 using CinemaBooking.API.Services;
@@ -8,6 +9,7 @@ using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CinemaBooking.API.Controllers;
 
@@ -20,19 +22,23 @@ public sealed class AuthController : ControllerBase
     private readonly IAuthService _authService;
     private readonly JwtTokenService _jwtTokenService;
     private readonly ITokenRevocationService _tokenRevocationService;
+    private readonly IAuthRequestRateLimiter _authRequestRateLimiter;
 
     public AuthController(
         IAuthService authService,
         JwtTokenService jwtTokenService,
-        ITokenRevocationService tokenRevocationService)
+        ITokenRevocationService tokenRevocationService,
+        IAuthRequestRateLimiter authRequestRateLimiter)
     {
         _authService = authService;
         _jwtTokenService = jwtTokenService;
         _tokenRevocationService = tokenRevocationService;
+        _authRequestRateLimiter = authRequestRateLimiter;
     }
 
     [HttpPost("register")]
     [AllowAnonymous]
+    [EnableRateLimiting(AuthRateLimitPolicyNames.Register)]
     public async Task<IActionResult> Register(
         [FromBody] RegisterRequest model,
         CancellationToken cancellationToken)
@@ -40,6 +46,11 @@ public sealed class AuthController : ControllerBase
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
+        }
+
+        if (!await TryAcquireEmailLimitAsync("register", model.Email, cancellationToken))
+        {
+            return TooManyAuthRequests();
         }
 
         var result = await _authService.RegisterAsync(
@@ -65,6 +76,7 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("resend-verification-email")]
     [AllowAnonymous]
+    [EnableRateLimiting(AuthRateLimitPolicyNames.EmailAction)]
     public async Task<IActionResult> ResendVerificationEmail(
         [FromBody] ResendVerificationEmailRequest model,
         CancellationToken cancellationToken)
@@ -75,6 +87,12 @@ public sealed class AuthController : ControllerBase
         }
 
         var startedAt = Stopwatch.GetTimestamp();
+
+        if (!await TryAcquireEmailLimitAsync("resend-verification-email", model.Email, cancellationToken))
+        {
+            await EnsureMinimumResponseDurationAsync(startedAt, cancellationToken);
+            return TooManyAuthRequests();
+        }
 
         var result = await _authService.ResendVerificationEmailAsync(
             model.Email,
@@ -93,6 +111,7 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("forgot-password")]
     [AllowAnonymous]
+    [EnableRateLimiting(AuthRateLimitPolicyNames.EmailAction)]
     public async Task<IActionResult> ForgotPassword(
         [FromBody] ForgotPasswordRequest model,
         CancellationToken cancellationToken)
@@ -103,6 +122,12 @@ public sealed class AuthController : ControllerBase
         }
 
         var startedAt = Stopwatch.GetTimestamp();
+
+        if (!await TryAcquireEmailLimitAsync("forgot-password", model.Email, cancellationToken))
+        {
+            await EnsureMinimumResponseDurationAsync(startedAt, cancellationToken);
+            return TooManyAuthRequests();
+        }
 
         var result = await _authService.ForgotPasswordAsync(
             model.Email,
@@ -154,6 +179,7 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting(AuthRateLimitPolicyNames.Login)]
     public async Task<IActionResult> Login(
         [FromBody] LoginRequest model,
         CancellationToken cancellationToken)
@@ -161,6 +187,11 @@ public sealed class AuthController : ControllerBase
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
+        }
+
+        if (!await TryAcquireEmailLimitAsync("login", model.Email, cancellationToken))
+        {
+            return TooManyAuthRequests();
         }
 
         var result = await _authService.LoginAsync(model.Email, model.Password, cancellationToken);
@@ -229,6 +260,7 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("verify-email")]
     [AllowAnonymous]
+    [EnableRateLimiting(AuthRateLimitPolicyNames.Verify)]
     public async Task<IActionResult> VerifyEmail(
         [FromBody] VerifyEmailRequest model,
         CancellationToken cancellationToken)
@@ -279,5 +311,25 @@ public sealed class AuthController : ControllerBase
         {
             await Task.Delay(remaining, cancellationToken);
         }
+    }
+
+    private async ValueTask<bool> TryAcquireEmailLimitAsync(
+        string action,
+        string email,
+        CancellationToken cancellationToken)
+    {
+        return await _authRequestRateLimiter.TryAcquireAsync(action, email, cancellationToken);
+    }
+
+    private static IActionResult TooManyAuthRequests()
+    {
+        return new ObjectResult(new
+        {
+            success = false,
+            message = "Too many requests. Please try again later."
+        })
+        {
+            StatusCode = StatusCodes.Status429TooManyRequests
+        };
     }
 }

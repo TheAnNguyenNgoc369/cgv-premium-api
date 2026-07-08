@@ -12,6 +12,7 @@ using CinemaBooking.Infrastructure.Reports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using CinemaBooking.Application.ActivityLogs;
 using CinemaBooking.Infrastructure.ActivityLogs;
@@ -76,6 +77,10 @@ public static class DependencyInjection
         services.AddHostedService<ShowtimeCompletionJob>();
         services.AddHostedService<EmailDeliveryJob>();
         services.AddHostedService<NotificationOutboxJob>();
+        services.Configure<HostOptions>(options =>
+        {
+            options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+        });
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScopedByConvention(typeof(DependencyInjection).Assembly, "Repository");
 

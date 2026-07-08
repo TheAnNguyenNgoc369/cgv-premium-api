@@ -2,6 +2,7 @@ using CinemaBooking.API.Contracts.Images;
 using CinemaBooking.API.Contracts.Users;
 using CinemaBooking.API.Contracts.Cinemas;
 using CinemaBooking.Application.Common.Enums;
+using CinemaBooking.Application.Membership;
 using CinemaBooking.Application.Users;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
@@ -16,10 +17,14 @@ namespace CinemaBooking.API.Controllers;
 public sealed class UserController : ControllerBase
 {
     private readonly IUserService _userService;
+    private readonly IMembershipService _membershipService;
 
-    public UserController(IUserService userService)
+    public UserController(
+        IUserService userService,
+        IMembershipService membershipService)
     {
         _userService = userService;
+        _membershipService = membershipService;
     }
 
     [HttpGet("profile")]
@@ -37,7 +42,9 @@ public sealed class UserController : ControllerBase
             return NotFound();
         }
 
-        return Ok(ToProfileResponseWithCinema(user));
+        var membership = await _membershipService.GetMyMembershipAsync(userId, cancellationToken);
+
+        return Ok(ToProfileResponseWithCinema(user, membership.TotalRefunds, membership.UsedRefunds));
     }
 
     [HttpPut("profile")]
@@ -71,7 +78,9 @@ public sealed class UserController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
-        return Ok(ToProfileResponse(result.User!));
+        var membership = await _membershipService.GetMyMembershipAsync(userId, cancellationToken);
+
+        return Ok(ToProfileResponse(result.User!, membership.TotalRefunds, membership.UsedRefunds));
     }
 
     [HttpPut("profile/avatar")]
@@ -108,11 +117,13 @@ public sealed class UserController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
+        var membership = await _membershipService.GetMyMembershipAsync(userId, cancellationToken);
+
         return Ok(new
         {
             secureUrl = result.User!.AvatarURL,
             publicId = result.User.AvatarPublicId,
-            user = ToProfileResponse(result.User)
+            user = ToProfileResponse(result.User, membership.TotalRefunds, membership.UsedRefunds)
         });
     }
 
@@ -197,7 +208,10 @@ public sealed class UserController : ControllerBase
         return int.TryParse(userIdValue, out userId);
     }
 
-    private static object ToProfileResponse(User user)
+    private static object ToProfileResponse(
+        User user,
+        int totalRefunds,
+        int usedRefunds)
     {
         return new
         {
@@ -209,11 +223,16 @@ public sealed class UserController : ControllerBase
             user.Status,
             user.AvatarURL,
             user.TotalPoints,
+            total_refunds = totalRefunds,
+            used_refunds = usedRefunds,
             user.CreatedAt
         };
     }
 
-    private static object ToProfileResponseWithCinema(User user)
+    private static object ToProfileResponseWithCinema(
+        User user,
+        int totalRefunds,
+        int usedRefunds)
     {
         return new
         {
@@ -225,6 +244,8 @@ public sealed class UserController : ControllerBase
             user.Status,
             user.AvatarURL,
             user.TotalPoints,
+            total_refunds = totalRefunds,
+            used_refunds = usedRefunds,
             user.CreatedAt,
             cinema = user.Role is Roles.Manager or Roles.Staff && user.Cinema is not null
                 ? new CinemaSummaryResponse(

@@ -7,10 +7,14 @@ namespace CinemaBooking.Application.Membership;
 public sealed class MembershipService : IMembershipService
 {
     private readonly ILoyaltyRepository _loyaltyRepository;
+    private readonly IRefundRepository _refundRepository;
 
-    public MembershipService(ILoyaltyRepository loyaltyRepository)
+    public MembershipService(
+        ILoyaltyRepository loyaltyRepository,
+        IRefundRepository refundRepository)
     {
         _loyaltyRepository = loyaltyRepository;
+        _refundRepository = refundRepository;
     }
 
     public async Task<MembershipInfo> GetMyMembershipAsync(
@@ -37,6 +41,10 @@ public sealed class MembershipService : IMembershipService
         var currentTierName = currentTier?.TierName ?? "unknown";
         var discountRate = currentTier?.DiscountRate ?? 0m;
         var discountPercent = discountRate * 100;
+        var totalRefunds = currentTier?.MaxRefundPerMonth ?? 0;
+        var usedRefunds = await _refundRepository.CountCompletedRefundsInCurrentMonthAsync(
+            userId,
+            cancellationToken);
 
         var nextTier = allTiers
             .Where(t => t.MinPoints > totalPoints)
@@ -52,7 +60,9 @@ public sealed class MembershipService : IMembershipService
             PointsToNextTier: pointsToNextTier,
             TotalPoints: totalPoints,
             TotalSpent: totalSpent,
-            DiscountPercent: discountPercent
+            DiscountPercent: discountPercent,
+            TotalRefunds: totalRefunds,
+            UsedRefunds: usedRefunds
         );
     }
 

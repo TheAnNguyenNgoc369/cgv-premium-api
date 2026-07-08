@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using CinemaBooking.API.Configuration;
 using CinemaBooking.API.OpenApi;
 using CinemaBooking.API.Services;
@@ -13,6 +14,7 @@ using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -126,6 +128,31 @@ public static class DependencyInjection
         services.AddApplicationServices();
         services.AddScoped<JwtTokenService>();
         services.AddScoped<ITokenRevocationService, DatabaseTokenRevocationService>();
+        services.AddSingleton<IAuthRequestRateLimiter, AuthRequestRateLimiter>();
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy(
+                AuthRateLimitPolicyNames.Login,
+                httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                    GetClientPartitionKey(httpContext, "login"),
+                    _ => CreateFixedWindowOptions(10)));
+            options.AddPolicy(
+                AuthRateLimitPolicyNames.Register,
+                httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                    GetClientPartitionKey(httpContext, "register"),
+                    _ => CreateFixedWindowOptions(5)));
+            options.AddPolicy(
+                AuthRateLimitPolicyNames.EmailAction,
+                httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                    GetClientPartitionKey(httpContext, "email-action"),
+                    _ => CreateFixedWindowOptions(5)));
+            options.AddPolicy(
+                AuthRateLimitPolicyNames.Verify,
+                httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                    GetClientPartitionKey(httpContext, "verify"),
+                    _ => CreateFixedWindowOptions(10)));
+        });
 
         if (environment.IsDevelopment())
         {
@@ -231,5 +258,22 @@ public static class DependencyInjection
         });
 
         return services;
+    }
+
+    private static string GetClientPartitionKey(HttpContext httpContext, string action)
+    {
+        var remoteIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return $"{action}:{remoteIp}";
+    }
+
+    private static FixedWindowRateLimiterOptions CreateFixedWindowOptions(int permitLimit)
+    {
+        return new FixedWindowRateLimiterOptions
+        {
+            AutoReplenishment = true,
+            PermitLimit = permitLimit,
+            QueueLimit = 0,
+            Window = TimeSpan.FromMinutes(1)
+        };
     }
 }
