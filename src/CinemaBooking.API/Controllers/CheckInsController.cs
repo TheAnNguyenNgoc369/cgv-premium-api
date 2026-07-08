@@ -24,6 +24,9 @@ public sealed class CheckInsController : ControllerBase
         [FromBody] CheckInLookupRequest request,
         CancellationToken cancellationToken)
     {
+        if (!User.IsInRole(Roles.Staff))
+            return Forbid();
+
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
@@ -101,6 +104,9 @@ public sealed class CheckInsController : ControllerBase
         [FromBody] CheckInRequest request,
         CancellationToken cancellationToken)
     {
+        if (!User.IsInRole(Roles.Staff))
+            return Forbid();
+
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
@@ -153,6 +159,21 @@ public sealed class CheckInsController : ControllerBase
         [FromQuery] CheckInHistoryRequest request,
         CancellationToken cancellationToken)
     {
+        if (!User.IsInRole(Roles.Staff)
+            && !User.IsInRole(Roles.Manager)
+            && !User.IsInRole(Roles.Admin))
+            return Forbid();
+
+        if (!ModelState.IsValid)
+        {
+            var error = ModelState
+                .Where(entry => entry.Value?.Errors.Count > 0)
+                .Select(entry => entry.Value!.Errors[0].ErrorMessage)
+                .FirstOrDefault() ?? "Invalid request.";
+
+            return BadRequest(new { success = false, message = error });
+        }
+
         var result = await _checkInService.GetHistoryAsync(
             request.StaffId,
             request.CinemaId,
@@ -160,6 +181,10 @@ public sealed class CheckInsController : ControllerBase
             request.To,
             request.Page,
             request.PageSize,
+            GetCurrentUserId(),
+            User.IsInRole(Roles.Admin),
+            User.IsInRole(Roles.Manager),
+            User.IsInRole(Roles.Staff),
             cancellationToken);
 
         var response = new CheckInHistoryResponse

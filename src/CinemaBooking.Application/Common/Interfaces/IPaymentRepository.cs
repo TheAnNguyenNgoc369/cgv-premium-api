@@ -26,7 +26,15 @@ public interface IPaymentRepository
     Task<bool> TryCompletePendingPaymentAsync(
         int paymentId,
         DateTime paidAt,
-        string transactionCode,
+        string? transactionCode,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> TryMarkCompletedPaymentAsRefundedAsync(
+        int paymentId,
+        decimal refundAmount,
+        string refundReason,
+        int refundedBy,
+        DateTime refundedAt,
         CancellationToken cancellationToken = default);
 
     Task<bool> TryCancelPendingPaymentAsync(

@@ -8,6 +8,7 @@ using CinemaBooking.API.OpenApi;
 using CinemaBooking.API.Services;
 using CinemaBooking.API.Serialization;
 using CinemaBooking.Application;
+using CinemaBooking.Application.Configuration;
 using CinemaBooking.Application.Payments.VNPay;
 using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Shared.Constants;
@@ -183,6 +184,14 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<FrontendSettings>()
+            .Bind(configuration.GetRequiredSection(FrontendSettings.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(settings => Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp),
+                "Frontend:BaseUrl must be an absolute HTTP or HTTPS URL.")
+            .ValidateOnStart();
+
         services.AddOptions<VNPaySettings>()
             .Bind(configuration.GetRequiredSection("VNPay"))
             .ValidateDataAnnotations()
@@ -241,8 +250,13 @@ public static class DependencyInjection
 
                     OnAuthenticationFailed = context =>
                     {
-                        Console.WriteLine("JWT ERROR:");
-                        Console.WriteLine(context.Exception.Message);
+                        var logger = context.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("JwtAuthentication");
+                        logger.LogWarning(
+                            context.Exception,
+                            "JWT authentication failed for request {Path}.",
+                            context.HttpContext.Request.Path);
 
                         return Task.CompletedTask;
                     }

@@ -133,11 +133,16 @@ public sealed class PaymentService : IPaymentService
                 EnumValueMapper.ToApiValue(payment.Status));
 
         var isSuccess = responseCode == VNPayResponseCode.Success;
-        await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        var completed = await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             if (isSuccess)
             {
-                await CompletePaymentAsync(payment, transactionNo, cancellationToken);
+                if (!await _paymentRepository.TryCompletePendingPaymentAsync(
+                        paymentId, DateTime.UtcNow, transactionNo, cancellationToken))
+                    return false;
+
+                await FinalizeSuccessfulBookingAsync(payment.Booking, cancellationToken);
+                await _invoiceService.CreateInvoiceAsync(payment.BookingID, cancellationToken);
                 await _paymentRepository.UpdatePaymentSessionsForPaymentAsync(
                     paymentId, "completed", cancellationToken);
             }
@@ -155,6 +160,11 @@ public sealed class PaymentService : IPaymentService
 
             return true;
         }, cancellationToken);
+
+        if (isSuccess && !completed)
+            return new(true, "Payment already processed", payment.PaymentID, payment.BookingID,
+                EnumValueMapper.ToApiValue(PaymentStatus.Completed),
+                EnumValueMapper.ToApiValue(BookingStatus.Paid));
 
         if (isSuccess)
             await _notificationOutbox.EnqueueBookingSuccessAsync(payment.BookingID, cancellationToken);

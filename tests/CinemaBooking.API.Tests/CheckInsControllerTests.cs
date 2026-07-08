@@ -492,6 +492,12 @@ public sealed class CheckInsControllerTests
         };
 
         public int? CapturedStaffId { get; private set; }
+        public int? CapturedHistoryStaffId { get; private set; }
+        public int? CapturedHistoryCinemaId { get; private set; }
+        public int? CapturedHistoryUserId { get; private set; }
+        public bool CapturedHistoryIsAdmin { get; private set; }
+        public bool CapturedHistoryIsManager { get; private set; }
+        public bool CapturedHistoryIsStaff { get; private set; }
         public string? CapturedIpAddress { get; private set; }
 
         public Task<(bool Succeeded, string? ErrorMessage, CheckInLookupResult? Data)> LookupAsync(
@@ -523,9 +529,19 @@ public sealed class CheckInsControllerTests
             DateTime? to,
             int page,
             int pageSize,
+            int currentUserId,
+            bool isAdmin,
+            bool isManager,
+            bool isStaff,
             CancellationToken cancellationToken = default)
         {
             HistoryCallCount++;
+            CapturedHistoryStaffId = staffId;
+            CapturedHistoryCinemaId = cinemaId;
+            CapturedHistoryUserId = currentUserId;
+            CapturedHistoryIsAdmin = isAdmin;
+            CapturedHistoryIsManager = isManager;
+            CapturedHistoryIsStaff = isStaff;
             return Task.FromResult(HistoryResult);
         }
     }

@@ -67,7 +67,7 @@ public sealed class PaymentRepository : IPaymentRepository
     public async Task<bool> TryCompletePendingPaymentAsync(
         int paymentId,
         DateTime paidAt,
-        string transactionCode,
+        string? transactionCode,
         CancellationToken cancellationToken = default)
     {
         var affectedRows = await _db.Payments
@@ -77,6 +77,28 @@ public sealed class PaymentRepository : IPaymentRepository
                 .SetProperty(payment => payment.Status, PaymentStatus.Completed)
                 .SetProperty(payment => payment.PaidAt, paidAt)
                 .SetProperty(payment => payment.TransactionCode, transactionCode),
+                cancellationToken);
+
+        return affectedRows == 1;
+    }
+
+    public async Task<bool> TryMarkCompletedPaymentAsRefundedAsync(
+        int paymentId,
+        decimal refundAmount,
+        string refundReason,
+        int refundedBy,
+        DateTime refundedAt,
+        CancellationToken cancellationToken = default)
+    {
+        var affectedRows = await _db.Payments
+            .Where(payment => payment.PaymentID == paymentId
+                && payment.Status == PaymentStatus.Completed)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(payment => payment.Status, PaymentStatus.Refunded)
+                .SetProperty(payment => payment.RefundReason, refundReason)
+                .SetProperty(payment => payment.RefundAmount, refundAmount)
+                .SetProperty(payment => payment.RefundedAt, refundedAt)
+                .SetProperty(payment => payment.RefundedBy, refundedBy),
                 cancellationToken);
 
         return affectedRows == 1;

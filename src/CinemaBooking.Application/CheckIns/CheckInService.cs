@@ -9,7 +9,9 @@ public sealed class CheckInService : ICheckInService
     private readonly ITicketRepository _ticketRepository;
     private readonly IBookingRepository _bookingRepository;
 
-    public CheckInService(ITicketRepository ticketRepository, IBookingRepository bookingRepository)
+    public CheckInService(
+        ITicketRepository ticketRepository,
+        IBookingRepository bookingRepository)
     {
         _ticketRepository = ticketRepository;
         _bookingRepository = bookingRepository;
@@ -173,8 +175,24 @@ public sealed class CheckInService : ICheckInService
         DateTime? to,
         int page,
         int pageSize,
+        int currentUserId,
+        bool isAdmin,
+        bool isManager,
+        bool isStaff,
         CancellationToken cancellationToken = default)
     {
+        if (isStaff && !isManager && !isAdmin)
+        {
+            staffId = currentUserId;
+            cinemaId = await _bookingRepository.GetStaffCinemaIdAsync(currentUserId, cancellationToken)
+                ?? -1;
+        }
+        else if (isManager && !isAdmin)
+        {
+            cinemaId = await _bookingRepository.GetStaffCinemaIdAsync(currentUserId, cancellationToken)
+                ?? -1;
+        }
+
         var (bookings, totalCount) = await _bookingRepository.GetCheckInHistoryAsync(
             staffId,
             cinemaId,
@@ -214,4 +232,25 @@ public sealed class CheckInService : ICheckInService
             TotalCount = totalCount
         };
     }
+
+    public Task<CheckInHistoryResult> GetHistoryAsync(
+        int? staffId,
+        int? cinemaId,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default) =>
+        GetHistoryAsync(
+            staffId,
+            cinemaId,
+            from,
+            to,
+            page,
+            pageSize,
+            currentUserId: 0,
+            isAdmin: true,
+            isManager: false,
+            isStaff: false,
+            cancellationToken);
 }
