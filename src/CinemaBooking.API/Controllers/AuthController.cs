@@ -45,7 +45,7 @@ public sealed class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
         }
 
         if (!await TryAcquireEmailLimitAsync("register", model.Email, cancellationToken))
@@ -83,7 +83,7 @@ public sealed class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
         }
 
         var startedAt = Stopwatch.GetTimestamp();
@@ -118,7 +118,7 @@ public sealed class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
         }
 
         var startedAt = Stopwatch.GetTimestamp();
@@ -152,7 +152,7 @@ public sealed class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
         }
 
         var result = await _authService.ResetPasswordAsync(
@@ -186,7 +186,7 @@ public sealed class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
         }
 
         if (!await TryAcquireEmailLimitAsync("login", model.Email, cancellationToken))
@@ -267,7 +267,7 @@ public sealed class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
         }
 
         var result = await _authService.VerifyEmailAsync(model.Code, cancellationToken);

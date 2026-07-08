@@ -8,6 +8,10 @@ public interface ITicketRepository
         Ticket ticket,
         CancellationToken cancellationToken = default);
 
+    Task<HashSet<int>> GetTicketedBookingSeatIdsAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default);
+
     Task<List<Ticket>> GetTicketsByBookingIdAsync(
         int bookingId,
         CancellationToken cancellationToken = default);

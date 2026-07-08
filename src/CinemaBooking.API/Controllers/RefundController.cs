@@ -26,7 +26,7 @@ public sealed class RefundController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
 
         var userId = GetCurrentUserId();
         var isStaff = User.IsInRole(Roles.Staff) || User.IsInRole(Roles.Admin);

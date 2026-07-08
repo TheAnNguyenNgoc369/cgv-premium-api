@@ -25,11 +25,19 @@ public sealed class EmailDeliveryJob(IServiceScopeFactory scopeFactory, ILogger<
         var db = scope.ServiceProvider.GetRequiredService<CinemaBookingDbContext>();
         var sender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
         var now = DateTime.UtcNow;
-        var logs = await db.EmailLogs.Where(x => (x.DeliveryStatus == "pending" || x.DeliveryStatus == "retrying") && (x.NextAttemptAt == null || x.NextAttemptAt <= now))
+        var processingLeaseExpiresAt = now.AddMinutes(5);
+        var logs = await db.EmailLogs.Where(x =>
+                (x.DeliveryStatus == "pending" || x.DeliveryStatus == "retrying")
+                    && (x.NextAttemptAt == null || x.NextAttemptAt <= now)
+                || x.DeliveryStatus == "processing"
+                    && x.NextAttemptAt != null
+                    && x.NextAttemptAt <= now)
             .OrderBy(x => x.CreatedAt).Take(20).ToListAsync(ct);
         foreach (var log in logs)
         {
-            log.DeliveryStatus = "processing"; await db.SaveChangesAsync(ct);
+            log.DeliveryStatus = "processing";
+            log.NextAttemptAt = processingLeaseExpiresAt;
+            await db.SaveChangesAsync(ct);
             try
             {
                 var images = log.InlineImagesJson is null ? null : JsonSerializer.Deserialize<List<EmailInlineImage>>(log.InlineImagesJson);

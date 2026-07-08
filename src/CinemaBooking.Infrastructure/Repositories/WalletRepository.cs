@@ -50,6 +50,22 @@ public sealed class WalletRepository : IWalletRepository
         await _db.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<bool> TryDeductBalanceAsync(
+        int userId,
+        decimal amount,
+        CancellationToken cancellationToken = default)
+    {
+        var affectedRows = await _db.Wallets
+            .Where(wallet => wallet.UserID == userId && wallet.Balance >= amount)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    wallet => wallet.Balance,
+                    wallet => wallet.Balance - amount),
+                cancellationToken);
+
+        return affectedRows == 1;
+    }
+
     public async Task AddBalanceAsync(
         int userId,
         decimal amount,

@@ -18,6 +18,11 @@ public interface IWalletRepository
         decimal amount,
         CancellationToken cancellationToken = default);
 
+    Task<bool> TryDeductBalanceAsync(
+        int userId,
+        decimal amount,
+        CancellationToken cancellationToken = default);
+
     Task AddBalanceAsync(
         int userId,
         decimal amount,

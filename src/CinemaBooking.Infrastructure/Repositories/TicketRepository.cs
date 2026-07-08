@@ -24,6 +24,18 @@ public sealed class TicketRepository : ITicketRepository
         return ticket;
     }
 
+    public async Task<HashSet<int>> GetTicketedBookingSeatIdsAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = await _db.Tickets
+            .Where(ticket => ticket.BookingSeat.BookingID == bookingId)
+            .Select(ticket => ticket.BookingSeatID)
+            .ToListAsync(cancellationToken);
+
+        return ids.ToHashSet();
+    }
+
     public async Task<List<Ticket>> GetTicketsByBookingIdAsync(
         int bookingId,
         CancellationToken cancellationToken = default)

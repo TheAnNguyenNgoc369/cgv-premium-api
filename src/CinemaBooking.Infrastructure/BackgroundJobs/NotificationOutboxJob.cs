@@ -112,14 +112,24 @@ public sealed class NotificationOutboxJob(IServiceScopeFactory scopeFactory, ILo
 
     private static async Task ProcessBookingAsync(CinemaBookingDbContext db, IBookingEmailService email, NotificationOutbox item, CancellationToken ct)
     {
-        var booking = await db.Bookings.AsNoTracking().Include(x => x.User).FirstAsync(x => x.BookingID == item.ReferenceId, ct);
-        await AddNotificationAsync(db, item, booking.UserID!.Value, "Booking successful", $"Order  {booking.BookingCode} has been successfully paid for.", "booking", "Booking", $"/bookings/{booking.BookingID}", ct);
+        var booking = await db.Bookings.AsNoTracking().Include(x => x.User).FirstOrDefaultAsync(x => x.BookingID == item.ReferenceId, ct);
+        if (booking is null)
+            return;
+
+        if (booking.UserID.HasValue)
+            await AddNotificationAsync(db, item, booking.UserID.Value, "Booking successful", $"Order  {booking.BookingCode} has been successfully paid for.", "booking", "Booking", $"/bookings/{booking.BookingID}", ct);
+
         await email.QueueBookingConfirmedAsync(booking.BookingID, ct);
     }
     private static async Task ProcessRefundAsync(CinemaBookingDbContext db, IBookingEmailService email, NotificationOutbox item, CancellationToken ct)
     {
-        var booking = await db.Bookings.AsNoTracking().FirstAsync(x => x.BookingID == item.ReferenceId, ct);
-        await AddNotificationAsync(db, item, booking.UserID!.Value, "Refund successful", $"Order {booking.BookingCode} has been refunded.", "refund", "Refund", $"/bookings/{booking.BookingID}", ct);
+        var booking = await db.Bookings.AsNoTracking().FirstOrDefaultAsync(x => x.BookingID == item.ReferenceId, ct);
+        if (booking is null)
+            return;
+
+        if (booking.UserID.HasValue)
+            await AddNotificationAsync(db, item, booking.UserID.Value, "Refund successful", $"Order {booking.BookingCode} has been refunded.", "refund", "Refund", $"/bookings/{booking.BookingID}", ct);
+
         await email.QueueRefundProcessedAsync(booking.BookingID, item.Amount!.Value, item.OccurredAt!.Value, ct);
     }
     private static async Task AddNotificationAsync(CinemaBookingDbContext db, NotificationOutbox item, int userId, string title,

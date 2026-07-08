@@ -2,6 +2,7 @@ using System.Security.Claims;
 using CinemaBooking.API.Contracts.Bookings;
 using CinemaBooking.API.Controllers;
 using CinemaBooking.Application.Bookings;
+using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Http;
@@ -53,7 +54,7 @@ public sealed class BookingAuthorizationTests
             new Claim(ClaimTypes.Role, role)
         ], "Test");
 
-        return new BookingController(service)
+        return new BookingController(service, new StubBookingRepository())
         {
             ControllerContext = new ControllerContext
             {
@@ -133,5 +134,36 @@ public sealed class BookingAuthorizationTests
         {
             throw new NotSupportedException();
         }
+    }
+
+    private sealed class StubBookingRepository : IBookingRepository
+    {
+        public Task<int?> GetStaffCinemaIdAsync(int staffId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<int?>(1);
+
+        public Task<Showtime?> GetShowtimeAsync(int showtimeId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<List<Seat>> GetSeatsByIdsAsync(List<int> seatIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<List<int>> GetUnavailableSeatIdsAsync(int showtimeId, List<int> seatIds, int currentUserId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> TryAddSeatHoldsAsync(IEnumerable<SeatHold> seatHolds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<List<SeatHold>> GetMyActiveHoldsAsync(int userId, int showtimeId, List<int> seatIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<List<SeatHold>> GetMyActiveHoldsForUpdateAsync(int userId, int showtimeId, DateTime now, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task ReleaseSeatHoldsAsync(IEnumerable<SeatHold> seatHolds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task AddBookingAsync(Booking booking, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task MarkHoldsAsConfirmedAsync(IEnumerable<SeatHold> seatHolds, int bookingId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Booking?> GetBookingByIdAsync(int bookingId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Booking?> GetBookingByQRCodeAsync(string qrCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Booking?> GetBookingWithFullDetailsForCheckInAsync(int bookingId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<(List<Booking> Bookings, int TotalCount)> GetCheckInHistoryAsync(int? staffId, int? cinemaId, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task UpdateBookingQRCodeAsync(int bookingId, string qrCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<List<Booking>> GetBookingsByUserAsync(int userId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<List<Product>> GetProductsByIdsAsync(List<int> productIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<List<Product>> GetAvailableProductsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Voucher?> GetVoucherByCodeAsync(string voucherCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Voucher?> GetVoucherByCodeWithLockAsync(string voucherCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task IncrementVoucherUsageAsync(int voucherId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task ExtendBookingHoldsAsync(int bookingId, DateTime expiresAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> HasActiveBookingHoldsAsync(int bookingId, DateTime now, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task UpdateBookingStatusAsync(int bookingId, string status, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

@@ -664,6 +664,8 @@ public sealed class CheckInServiceTests
 
         public Task<Ticket> CreateTicketAsync(Ticket ticket, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+        public Task<HashSet<int>> GetTicketedBookingSeatIdsAsync(int bookingId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
         public Task<List<Ticket>> GetTicketsByBookingIdAsync(int bookingId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
         public Task<Ticket?> GetTicketByIdAsync(int ticketId, CancellationToken cancellationToken = default) =>
