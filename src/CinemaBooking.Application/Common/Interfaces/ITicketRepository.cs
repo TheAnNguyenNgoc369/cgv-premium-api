@@ -28,4 +28,20 @@ public interface ITicketRepository
         int bookingId,
         string status,
         CancellationToken cancellationToken = default);
+
+    Task<Ticket?> GetTicketWithFullDetailsForCheckInAsync(
+        string qrCode,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> PerformTicketCheckInAsync(
+        int ticketId,
+        int bookingId,
+        int staffId,
+        string? ipAddress,
+        DateTime checkedInAt,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> AreAllTicketsUsedInBookingAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default);
 }

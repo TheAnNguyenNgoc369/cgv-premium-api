@@ -332,7 +332,7 @@ public sealed class ShowtimeServiceTests
         public Task<bool> HasConflictAsync(int roomId, DateTime startTime, DateTime endTime,
             int? excludingShowtimeId = null, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task<bool> HasRoomTypeStartConflictAsync(
-            int cinemaId, string roomType, DateTime startTime,
+            int cinemaId, int roomTypeId, DateTime startTime,
             int? excludingShowtimeId = null, CancellationToken cancellationToken = default) =>
             Task.FromResult(HasRoomTypeStartConflict);
         public Task<Showtime> AddAsync(Showtime showtime, CancellationToken cancellationToken = default)

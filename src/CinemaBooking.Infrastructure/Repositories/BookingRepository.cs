@@ -197,64 +197,6 @@ public sealed class BookingRepository : IBookingRepository
         return user;
     }
 
-    public async Task<bool> PerformCheckInAsync(
-        int bookingId,
-        int staffId,
-        string? ipAddress,
-        DateTime checkedInAt,
-        CancellationToken cancellationToken = default)
-    {
-        using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
-
-        try
-        {
-            var booking = await _db.Bookings
-                .Include(b => b.BookingSeats)
-                .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
-
-            if (booking is null)
-                return false;
-
-            var tickets = await _db.Tickets
-                .Where(t => booking.BookingSeats.Select(bs => bs.BookingSeatID).Contains(t.BookingSeatID))
-                .ToListAsync(cancellationToken);
-
-            foreach (var ticket in tickets)
-            {
-                ticket.Status = TicketStatus.Used;
-                ticket.CheckedInAt = checkedInAt;
-                ticket.CheckedInByID = staffId;
-            }
-
-            booking.Status = BookingStatus.Used;
-            booking.CheckedInAt = checkedInAt;
-            booking.CheckedInByUserId = staffId;
-            booking.UpdatedAt = checkedInAt;
-
-            var auditLog = new AdminActionLog
-            {
-                AdminID = staffId,
-                TargetTable = "Booking",
-                TargetID = booking.BookingID,
-                ActionType = AdminActionTypes.CheckIn,
-                Description = $"Staff checked in booking {booking.BookingCode}",
-                IPAddress = ipAddress ?? "unknown",
-                CreatedAt = checkedInAt
-            };
-
-            await _db.AdminActionLogs.AddAsync(auditLog, cancellationToken);
-            await _db.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-
-            return true;
-        }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            return false;
-        }
-    }
-
     public async Task<(List<Booking> Bookings, int TotalCount)> GetCheckInHistoryAsync(
         int? staffId,
         int? cinemaId,
@@ -266,28 +208,29 @@ public sealed class BookingRepository : IBookingRepository
     {
         var query = _db.Bookings
             .Include(b => b.User)
-            .Include(b => b.CheckedInByUser)
             .Include(b => b.Showtime).ThenInclude(s => s.Movie)
             .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
-            .Include(b => b.BookingSeats)
-            .Where(b => b.CheckedInAt != null);
+            .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket).ThenInclude(t => t!.CheckedInBy)
+            .Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.Status == TicketStatus.Used));
 
         if (staffId.HasValue)
-            query = query.Where(b => b.CheckedInByUserId == staffId.Value);
+            query = query.Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.CheckedInByID == staffId.Value));
 
         if (cinemaId.HasValue)
             query = query.Where(b => b.Showtime.Room.CinemaID == cinemaId.Value);
 
         if (from.HasValue)
-            query = query.Where(b => b.CheckedInAt >= from.Value);
+            query = query.Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.CheckedInAt >= from.Value));
 
         if (to.HasValue)
-            query = query.Where(b => b.CheckedInAt <= to.Value);
+            query = query.Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.CheckedInAt <= to.Value));
 
         var totalCount = await query.CountAsync(cancellationToken);
 
         var bookings = await query
-            .OrderByDescending(b => b.CheckedInAt)
+            .OrderByDescending(b => b.BookingSeats
+                .Where(bs => bs.Ticket != null && bs.Ticket.CheckedInAt != null)
+                .Max(bs => bs.Ticket!.CheckedInAt))
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .AsSplitQuery()

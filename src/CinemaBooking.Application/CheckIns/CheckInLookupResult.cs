@@ -47,6 +47,8 @@ public sealed class CheckInLookupResult
         public int Column { get; set; }
         public string SeatType { get; set; } = string.Empty;
         public decimal TicketPrice { get; set; }
+        public bool IsCheckedIn { get; set; }
+        public DateTime? CheckedInAt { get; set; }
     }
 
     public sealed class ProductInfo
