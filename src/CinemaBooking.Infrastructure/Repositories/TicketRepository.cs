@@ -146,58 +146,63 @@ public sealed class TicketRepository : ITicketRepository
         DateTime checkedInAt,
         CancellationToken cancellationToken = default)
     {
-        using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+        var strategy = _db.Database.CreateExecutionStrategy();
 
-        try
+        return await strategy.ExecuteAsync(async () =>
         {
-            var ticket = await _db.Tickets
-                .FirstOrDefaultAsync(t => t.TicketID == ticketId, cancellationToken);
+            await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
 
-            if (ticket is null)
-                return false;
-
-            ticket.Status = TicketStatus.Used;
-            ticket.CheckedInAt = checkedInAt;
-            ticket.CheckedInByID = staffId;
-
-            var allTicketsUsed = await AreAllTicketsUsedInBookingAsync(bookingId, cancellationToken);
-
-            if (allTicketsUsed)
+            try
             {
-                var booking = await _db.Bookings
-                    .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
+                var ticket = await _db.Tickets
+                    .FirstOrDefaultAsync(t => t.TicketID == ticketId, cancellationToken);
 
-                if (booking is not null)
+                if (ticket is null)
+                    return false;
+
+                ticket.Status = TicketStatus.Used;
+                ticket.CheckedInAt = checkedInAt;
+                ticket.CheckedInByID = staffId;
+
+                var allTicketsUsed = await AreAllTicketsUsedInBookingAsync(bookingId, cancellationToken);
+
+                if (allTicketsUsed)
                 {
-                    booking.Status = BookingStatus.Used;
-                    booking.UpdatedAt = checkedInAt;
+                    var booking = await _db.Bookings
+                        .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
+
+                    if (booking is not null)
+                    {
+                        booking.Status = BookingStatus.Used;
+                        booking.UpdatedAt = checkedInAt;
+                    }
                 }
+
+                var auditLog = new Domain.Entities.AdminActionLog
+                {
+                    AdminID = staffId,
+                    TargetTable = "Ticket",
+                    TargetID = ticket.TicketID,
+                    ActionType = AdminActionTypes.CheckIn,
+                    Description = $"Staff checked in ticket {ticket.QRCode} for booking {bookingId}",
+                    IPAddress = ipAddress ?? "unknown",
+                    CreatedAt = checkedInAt
+                };
+
+                await _db.AdminActionLogs.AddAsync(auditLog, cancellationToken);
+
+                await _db.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                return true;
             }
-
-            var auditLog = new Domain.Entities.AdminActionLog
+            catch (Exception ex)
             {
-                AdminID = staffId,
-                TargetTable = "Ticket",
-                TargetID = ticket.TicketID,
-                ActionType = AdminActionTypes.CheckIn,
-                Description = $"Staff checked in ticket {ticket.QRCode} for booking {bookingId}",
-                IPAddress = ipAddress ?? "unknown",
-                CreatedAt = checkedInAt
-            };
-
-            await _db.AdminActionLogs.AddAsync(auditLog, cancellationToken);
-
-            await _db.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            Console.WriteLine($"Check-in failed: {ex.Message}");
-            throw;
-        }
+                await transaction.RollbackAsync(cancellationToken);
+                Console.WriteLine($"Check-in failed: {ex.Message}");
+                throw;
+            }
+        });
     }
 
     public async Task<bool> AreAllTicketsUsedInBookingAsync(

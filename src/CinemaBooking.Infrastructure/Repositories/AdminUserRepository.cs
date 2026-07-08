@@ -115,19 +115,18 @@ public sealed class AdminUserRepository : IAdminUserRepository
         User user, Wallet wallet, AdminActionLog actionLog,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await ExecuteInTransactionAsync(async () =>
+        {
+            _dbContext.Users.Add(user);
+            await _dbContext.SaveChangesAsync(cancellationToken);
 
-        _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        wallet.UserID = user.UserID;
-        actionLog.TargetUserID = user.UserID;
-        actionLog.TargetID = user.UserID;
-        _dbContext.Wallets.Add(wallet);
-        _dbContext.AdminActionLogs.Add(actionLog);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
+            wallet.UserID = user.UserID;
+            actionLog.TargetUserID = user.UserID;
+            actionLog.TargetID = user.UserID;
+            _dbContext.Wallets.Add(wallet);
+            _dbContext.AdminActionLogs.Add(actionLog);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }, cancellationToken);
     }
 
     public Task<User?> UpdateAsync(
@@ -239,18 +238,48 @@ public sealed class AdminUserRepository : IAdminUserRepository
         int userId, AdminActionLog actionLog, Action<User> update,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        var user = await _dbContext.Users.FirstOrDefaultAsync(
-            candidate => candidate.UserID == userId, cancellationToken);
-        if (user is null) return null;
+        return await ExecuteInTransactionAsync(async () =>
+        {
+            var user = await _dbContext.Users.FirstOrDefaultAsync(
+                candidate => candidate.UserID == userId, cancellationToken);
+            if (user is null) return null;
 
-        update(user);
-        user.UpdatedAt = DateTime.UtcNow;
-        actionLog.TargetUserID = userId;
-        actionLog.TargetID = userId;
-        _dbContext.AdminActionLogs.Add(actionLog);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return user;
+            update(user);
+            user.UpdatedAt = DateTime.UtcNow;
+            actionLog.TargetUserID = userId;
+            actionLog.TargetID = userId;
+            _dbContext.AdminActionLogs.Add(actionLog);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return user;
+        }, cancellationToken);
+    }
+
+    private async Task ExecuteInTransactionAsync(
+        Func<Task> operation,
+        CancellationToken cancellationToken)
+    {
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+            await operation();
+            await transaction.CommitAsync(cancellationToken);
+        });
+    }
+
+    private async Task<T> ExecuteInTransactionAsync<T>(
+        Func<Task<T>> operation,
+        CancellationToken cancellationToken)
+    {
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+            var result = await operation();
+            await transaction.CommitAsync(cancellationToken);
+            return result;
+        });
     }
 }
