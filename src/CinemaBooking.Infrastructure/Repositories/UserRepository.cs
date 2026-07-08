@@ -137,15 +137,11 @@ public sealed class UserRepository : IUserRepository
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-            var user = await _dbContext.Users
-                .FirstOrDefaultAsync(u => u.UserID == userId, cancellationToken);
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
 
-            if (user is null)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                return false;
-            }
-
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
             var wallet = await _dbContext.Wallets
                 .FirstOrDefaultAsync(w => w.UserID == userId, cancellationToken);
 
@@ -176,15 +172,21 @@ public sealed class UserRepository : IUserRepository
         Wallet wallet,
         CancellationToken cancellationToken = default)
     {
-        await ExecuteInTransactionAsync(async () =>
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
         {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
             _dbContext.Users.Add(user);
             await _dbContext.SaveChangesAsync(cancellationToken);
 
             wallet.UserID = user.UserID;
             _dbContext.Wallets.Add(wallet);
             await _dbContext.SaveChangesAsync(cancellationToken);
-        }, cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+        });
     }
 
     public async Task AddUserWithWalletAndVerificationTokenAsync(
@@ -193,8 +195,12 @@ public sealed class UserRepository : IUserRepository
         EmailVerificationToken verificationToken,
         CancellationToken cancellationToken = default)
     {
-        await ExecuteInTransactionAsync(async () =>
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
         {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
             _dbContext.Users.Add(user);
             await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -204,7 +210,9 @@ public sealed class UserRepository : IUserRepository
             _dbContext.Wallets.Add(wallet);
             _dbContext.EmailVerificationTokens.Add(verificationToken);
             await _dbContext.SaveChangesAsync(cancellationToken);
-        }, cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+        });
     }
 
     public Task AddEmailVerificationTokenAsync(

@@ -26,7 +26,6 @@ public sealed class VoucherRepository : IVoucherRepository
     public async Task<Voucher> AddAsync(Voucher voucher, AdminActionLog log, CancellationToken ct)
     {
         var strategy = _db.Database.CreateExecutionStrategy();
-
         return await strategy.ExecuteAsync(async () =>
         {
             await using var transaction = await _db.Database.BeginTransactionAsync(ct);

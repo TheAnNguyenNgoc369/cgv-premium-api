@@ -162,7 +162,7 @@ public sealed class TicketRepository : ITicketRepository
 
         return await strategy.ExecuteAsync(async () =>
         {
-            await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+            using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
 
             try
             {
