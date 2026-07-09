@@ -17,6 +17,7 @@ public sealed class PayOSService : IPayOSService
 
     public async Task<PayOSPaymentLinkResult> CreatePaymentLinkAsync(
         long orderCode,
+        int bookingId,
         int amount,
         string description,
         DateTime expiresAt,
@@ -28,8 +29,8 @@ public sealed class PayOSService : IPayOSService
             OrderCode = orderCode,
             Amount = amount,
             Description = description,
-            ReturnUrl = _settings.ReturnUrl,
-            CancelUrl = _settings.CancelUrl,
+            ReturnUrl = BuildRedirectUrl(_settings.ReturnUrl, bookingId, orderCode),
+            CancelUrl = BuildRedirectUrl(_settings.CancelUrl, bookingId, orderCode),
             ExpiredAt = new DateTimeOffset(expiresAt).ToUnixTimeSeconds()
         });
 
@@ -99,5 +100,11 @@ public sealed class PayOSService : IPayOSService
                 "PayOS credentials are not configured. Set PayOS__ClientId, PayOS__ApiKey and PayOS__ChecksumKey.");
 
         return new PayOSClient(_settings.ClientId, _settings.ApiKey, _settings.ChecksumKey);
+    }
+
+    internal static string BuildRedirectUrl(string baseUrl, int bookingId, long orderCode)
+    {
+        var separator = baseUrl.Contains('?', StringComparison.Ordinal) ? '&' : '?';
+        return $"{baseUrl}{separator}bookingId={bookingId}&orderCode={orderCode}";
     }
 }

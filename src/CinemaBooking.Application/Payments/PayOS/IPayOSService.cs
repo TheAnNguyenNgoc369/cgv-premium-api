@@ -4,6 +4,7 @@ public interface IPayOSService
 {
     Task<PayOSPaymentLinkResult> CreatePaymentLinkAsync(
         long orderCode,
+        int bookingId,
         int amount,
         string description,
         DateTime expiresAt,

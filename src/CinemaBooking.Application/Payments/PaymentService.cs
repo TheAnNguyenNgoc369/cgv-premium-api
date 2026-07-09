@@ -399,6 +399,7 @@ public sealed class PaymentService : IPaymentService
                 var orderCode = CreatePayOSOrderCode();
                 var paymentLink = await _payOSService.CreatePaymentLinkAsync(
                     orderCode,
+                    booking.BookingID,
                     decimal.ToInt32(booking.FinalAmount),
                     $"PAY {payment.PaymentID}",
                     expiresAt,
