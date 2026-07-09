@@ -13,11 +13,15 @@ public class SeatConfiguration : IEntityTypeConfiguration<Seat>
         builder.HasKey(s => s.SeatID);
 
         builder.Property(s => s.SeatRow).HasMaxLength(5).IsRequired();
+        builder.Property(s => s.SeatTypeID).IsRequired(false);
+        builder.Property(s => s.IsGap).IsRequired().HasDefaultValue(false);
+        builder.Property(s => s.IsCurrentLayout).IsRequired().HasDefaultValue(true);
         builder.Property(s => s.Status).HasMaxLength(20).IsRequired().HasDefaultValue("active");
 
         builder.HasIndex(s => s.RoomID).HasDatabaseName("IX_Seat_RoomID");
         builder.HasIndex(s => new { s.RoomID, s.SeatRow, s.SeatCol })
             .IsUnique()
+            .HasFilter("[IsCurrentLayout] = 1")
             .HasDatabaseName("UQ_Seat_RoomID_SeatRow_SeatCol");
 
         builder.HasOne(s => s.Room)

@@ -18,6 +18,11 @@ public interface IWalletRepository
         decimal amount,
         CancellationToken cancellationToken = default);
 
+    Task<bool> TryDeductBalanceAsync(
+        int userId,
+        decimal amount,
+        CancellationToken cancellationToken = default);
+
     Task AddBalanceAsync(
         int userId,
         decimal amount,
@@ -28,6 +33,23 @@ public interface IWalletRepository
         CancellationToken cancellationToken = default);
 
     Task<List<WalletTransaction>> GetTransactionHistoryAsync(
+        int userId,
+        CancellationToken cancellationToken = default);
+
+    Task<WalletTransaction?> GetTransactionByIdAsync(
+        int transactionId,
+        CancellationToken cancellationToken = default);
+
+    Task<(List<WalletTransaction> Transactions, int TotalCount)> GetTransactionsWithFiltersAsync(
+        int userId,
+        int page,
+        int pageSize,
+        DateTime? fromDate,
+        DateTime? toDate,
+        string? transactionType,
+        CancellationToken cancellationToken = default);
+
+    Task<(decimal TotalRefundReceived, decimal TotalSpent, int TransactionCount)> GetWalletSummaryAsync(
         int userId,
         CancellationToken cancellationToken = default);
 }

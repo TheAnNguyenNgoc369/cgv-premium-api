@@ -27,6 +27,10 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.UpdatedAt).HasDefaultValueSql("GETDATE()");
 
         builder.HasIndex(u => u.Email).IsUnique().HasDatabaseName("UQ_Users_Email");
+        builder.HasIndex(u => u.Phone)
+            .IsUnique()
+            .HasDatabaseName("UQ_Users_Phone")
+            .HasFilter("[Phone] IS NOT NULL");
         builder.HasIndex(u => new { u.Role, u.Status }).HasDatabaseName("IX_Users_Role_Status");
 
         builder.HasOne(u => u.Cinema)
@@ -41,6 +45,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.ToTable(t =>
         {
+            t.HasTrigger("TR_Users_TotalPoints_Adjustment");
             t.HasCheckConstraint("CK_Users_Role", "[Role] IN ('customer', 'staff', 'admin', 'manager')");
             t.HasCheckConstraint("CK_Users_Status", "[Status] IN ('unverified', 'active', 'locked', 'inactive')");
             t.HasCheckConstraint("CK_Users_TotalPoints", "[TotalPoints] >= 0");

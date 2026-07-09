@@ -4,7 +4,8 @@ public sealed record SeatMapSeatResult(
     int SeatID,
     string SeatRow,
     int SeatCol,
-    string SeatType,
+    string? SeatType,
     decimal ExtraPrice,
     decimal Price,
-    string Status);
+    string Status,
+    bool IsGap);

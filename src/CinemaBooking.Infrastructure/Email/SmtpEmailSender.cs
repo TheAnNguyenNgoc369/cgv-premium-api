@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Mail;
+using System.Net.Mime;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Infrastructure.Configuration;
 using Microsoft.Extensions.Logging;
@@ -20,10 +21,18 @@ public sealed class SmtpEmailSender : IEmailSender
         _logger = logger;
     }
 
+    public Task<bool> SendAsync(
+        string toEmail,
+        string subject,
+        string htmlBody,
+        CancellationToken cancellationToken = default) =>
+        SendAsync(toEmail, subject, htmlBody, null, cancellationToken);
+
     public async Task<bool> SendAsync(
         string toEmail,
         string subject,
         string htmlBody,
+        IReadOnlyCollection<EmailInlineImage>? inlineImages = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(_emailSettings.Host))
@@ -44,6 +53,25 @@ public sealed class SmtpEmailSender : IEmailSender
                 IsBodyHtml = true
             };
             message.To.Add(toEmail);
+
+            if (inlineImages is { Count: > 0 })
+            {
+                var htmlView = AlternateView.CreateAlternateViewFromString(
+                    htmlBody, null, MediaTypeNames.Text.Html);
+                foreach (var image in inlineImages)
+                {
+                    var stream = new MemoryStream(image.Content, writable: false);
+                    var resource = new LinkedResource(stream, image.MediaType)
+                    {
+                        ContentId = image.ContentId,
+                        TransferEncoding = TransferEncoding.Base64
+                    };
+                    resource.ContentType.Name = image.FileName;
+                    htmlView.LinkedResources.Add(resource);
+                }
+
+                message.AlternateViews.Add(htmlView);
+            }
 
             using var client = new SmtpClient(_emailSettings.Host, _emailSettings.Port)
             {

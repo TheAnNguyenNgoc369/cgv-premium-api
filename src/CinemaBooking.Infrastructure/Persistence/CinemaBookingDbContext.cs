@@ -10,6 +10,12 @@ public class CinemaBookingDbContext : DbContext
     {
     }
 
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.ConfigureWarnings(warnings =>
+            warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+    }
+
     public DbSet<Cinema> Cinemas => Set<Cinema>();
     public DbSet<LoyaltyTier> LoyaltyTiers => Set<LoyaltyTier>();
     public DbSet<User> Users => Set<User>();
@@ -20,9 +26,12 @@ public class CinemaBookingDbContext : DbContext
     public DbSet<Movie> Movie => Set<Movie>();
     public DbSet<MovieGenre> MovieGenres => Set<MovieGenre>();
     public DbSet<Room> Rooms => Set<Room>();
+    public DbSet<RoomType> RoomTypes => Set<RoomType>();
     public DbSet<SeatType> SeatTypes => Set<SeatType>();
     public DbSet<Seat> Seats => Set<Seat>();
     public DbSet<Showtime> Showtimes => Set<Showtime>();
+    public DbSet<ShowtimeType> ShowtimeTypes => Set<ShowtimeType>();
+    public DbSet<ShowtimeTypeSlot> ShowtimeTypeSlots => Set<ShowtimeTypeSlot>();
     public DbSet<SeatHold> SeatHolds => Set<SeatHold>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<BookingSeat> BookingSeats => Set<BookingSeat>();
@@ -37,9 +46,11 @@ public class CinemaBookingDbContext : DbContext
     public DbSet<Voucher> Vouchers => Set<Voucher>();
     public DbSet<BookingVoucher> BookingVouchers => Set<BookingVoucher>();
     public DbSet<LoyaltyPoints> LoyaltyPoints => Set<LoyaltyPoints>();
+    public DbSet<UserVoucher> UserVouchers => Set<UserVoucher>();
     public DbSet<AdminActionLog> AdminActionLogs => Set<AdminActionLog>();
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<NotificationOutbox> NotificationOutbox => Set<NotificationOutbox>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

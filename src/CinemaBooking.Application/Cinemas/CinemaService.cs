@@ -40,6 +40,8 @@ public sealed class CinemaService : ICinemaService
     public async Task<(bool Succeeded, string? ErrorMessage, Cinema? Cinema)> CreateCinemaAsync(
         string cinemaName,
         string address,
+        double? latitude,
+        double? longitude,
         string? status,
         CancellationToken cancellationToken = default)
     {
@@ -60,6 +62,8 @@ public sealed class CinemaService : ICinemaService
         {
             CinemaName = cinemaName.Trim(),
             Address = address.Trim(),
+            Latitude = latitude.HasValue ? Convert.ToDecimal(latitude.Value) : null,
+            Longitude = longitude.HasValue ? Convert.ToDecimal(longitude.Value) : null,
             Status = normalizedStatus,
             CreatedAt = now,
             UpdatedAt = now
@@ -74,6 +78,8 @@ public sealed class CinemaService : ICinemaService
         int cinemaId,
         string cinemaName,
         string address,
+        double? latitude,
+        double? longitude,
         string? status,
         CancellationToken cancellationToken = default)
     {
@@ -95,10 +101,22 @@ public sealed class CinemaService : ICinemaService
             return (false, "Status must be active, inactive, or maintenance", null);
         }
 
+        if (existingCinema.Status != "inactive" && normalizedStatus == "inactive")
+        {
+            if (await _cinemaRepository.HasUpcomingShowtimesAsync(cinemaId, DateTime.UtcNow, cancellationToken))
+                return (false, "Cinema has upcoming showtimes", null);
+            if (await _cinemaRepository.HasActiveAssignedStaffAsync(cinemaId, cancellationToken))
+                return (false, "Cinema has active assigned manager or staff", null);
+            if (await _cinemaRepository.HasRoomsAsync(cinemaId, cancellationToken))
+                return (false, "Cinema has rooms", null);
+        }
+
         var updatedCinema = await _cinemaRepository.UpdateAsync(
             cinemaId,
             cinemaName.Trim(),
             address.Trim(),
+            latitude.HasValue ? Convert.ToDecimal(latitude.Value) : null,
+            longitude.HasValue ? Convert.ToDecimal(longitude.Value) : null,
             normalizedStatus,
             DateTime.UtcNow,
             cancellationToken);
@@ -118,14 +136,14 @@ public sealed class CinemaService : ICinemaService
             return (false, "Cinema not found");
         }
 
+        if (await _cinemaRepository.HasAssignedStaffAsync(cinemaId, cancellationToken))
+        {
+            return (false, "Cinema has assigned manager or staff");
+        }
+
         if (await _cinemaRepository.HasRoomsAsync(cinemaId, cancellationToken))
         {
             return (false, "Cinema has rooms");
-        }
-
-        if (await _cinemaRepository.HasAssignedUsersAsync(cinemaId, cancellationToken))
-        {
-            return (false, "Cinema has assigned users");
         }
 
         var deletedCinema = await _cinemaRepository.SoftDeleteAsync(

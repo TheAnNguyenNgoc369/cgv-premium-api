@@ -18,8 +18,21 @@ public sealed class RoomRepository : IRoomRepository
     {
         return _dbContext.Rooms
             .AsNoTracking()
+            .Include(r => r.RoomType)
             .OrderBy(r => r.CinemaID)
             .ThenBy(r => r.RoomName)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<List<Room>> GetRoomsByCinemaIdAsync(
+        int cinemaId,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Rooms
+            .AsNoTracking()
+            .Include(r => r.RoomType)
+            .Where(r => r.CinemaID == cinemaId)
+            .OrderBy(r => r.RoomName)
             .ToListAsync(cancellationToken);
     }
 
@@ -29,6 +42,7 @@ public sealed class RoomRepository : IRoomRepository
     {
         return _dbContext.Rooms
             .AsNoTracking()
+            .Include(r => r.RoomType)
             .FirstOrDefaultAsync(r => r.RoomID == roomId, cancellationToken);
     }
 
@@ -40,6 +54,9 @@ public sealed class RoomRepository : IRoomRepository
             .AsNoTracking()
             .AnyAsync(c => c.CinemaID == cinemaId, cancellationToken);
     }
+
+    public Task<bool> RoomTypeExistsAsync(int roomTypeId, CancellationToken cancellationToken = default) =>
+        _dbContext.RoomTypes.AsNoTracking().AnyAsync(x => x.RoomTypeID == roomTypeId, cancellationToken);
 
     public Task<bool> NameExistsInCinemaAsync(
         int cinemaId,
@@ -62,7 +79,9 @@ public sealed class RoomRepository : IRoomRepository
     public Task<int> CountSeatsAsync(
         int roomId,
         CancellationToken cancellationToken = default) =>
-        _dbContext.Seats.CountAsync(seat => seat.RoomID == roomId, cancellationToken);
+        _dbContext.Seats.CountAsync(
+            seat => seat.RoomID == roomId && seat.IsCurrentLayout,
+            cancellationToken);
 
     public async Task<Room> AddAsync(
         Room room,
@@ -71,15 +90,14 @@ public sealed class RoomRepository : IRoomRepository
         _dbContext.Rooms.Add(room);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return room;
+        return (await GetByIdAsync(room.RoomID, cancellationToken))!;
     }
 
     public async Task<Room?> UpdateAsync(
         int roomId,
         int cinemaId,
         string roomName,
-        string roomType,
-        int capacity,
+        int roomTypeId,
         string status,
         string? description,
         CancellationToken cancellationToken = default)
@@ -94,14 +112,13 @@ public sealed class RoomRepository : IRoomRepository
 
         room.CinemaID = cinemaId;
         room.RoomName = roomName;
-        room.RoomType = roomType;
-        room.Capacity = capacity;
+        room.RoomTypeID = roomTypeId;
         room.Status = status;
         room.Description = description;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return room;
+        return await GetByIdAsync(roomId, cancellationToken);
     }
 
     public Task<bool> HasActiveOrUpcomingShowtimesAsync(
@@ -111,8 +128,26 @@ public sealed class RoomRepository : IRoomRepository
         return _dbContext.Showtimes
             .AsNoTracking()
             .AnyAsync(s => s.RoomID == roomId
-                && (s.Status == "scheduled" || s.Status == "ongoing"), cancellationToken);
+                && s.Status == "scheduled", cancellationToken);
     }
+
+    public Task<bool> HasUpcomingShowtimesAsync(
+        int roomId,
+        DateTime now,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Showtimes
+            .AsNoTracking()
+            .AnyAsync(s => s.RoomID == roomId
+                && s.Status == "scheduled"
+                && s.StartTime > now, cancellationToken);
+    }
+
+    public Task<bool> HasAnyShowtimesAsync(
+        int roomId,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.Showtimes.AsNoTracking()
+            .AnyAsync(showtime => showtime.RoomID == roomId, cancellationToken);
 
     public async Task<bool> DeleteAsync(
         int roomId,

@@ -1,0 +1,109 @@
+thiết kết lại api seat-map từ đầu
+
+1.1. GET /api/rooms/{roomId}/seat-map: lấy thông tin seat-map
+sinh ra
+A1 → A10
+B1 → B10
+...
+E1 → E10
+
+{
+  "roomId": 15,
+  "rows": [
+    {
+      "rowLabel": "A",
+      "seats": [
+        { "seatId": 1, "seatNumber": 1, "seatCode": "A1", "type": "STANDARD", "status": "ACTIVE" },
+        { "seatId": 2, "seatNumber": 2, "seatCode": "A2", "type": "STANDARD", "status": "ACTIVE" },
+        { "seatId": 3, "seatNumber": 3, "seatCode": "A3", "type": null, "status": "ACTIVE" },
+        { "seatId": 4, "seatNumber": 4, "seatCode": "A4", "type": "STANDARD", "status": "ACTIVE" },
+        { "seatId": 5, "seatNumber": 5, "seatCode": "A5", "type": "STANDARD", "status": "ACTIVE" }
+      ]
+    },
+    {
+      "rowLabel": "B",
+      "seats": [
+        { "seatId": 6, "seatNumber": 1, "seatCode": "B1", "type": "STANDARD", "status": "ACTIVE" },
+        { "seatId": 7, "seatNumber": 2, "seatCode": "B2", "type": "STANDARD", "status": "ACTIVE" },
+        { "seatId": 8, "seatNumber": 3, "seatCode": "B3", "type": "STANDARD", "status": "ACTIVE" },
+        { "seatId": 9, "seatNumber": 4, "seatCode": "B4", "type": "STANDARD", "status": "ACTIVE" },
+        { "seatId": 10, "seatNumber": 5, "seatCode": "B5", "type": "STANDARD", "status": "ACTIVE" }
+      ]
+    },
+    {
+      "rowLabel": "C",
+      "seats": [
+        { "seatId": 11, "seatNumber": 1, "seatCode": "C1", "type": "STANDARD", "status": "ACTIVE" },
+        { "seatId": 12, "seatNumber": 2, "seatCode": "C2", "type": "STANDARD", "status": "ACTIVE" },
+        { "seatId": 13, "seatNumber": 3, "seatCode": "C3", "type": "STANDARD", "status": "ACTIVE" },
+        { "seatId": 14, "seatNumber": 4, "seatCode": "C4", "type": "STANDARD", "status": "ACTIVE" },
+        { "seatId": 15, "seatNumber": 5, "seatCode": "C5", "type": "STANDARD", "status": "ACTIVE" }
+      ]
+    }
+  ]
+}
+
+1.2. GET /api/rooms/{roomId}/seats/{seatId}: get ghế cụ thể theo roomId, seatId
+response body
+{
+  "seatId": 182,
+  "roomId": 15,
+  "rowLabel": "A",
+  "seatNumber": 1,
+  "seatCode": "A1",
+  "seatTypeId": 6,
+  "type": "STANDARD",
+  "status": "ACTIVE"
+}
+
+2. POST /api/rooms/{roomId}/seats/generate: tạo ghế theo id phòng.
+request body
+{
+  "rows": 2, (>=1), khi tạo ra theo hàng từ A-Z, AA,AB,AZ)
+  "column": 3, (>=1) 
+  "seatTypeId": 0, (bắt buộc seatType lấy từ seat-type)
+  "status": "ACTIVE/INACTIVE/MAINTENANCE"
+}
+
+3.1. PUT /api/rooms/{roomId}/seats/{seatId}: update ghế theo id
+{
+  "seatTypeId": 6,
+  "status": "ACTIVE"
+}
+
+3.2. PATCH /api/rooms/{roomId}/seats/bulk: update ghế theo room, hàng/cột/id
+request body
+{
+  "selector": {
+    "mode": "IDS/ROWS/COLS",
+    "target": [12, 13/A, B/ 1, 2]
+  },
+  "update": {
+    "seatTypeId": null,
+    "status": "INACTIVE",
+    "isGap": true
+  }
+}
+
+mode = IDS  → target là seatId[], ví dụ [12, 13]
+mode = ROWS → target là rowLabel[], ví dụ ["A", "B"]
+mode = COLS → target là seatNumber[], ví dụ [1, 2]
+
+4.1. DELETE /api/rooms/{roomId}/seats/{seatId}: xóa một ghế cụ thể, không xóa cứng mà chuyển thành inactive
+
+4.2. DELETE /api/rooms/{roomId}/seats/bulk: xóa ghế theo hàng/cột, không xóa cứng mà chuyển thành inactive
+{
+  "selector": {
+    "mode": "IDS/ROWS/COLS",
+    "target": [12, 13/A, B/ 1, 2]
+  }
+}
+
+
+5. Bổ sung isGap là field cho ghế để thể hiện đó là khoảng trống. Hiện tại các json ở trên chưa có.
+
+6. Rules: 
+Chỉ được cập nhật ghế cho phòng (INACTIVE, MAINTENANCE).
+Manager chỉ được quản lý ghế trong rạp của mình. (Admin-không được quản lý).
+Trong một phòng chiếu, sự kết hợp giữa Hàng (SeatRow) và Cột (SeatCol) của một ghế phải là duy nhất
+Tổng số ghế thực tế được tạo ra (không tính các vị trí isGap) phải luôn khớp với sức chứa (Capacity) của phòng chiếu đã khai báo.

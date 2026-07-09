@@ -18,6 +18,11 @@ public class LoyaltyPointsConfiguration : IEntityTypeConfiguration<LoyaltyPoints
 
         builder.HasIndex(p => p.UserID).HasDatabaseName("IX_LoyaltyPoints_UserID");
 
+        builder.HasIndex(p => p.BookingID)
+            .IsUnique()
+            .HasDatabaseName("UQ_LoyaltyPoints_BookingID_Earned")
+            .HasFilter("[TransactionType] = 'earn' AND [BookingID] IS NOT NULL");
+
         builder.HasOne(p => p.User)
             .WithMany(u => u.LoyaltyPoints)
             .HasForeignKey(p => p.UserID)
@@ -28,6 +33,12 @@ public class LoyaltyPointsConfiguration : IEntityTypeConfiguration<LoyaltyPoints
             .HasForeignKey(p => p.BookingID)
             .HasConstraintName("FK_LoyaltyPoints_Booking");
 
-        builder.ToTable(t => t.HasCheckConstraint("CK_LoyaltyPoints_TransactionType", "[TransactionType] IN ('earn', 'redeem', 'expire', 'adjust')"));
+        builder.HasOne(p => p.Voucher)
+            .WithMany(v => v.LoyaltyPointsTransactions)
+            .HasForeignKey(p => p.VoucherID)
+            .HasConstraintName("FK_LoyaltyPoints_Voucher")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.ToTable(t => t.HasCheckConstraint("CK_LoyaltyPoints_TransactionType", "[TransactionType] IN ('earn', 'redeem', 'expire', 'adjust', 'exchange')"));
     }
 }

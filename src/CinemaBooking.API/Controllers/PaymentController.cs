@@ -25,16 +25,14 @@ public sealed class PaymentController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
 
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+        var userId = GetCurrentUserId();
+        var isStaff = User.IsInRole(Roles.Staff);
 
-        var result = await _paymentService.InitiatePaymentAsync(request, ipAddress, cancellationToken);
-
-        if (result is PaymentValidationErrorResponse validationError)
-            return BadRequest(validationError);
-
-        return Ok(result);
+        var result = await _paymentService.InitiatePaymentAsync(
+            request, userId, isStaff, cancellationToken: cancellationToken);
+        return MapResult(result);
     }
 
     [HttpPost("cash/confirm")]
@@ -44,52 +42,68 @@ public sealed class PaymentController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(new { success = false, message = "Invalid request." });
 
-        var result = await _paymentService.ConfirmCashPaymentAsync(request, cancellationToken);
+        var result = await _paymentService.ConfirmCashPaymentAsync(
+            request, GetCurrentUserId(), cancellationToken);
 
-        if (result is null)
-            return NotFound(new { message = "Không tìm thấy thanh toán" });
-
-        return Ok(result);
+        return MapResult(result);
     }
 
-    [HttpPost("vnpay/callback")]
+    [HttpPost("payos/webhook")]
     [AllowAnonymous]
-    public async Task<IActionResult> ProcessVNPayCallback(CancellationToken cancellationToken)
+    public async Task<IActionResult> ProcessPayOSWebhook(
+        [FromBody] CinemaBooking.API.Contracts.Payment.PayOSWebhookRequest request,
+        CancellationToken cancellationToken)
     {
-        var vnpayData = Request.Query.ToDictionary(
-            kvp => kvp.Key,
-            kvp => kvp.Value.ToString());
+        if (!ModelState.IsValid)
+            return BadRequest(new { success = false, message = "Invalid PayOS webhook payload." });
 
-        var result = await _paymentService.ProcessVNPayCallbackAsync(vnpayData, cancellationToken);
+        var result = await _paymentService.ProcessPayOSWebhookAsync(
+            request.ToApplicationModel(), cancellationToken);
 
-        return Ok(result);
+        return result.Success
+            ? Ok(result)
+            : BadRequest(new { success = false, message = result.Message });
     }
 
     [HttpGet("{id}")]
+    [Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
     public async Task<IActionResult> GetPaymentById(
         int id,
         CancellationToken cancellationToken)
     {
-        var payment = await _paymentService.GetPaymentByIdAsync(id, cancellationToken);
-
-        if (payment is null)
-            return NotFound(new { message = "Không tìm thấy thanh toán" });
-
-        return Ok(payment);
+        var result = await _paymentService.GetPaymentByIdAsync(
+            id, GetCurrentUserId(), User.IsInRole(Roles.Staff), cancellationToken);
+        return MapResult(result);
     }
 
     [HttpGet("booking/{bookingId}")]
+    [Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
     public async Task<IActionResult> GetPaymentByBookingId(
         int bookingId,
         CancellationToken cancellationToken)
     {
-        var payment = await _paymentService.GetPaymentByBookingIdAsync(bookingId, cancellationToken);
+        var result = await _paymentService.GetPaymentByBookingIdAsync(
+            bookingId, GetCurrentUserId(), User.IsInRole(Roles.Staff), cancellationToken);
+        return MapResult(result);
+    }
 
-        if (payment is null)
-            return NotFound(new { message = "Không tìm thấy thanh toán cho booking này" });
+    private int GetCurrentUserId() => int.Parse(User.FindFirst("userId")!.Value);
 
-        return Ok(payment);
+    private IActionResult MapResult(PaymentOperationResult result)
+    {
+        if (result.Succeeded)
+            return Ok(result.Value);
+
+        var body = new { success = false, message = result.ErrorMessage };
+        return result.ErrorType switch
+        {
+            PaymentErrorType.NotFound => NotFound(body),
+            PaymentErrorType.Forbidden => StatusCode(StatusCodes.Status403Forbidden, body),
+            PaymentErrorType.Conflict => Conflict(body),
+            PaymentErrorType.Gateway => StatusCode(StatusCodes.Status502BadGateway, body),
+            _ => BadRequest(body)
+        };
     }
 }

@@ -1,6 +1,7 @@
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
+using CinemaBooking.Application.Common.Security;
 
 namespace CinemaBooking.Application.Rooms;
 
@@ -18,6 +19,13 @@ public sealed class RoomService : IRoomService
         return _roomRepository.GetRoomsAsync(cancellationToken);
     }
 
+    public Task<List<Room>> GetRoomsByCinemaIdAsync(
+    int cinemaId,
+    CancellationToken cancellationToken = default)
+{
+    return _roomRepository.GetRoomsByCinemaIdAsync(cinemaId, cancellationToken);
+}
+
     public Task<Room?> GetRoomByIdAsync(
         int roomId,
         CancellationToken cancellationToken = default)
@@ -28,17 +36,18 @@ public sealed class RoomService : IRoomService
     public async Task<(bool Succeeded, string? ErrorMessage, Room? Room)> CreateRoomAsync(
         int cinemaId,
         string name,
-        string type,
-        int capacity,
+        int roomTypeId,
         string status,
         string? description,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default)
     {
+        if (managerCinemaId.HasValue && cinemaId != managerCinemaId)
+            return (false, CinemaScopeMessages.AccessDenied, null);
         var validation = await ValidateRoomAsync(
             cinemaId,
             name,
-            type,
-            capacity,
+            roomTypeId,
             status,
             excludingRoomId: null,
             cancellationToken);
@@ -52,8 +61,8 @@ public sealed class RoomService : IRoomService
         {
             CinemaID = cinemaId,
             RoomName = name.Trim(),
-            RoomType = validation.RoomType!,
-            Capacity = capacity,
+            RoomTypeID = roomTypeId,
+            Capacity = 0,
             Status = validation.Status!,
             Description = NormalizeNullable(description),
             CreatedAt = DateTime.UtcNow
@@ -68,10 +77,10 @@ public sealed class RoomService : IRoomService
         int roomId,
         int cinemaId,
         string name,
-        string type,
-        int capacity,
+        int roomTypeId,
         string status,
         string? description,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default)
     {
         var existingRoom = await _roomRepository.GetByIdAsync(roomId, cancellationToken);
@@ -79,12 +88,14 @@ public sealed class RoomService : IRoomService
         {
             return (false, "Room not found", null);
         }
+        if (managerCinemaId.HasValue
+            && (existingRoom.CinemaID != managerCinemaId || cinemaId != managerCinemaId))
+            return (false, CinemaScopeMessages.AccessDenied, null);
 
         var validation = await ValidateRoomAsync(
             cinemaId,
             name,
-            type,
-            capacity,
+            roomTypeId,
             status,
             roomId,
             cancellationToken);
@@ -94,20 +105,18 @@ public sealed class RoomService : IRoomService
             return (false, validation.ErrorMessage, null);
         }
 
-        var seatCount = await _roomRepository.CountSeatsAsync(roomId, cancellationToken);
-        if (capacity < seatCount)
+        if (existingRoom.Status != "inactive"
+            && validation.Status == "inactive"
+            && await _roomRepository.HasUpcomingShowtimesAsync(roomId, DateTime.UtcNow, cancellationToken))
         {
-            return (false,
-                $"Capacity cannot be less than the current seat count ({seatCount})",
-                null);
+            return (false, "Room has upcoming showtimes", null);
         }
 
         var updatedRoom = await _roomRepository.UpdateAsync(
             roomId,
             cinemaId,
             name.Trim(),
-            validation.RoomType!,
-            capacity,
+            roomTypeId,
             validation.Status!,
             NormalizeNullable(description),
             cancellationToken);
@@ -119,6 +128,7 @@ public sealed class RoomService : IRoomService
 
     public async Task<(bool Succeeded, string? ErrorMessage)> DeleteRoomAsync(
         int roomId,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default)
     {
         var existingRoom = await _roomRepository.GetByIdAsync(roomId, cancellationToken);
@@ -126,10 +136,17 @@ public sealed class RoomService : IRoomService
         {
             return (false, "Room not found");
         }
+        if (managerCinemaId.HasValue && existingRoom.CinemaID != managerCinemaId)
+            return (false, CinemaScopeMessages.AccessDenied);
 
         if (await _roomRepository.HasActiveOrUpcomingShowtimesAsync(roomId, cancellationToken))
         {
             return (false, "Room has active or upcoming schedules");
+        }
+
+        if (await _roomRepository.HasAnyShowtimesAsync(roomId, cancellationToken))
+        {
+            return (false, "Room has showtime history");
         }
 
         var deleted = await _roomRepository.DeleteAsync(roomId, cancellationToken);
@@ -139,45 +156,38 @@ public sealed class RoomService : IRoomService
             : (false, "Room not found");
     }
 
-    private async Task<(bool Succeeded, string? ErrorMessage, string? RoomType, string? Status)> ValidateRoomAsync(
+    private async Task<(bool Succeeded, string? ErrorMessage, string? Status)> ValidateRoomAsync(
         int cinemaId,
         string name,
-        string type,
-        int capacity,
+        int roomTypeId,
         string status,
         int? excludingRoomId,
         CancellationToken cancellationToken)
     {
         if (cinemaId <= 0)
         {
-            return (false, "CinemaId is required", null, null);
+            return (false, "CinemaId is required", null);
         }
 
         if (!await _roomRepository.CinemaExistsAsync(cinemaId, cancellationToken))
         {
-            return (false, "Cinema not found", null, null);
+            return (false, "Cinema not found", null);
         }
 
         if (string.IsNullOrWhiteSpace(name))
         {
-            return (false, "Name is required", null, null);
+            return (false, "Name is required", null);
         }
 
-        if (capacity <= 0)
+        if (!await _roomRepository.RoomTypeExistsAsync(roomTypeId, cancellationToken))
         {
-            return (false, "Capacity must be greater than 0", null, null);
-        }
-
-        var normalizedType = NormalizeRoomType(type);
-        if (normalizedType is null)
-        {
-            return (false, "Type must be STANDARD, VIP, IMAX, or THREE_D", null, null);
+            return (false, "Room type not found", null);
         }
 
         var normalizedStatus = NormalizeStatus(status);
         if (normalizedStatus is null)
         {
-            return (false, "Status must be ACTIVE, MAINTENANCE, or INACTIVE", null, null);
+            return (false, "Status must be ACTIVE, MAINTENANCE, or INACTIVE", null);
         }
 
         if (await _roomRepository.NameExistsInCinemaAsync(
@@ -186,17 +196,10 @@ public sealed class RoomService : IRoomService
                 excludingRoomId,
                 cancellationToken))
         {
-            return (false, "Room name must be unique within the cinema", null, null);
+            return (false, "Room name must be unique within the cinema", null);
         }
 
-        return (true, null, normalizedType, normalizedStatus);
-    }
-
-    private static string? NormalizeRoomType(string type)
-    {
-        return string.IsNullOrWhiteSpace(type)
-            ? null
-            : EnumValueMapper.Validate(type, "Type", DatabaseEnumMappings.RoomTypes).DatabaseValue;
+        return (true, null, normalizedStatus);
     }
 
     private static string? NormalizeStatus(string status)

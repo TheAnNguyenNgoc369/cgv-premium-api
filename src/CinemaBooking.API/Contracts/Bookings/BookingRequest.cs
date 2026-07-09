@@ -8,17 +8,19 @@ public sealed class HoldSeatsRequest
     public int ShowtimeId { get; set; }
 
     [Required]
-    [MinLength(1, ErrorMessage = "Vui lòng chọn ít nhất 1 ghế")]
+    [MinLength(1, ErrorMessage = "Please select at least one seat")]
     public List<int> SeatIds { get; set; } = new();
 }
 
 public sealed class CreateBookingRequest
 {
+    public int? CustomerId { get; set; }
+
     [Required]
     public int ShowtimeId { get; set; }
 
     [Required]
-    [MinLength(1, ErrorMessage = "Vui lòng chọn ít nhất 1 ghế")]
+    [MinLength(1, ErrorMessage = "Please select at least one seat")]
     public List<int> SeatIds { get; set; } = new();
 
     public List<BookingFnBItem> FnbItems { get; set; } = new();
@@ -32,6 +34,6 @@ public sealed class BookingFnBItem
     public int ItemId { get; set; }
 
     [Required]
-    [Range(1, 99, ErrorMessage = "Số lượng phải từ 1-99")]
+    [Range(1, 99, ErrorMessage = "Quantity must be between 1 and 99")]
     public int Quantity { get; set; }
 }

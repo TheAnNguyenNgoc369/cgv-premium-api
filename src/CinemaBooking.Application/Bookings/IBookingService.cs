@@ -4,14 +4,30 @@ namespace CinemaBooking.Application.Bookings;
 
 public interface IBookingService
 {
-    Task<(bool Succeeded, string? ErrorMessage, List<int>? HoldIds, DateTime? ExpiresAt)> HoldSeatsAsync(
+    Task<(bool Succeeded, string? ErrorMessage, List<int>? HoldIds, DateTime? ExpiresAt, SeatValidationErrors? SeatErrors)> HoldSeatsAsync(
         int userId,
         int showtimeId,
         List<int> seatIds,
         CancellationToken cancellationToken = default);
 
-    Task<(bool Succeeded, string? ErrorMessage, Booking? Booking)> CreateBookingAsync(
+    Task<(bool Succeeded, string? ErrorMessage)> ReleaseSeatHoldsAsync(
         int userId,
+        int showtimeId,
+        List<int> seatIds,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage, Booking? Booking, SeatValidationErrors? SeatErrors)> CreateBookingAsync(
+        int actorUserId,
+        int? customerId,
+        bool isStaff,
+        int showtimeId,
+        List<int> seatIds,
+        List<BookingFnBItemDto> fnbItems,
+        string? voucherCode,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage, PricingCalculationResult? Result)> CalculatePricingAsync(
+        int? userId,
         int showtimeId,
         List<int> seatIds,
         List<BookingFnBItemDto> fnbItems,

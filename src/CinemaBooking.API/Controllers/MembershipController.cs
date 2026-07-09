@@ -25,12 +25,14 @@ public sealed class MembershipController : ControllerBase
         var membership = await _membershipService.GetMyMembershipAsync(userId, cancellationToken);
 
         var response = new MembershipResponse(
-            Tier: membership.Tier,
+            CurrentTier: membership.CurrentTier,
+            NextTier: membership.NextTier,
+            PointsToNextTier: membership.PointsToNextTier,
             TotalPoints: membership.TotalPoints,
             TotalSpent: membership.TotalSpent,
             DiscountPercent: membership.DiscountPercent,
-            IsVip: membership.IsVip,
-            PointsToVip: membership.PointsToVip
+            TotalRefunds: membership.TotalRefunds,
+            UsedRefunds: membership.UsedRefunds
         );
 
         return Ok(response);
@@ -45,7 +47,8 @@ public sealed class MembershipController : ControllerBase
             TierID: t.TierID,
             TierName: t.TierName,
             MinPoints: t.MinPoints,
-            DiscountRate: t.DiscountRate
+            DiscountRate: t.DiscountRate,
+            TotalRefunds: t.MaxRefundPerMonth
         )).ToList();
 
         return Ok(response);

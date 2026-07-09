@@ -4,22 +4,25 @@ using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using CinemaBooking.Application.ActivityLogs;
 
 namespace CinemaBooking.API.Controllers;
 
 [ApiController]
 [Route("api/genres")]
-[Authorize(Roles = Roles.Manager)]
 public sealed class GenreController : ControllerBase
 {
     private readonly IGenreService _genreService;
+    private readonly IActivityLogService _activityLogs;
 
-    public GenreController(IGenreService genreService)
+    public GenreController(IGenreService genreService, IActivityLogService activityLogs)
     {
         _genreService = genreService;
+        _activityLogs = activityLogs;
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetGenres(CancellationToken cancellationToken)
     {
         var genres = await _genreService.GetGenresAsync(cancellationToken);
@@ -28,6 +31,7 @@ public sealed class GenreController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetGenreById(
         int id,
         CancellationToken cancellationToken)
@@ -36,13 +40,14 @@ public sealed class GenreController : ControllerBase
 
         if (genre is null)
         {
-            return NotFound(new { message = "Genre not found" });
+            return NotFound(new { success = false, message = "Genre not found" });
         }
 
         return Ok(ToResponse(genre));
     }
 
     [HttpPost]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> CreateGenre(
         [FromBody] GenreRequest request,
         CancellationToken cancellationToken)
@@ -53,10 +58,12 @@ public sealed class GenreController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
         var response = ToResponse(result.Genre!);
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.CreateGenre,
+            "Genre", response.GenreId, $"Created genre {response.GenreId}", this.AuditIpAddress(), cancellationToken);
 
         return CreatedAtAction(
             nameof(GetGenreById),
@@ -65,6 +72,7 @@ public sealed class GenreController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> UpdateGenre(
         int id,
         [FromBody] GenreRequest request,
@@ -79,16 +87,19 @@ public sealed class GenreController : ControllerBase
         {
             if (result.ErrorMessage == "Genre not found")
             {
-                return NotFound(new { message = result.ErrorMessage });
+                return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return BadRequest(new { message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateGenre,
+            "Genre", id, $"Updated genre {id}", this.AuditIpAddress(), cancellationToken);
         return Ok(ToResponse(result.Genre!));
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> DeleteGenre(
         int id,
         CancellationToken cancellationToken)
@@ -99,12 +110,14 @@ public sealed class GenreController : ControllerBase
         {
             if (result.ErrorMessage == "Genre not found")
             {
-                return NotFound(new { message = result.ErrorMessage });
+                return NotFound(new { success = false, message = result.ErrorMessage });
             }
 
-            return Conflict(new { message = result.ErrorMessage });
+            return Conflict(new { success = false, message = result.ErrorMessage });
         }
 
+        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.DeleteGenre,
+            "Genre", id, $"Deleted genre {id}", this.AuditIpAddress(), cancellationToken);
         return NoContent();
     }
 

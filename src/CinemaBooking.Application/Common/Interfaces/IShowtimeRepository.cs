@@ -10,7 +10,9 @@ namespace CinemaBooking.Application.Common.Interfaces;
 public interface IShowtimeRepository
 {
     Task<(List<Showtime> Items, int TotalItems)> GetShowtimesAsync(
-        string? movieName, string? roomName, DateOnly? date, string? status,
+        int? movieId, int? cinemaId, string? movieName, string? roomName,
+        DateOnly? date, string? status,
+        bool onlyActiveLocations,
         int page, int pageSize, string sortBy, bool descending,
         CancellationToken cancellationToken = default);
 
@@ -19,20 +21,37 @@ public interface IShowtimeRepository
     Task<Room?> GetRoomAsync(int roomId, CancellationToken cancellationToken = default);
     Task<bool> HasConflictAsync(int roomId, DateTime startTime, DateTime endTime,
         int? excludingShowtimeId = null, CancellationToken cancellationToken = default);
+    Task<bool> HasRoomTypeStartConflictAsync(
+        int cinemaId, int roomTypeId, DateTime startTime,
+        int? excludingShowtimeId = null, CancellationToken cancellationToken = default);
     Task<bool> HasActiveBookingOrHoldAsync(int showtimeId, DateTime now,
         CancellationToken cancellationToken = default);
-    Task<bool> IsSoldOutAsync(int showtimeId, int capacity, DateTime now,
+    Task<bool> HasSuccessfulBookingAsync(int showtimeId,
         CancellationToken cancellationToken = default);
+    Task<bool> HasAnyBookingOrHoldAsync(int showtimeId,
+        CancellationToken cancellationToken = default);
+    Task<List<Showtime>> GetShowtimesByRangeAsync(
+        DateTime startUtc,
+        DateTime endUtc,
+        int? cinemaId,
+        bool onlyActiveLocations,
+        CancellationToken cancellationToken = default);
+    Task<IReadOnlySet<int>> GetSoldOutShowtimeIdsAsync(
+        IReadOnlyCollection<int> showtimeIds, DateTime now,
+        CancellationToken cancellationToken = default);
+    Task<bool> AcquireRoomScheduleLockAsync(
+        int roomId, CancellationToken cancellationToken = default);
+    Task<bool> AcquireCinemaScheduleLockAsync(
+        int cinemaId, CancellationToken cancellationToken = default);
     Task<Showtime> AddAsync(Showtime showtime, CancellationToken cancellationToken = default);
     Task<Showtime?> UpdateAsync(Showtime showtime, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(int showtimeId, CancellationToken cancellationToken = default);
-    Task<List<Showtime>> GetShowtimesByMovieAsync(
-        int movieId,
-        DateOnly? date,
-        int? cinemaId,
-        CancellationToken cancellationToken = default);
 
     Task<Showtime?> GetShowtimeByIdAsync(
+        int id,
+        CancellationToken cancellationToken = default);
+
+    Task<Showtime?> GetManagedShowtimeByIdAsync(
         int id,
         CancellationToken cancellationToken = default);
 
@@ -46,5 +65,6 @@ public interface IShowtimeRepository
 
     Task<List<int>> GetHeldSeatIdsAsync(
         int showtimeId,
+        DateTime now,
         CancellationToken cancellationToken = default);
 }

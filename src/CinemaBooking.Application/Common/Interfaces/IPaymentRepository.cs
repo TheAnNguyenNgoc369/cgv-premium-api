@@ -23,6 +23,24 @@ public interface IPaymentRepository
         string? transactionCode = null,
         CancellationToken cancellationToken = default);
 
+    Task<bool> TryCompletePendingPaymentAsync(
+        int paymentId,
+        DateTime paidAt,
+        string? transactionCode,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> TryMarkCompletedPaymentAsRefundedAsync(
+        int paymentId,
+        decimal refundAmount,
+        string refundReason,
+        int refundedBy,
+        DateTime refundedAt,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> TryCancelPendingPaymentAsync(
+        int paymentId,
+        CancellationToken cancellationToken = default);
+
     Task<PaymentSession> CreatePaymentSessionAsync(
         PaymentSession session,
         CancellationToken cancellationToken = default);
@@ -35,8 +53,30 @@ public interface IPaymentRepository
         string orderNo,
         CancellationToken cancellationToken = default);
 
+    Task<PaymentSession?> GetLatestPaymentSessionAsync(
+        int paymentId,
+        CancellationToken cancellationToken = default);
+
     Task UpdatePaymentSessionStatusAsync(
         int sessionId,
         string status,
+        CancellationToken cancellationToken = default);
+
+    Task UpdatePaymentSessionsForPaymentAsync(
+        int paymentId,
+        string status,
+        CancellationToken cancellationToken = default);
+
+    Task ResetPaymentForRetryAsync(
+        int paymentId,
+        string paymentMethod,
+        decimal amount,
+        CancellationToken cancellationToken = default);
+
+    Task UpdatePaymentForRefundAsync(
+        int paymentId,
+        decimal refundAmount,
+        string refundReason,
+        int refundedBy,
         CancellationToken cancellationToken = default);
 }

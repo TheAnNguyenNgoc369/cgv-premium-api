@@ -2,6 +2,7 @@ using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using CinemaBooking.Shared.Constants;
 
 namespace CinemaBooking.Infrastructure.Repositories;
 
@@ -63,6 +64,60 @@ public sealed class PaymentRepository : IPaymentRepository
         await _db.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<bool> TryCompletePendingPaymentAsync(
+        int paymentId,
+        DateTime paidAt,
+        string? transactionCode,
+        CancellationToken cancellationToken = default)
+    {
+        var affectedRows = await _db.Payments
+            .Where(payment => payment.PaymentID == paymentId
+                && payment.Status == PaymentStatus.Pending)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(payment => payment.Status, PaymentStatus.Completed)
+                .SetProperty(payment => payment.PaidAt, paidAt)
+                .SetProperty(payment => payment.TransactionCode, transactionCode),
+                cancellationToken);
+
+        return affectedRows == 1;
+    }
+
+    public async Task<bool> TryMarkCompletedPaymentAsRefundedAsync(
+        int paymentId,
+        decimal refundAmount,
+        string refundReason,
+        int refundedBy,
+        DateTime refundedAt,
+        CancellationToken cancellationToken = default)
+    {
+        var affectedRows = await _db.Payments
+            .Where(payment => payment.PaymentID == paymentId
+                && payment.Status == PaymentStatus.Completed)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(payment => payment.Status, PaymentStatus.Refunded)
+                .SetProperty(payment => payment.RefundReason, refundReason)
+                .SetProperty(payment => payment.RefundAmount, refundAmount)
+                .SetProperty(payment => payment.RefundedAt, refundedAt)
+                .SetProperty(payment => payment.RefundedBy, refundedBy),
+                cancellationToken);
+
+        return affectedRows == 1;
+    }
+
+    public async Task<bool> TryCancelPendingPaymentAsync(
+        int paymentId,
+        CancellationToken cancellationToken = default)
+    {
+        var affectedRows = await _db.Payments
+            .Where(payment => payment.PaymentID == paymentId
+                && payment.Status == PaymentStatus.Pending)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(payment => payment.Status, PaymentStatus.Cancelled),
+                cancellationToken);
+
+        return affectedRows == 1;
+    }
+
     public async Task<PaymentSession> CreatePaymentSessionAsync(
         PaymentSession session,
         CancellationToken cancellationToken = default)
@@ -90,6 +145,18 @@ public sealed class PaymentRepository : IPaymentRepository
             .FirstOrDefaultAsync(ps => ps.GatewayOrderNo == orderNo, cancellationToken);
     }
 
+    public async Task<PaymentSession?> GetLatestPaymentSessionAsync(
+        int paymentId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.PaymentSessions
+            .AsNoTracking()
+            .Where(session => session.PaymentID == paymentId)
+            .OrderByDescending(session => session.CreatedAt)
+            .ThenByDescending(session => session.SessionID)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task UpdatePaymentSessionStatusAsync(
         int sessionId,
         string status,
@@ -102,6 +169,53 @@ public sealed class PaymentRepository : IPaymentRepository
             throw new InvalidOperationException($"PaymentSession {sessionId} not found");
 
         session.Status = status;
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UpdatePaymentSessionsForPaymentAsync(
+        int paymentId,
+        string status,
+        CancellationToken cancellationToken = default)
+    {
+        await _db.PaymentSessions
+            .Where(session => session.PaymentID == paymentId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(session => session.Status, status),
+                cancellationToken);
+    }
+
+    public async Task ResetPaymentForRetryAsync(
+        int paymentId,
+        string paymentMethod,
+        decimal amount,
+        CancellationToken cancellationToken = default)
+    {
+        var payment = await _db.Payments.FindAsync(new object[] { paymentId }, cancellationToken)
+            ?? throw new InvalidOperationException($"Payment {paymentId} not found");
+        payment.PaymentMethod = paymentMethod;
+        payment.Amount = amount;
+        payment.Status = PaymentStatus.Pending;
+        payment.PaidAt = null;
+        payment.TransactionCode = null;
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UpdatePaymentForRefundAsync(
+        int paymentId,
+        decimal refundAmount,
+        string refundReason,
+        int refundedBy,
+        CancellationToken cancellationToken = default)
+    {
+        var payment = await _db.Payments.FindAsync(new object[] { paymentId }, cancellationToken)
+            ?? throw new InvalidOperationException($"Payment {paymentId} not found");
+
+        payment.Status = PaymentStatus.Refunded;
+        payment.RefundReason = refundReason;
+        payment.RefundAmount = refundAmount;
+        payment.RefundedAt = DateTime.UtcNow;
+        payment.RefundedBy = refundedBy;
+
         await _db.SaveChangesAsync(cancellationToken);
     }
 }

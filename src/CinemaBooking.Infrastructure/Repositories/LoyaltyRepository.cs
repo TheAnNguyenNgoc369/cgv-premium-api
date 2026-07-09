@@ -2,6 +2,7 @@ using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
 using CinemaBooking.Shared.Constants;
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace CinemaBooking.Infrastructure.Repositories;
@@ -95,14 +96,44 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
         int totalPoints,
         CancellationToken cancellationToken = default)
     {
-        var user = await _db.Users
-            .FirstOrDefaultAsync(u => u.UserID == userId, cancellationToken);
+        var connection = _db.Database.GetDbConnection();
+        var shouldCloseConnection = connection.State != ConnectionState.Open;
+        if (shouldCloseConnection)
+            await connection.OpenAsync(cancellationToken);
 
-        if (user is not null)
+        try
         {
-            user.TotalPoints = totalPoints;
-            user.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync(cancellationToken);
+            await _db.Database.ExecuteSqlRawAsync(
+                "EXEC sys.sp_set_session_context @key=N'SkipLoyaltyPointTrigger', @value=1",
+                cancellationToken);
+
+            var user = await _db.Users
+                .FirstOrDefaultAsync(u => u.UserID == userId, cancellationToken);
+
+            if (user is not null)
+            {
+                user.TotalPoints = totalPoints;
+                user.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync(cancellationToken);
+            }
         }
+        finally
+        {
+            await _db.Database.ExecuteSqlRawAsync(
+                "EXEC sys.sp_set_session_context @key=N'SkipLoyaltyPointTrigger', @value=NULL",
+                CancellationToken.None);
+            if (shouldCloseConnection)
+                await connection.CloseAsync();
+        }
+    }
+
+    public async Task<bool> HasPointsForBookingAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.LoyaltyPoints
+            .AnyAsync(lp => lp.BookingID == bookingId
+                         && lp.TransactionType == LoyaltyTransactionTypes.Earned,
+                      cancellationToken);
     }
 }

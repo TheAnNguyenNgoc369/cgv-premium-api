@@ -1,19 +1,19 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Net;
+using System.Text.RegularExpressions;
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Common.Security;
+using CinemaBooking.Application.Configuration;
+using CinemaBooking.Application.Notifications;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
+using Microsoft.Extensions.Options;
 
 namespace CinemaBooking.Application.Authentication;
 
 public sealed class AuthService : IAuthService
 {
-    private const string PasswordHashAlgorithm = "pbkdf2-sha256";
-    private const string PasswordHashVersion = "v1";
-    private const int PasswordHashIterations = 700_000;
-    private const int PasswordSaltSize = 16;
-    private const int PasswordHashSize = 32;
     private const string ActiveStatus = "active";
     private const string LockedStatus = "locked";
     private const string InactiveStatus = "inactive";
@@ -21,17 +21,27 @@ public sealed class AuthService : IAuthService
     private const int VerificationEmailResendCooldownSeconds = 60;
     private const int PasswordResetTokenExpirationMinutes = 15;
     private const int ForgotPasswordCooldownSeconds = 60;
-    private const string EnumerationSafeEmailMessage = "If the email is eligible, an email has been sent.";
+    private const string VerificationEmailSentMessage = "Verification email has been sent.";
+    private const string PasswordResetEmailSentMessage = "Password reset email has been sent.";
+    private const string EmailNotFoundMessage = "Email doesn't exist.";
+    private const string EmailAlreadyVerifiedMessage = "Email has been verified.";
+    private const string EmailSendFailedMessage = "Email could not be sent. Please try again later.";
 
     private readonly IUserRepository _userRepository;
     private readonly IEmailSender _emailSender;
+    private readonly IAuthEmailService _authEmailService;
+    private readonly FrontendSettings _frontendSettings;
 
     public AuthService(
         IUserRepository userRepository,
-        IEmailSender emailSender)
+        IEmailSender emailSender,
+        IAuthEmailService authEmailService,
+        IOptions<FrontendSettings>? frontendSettings = null)
     {
         _userRepository = userRepository;
         _emailSender = emailSender;
+        _authEmailService = authEmailService;
+        _frontendSettings = frontendSettings?.Value ?? new FrontendSettings { BaseUrl = "http://localhost:5173" };
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, int? UserId, bool VerificationEmailSent)> RegisterAsync(
@@ -45,9 +55,19 @@ public sealed class AuthService : IAuthService
         var normalizedEmail = email.Trim();
         var normalizedPhone = phone.Trim();
 
+        if (!IsStrongPassword(password))
+        {
+            return (false, "Password must contain at least 1 uppercase letter, 1 number, and 1 special character", null, false);
+        }
+
         if (await _userRepository.EmailExistsAsync(normalizedEmail, cancellationToken))
         {
-            return (false, "Email này đã được đăng ký", null, false);
+            return (false, "Email is already in use.", null, false);
+        }
+
+        if (await _userRepository.PhoneExistsAsync(normalizedPhone, cancellationToken: cancellationToken))
+        {
+            return (false, "Phone is already in use.", null, false);
         }
 
         var now = DateTime.UtcNow;
@@ -56,7 +76,7 @@ public sealed class AuthService : IAuthService
             FullName = normalizedFullName,
             Email = normalizedEmail,
             Phone = normalizedPhone,
-            PasswordHash = HashPassword(password),
+            PasswordHash = PasswordHasher.Hash(password),
             Role = Roles.Customer,
             Status = ActiveStatus,
             EmailVerifiedAt = null,
@@ -83,13 +103,14 @@ public sealed class AuthService : IAuthService
             verificationToken,
             cancellationToken);
 
-        var verificationEmailSent = await _emailSender.SendAsync(
+        await _authEmailService.QueueVerificationAsync(
+            user.UserID,
             user.Email,
             "Verify your Cinema Booking account",
-            BuildVerificationEmailBody(user.FullName, verificationToken.Token),
+            BuildVerificationEmailBody(user.FullName, verificationToken.Token, _frontendSettings.BaseUrl),
             cancellationToken);
 
-        return (true, null, user.UserID, verificationEmailSent);
+        return (true, null, user.UserID, true);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, User? User)> LoginAsync(
@@ -99,14 +120,14 @@ public sealed class AuthService : IAuthService
     {
         var user = await _userRepository.GetByEmailAsync(email.Trim(), cancellationToken);
 
-        if (user is null || !VerifyPassword(password, user.PasswordHash, out var requiresRehash))
+        if (user is null || !PasswordHasher.Verify(password, user.PasswordHash, out var requiresRehash))
         {
-            return (false, "Email hoặc mật khẩu không đúng", null);
+            return (false, "Email or password is incorrect.", null);
         }
 
         if (requiresRehash)
         {
-            var upgradedPasswordHash = HashPassword(password);
+            var upgradedPasswordHash = PasswordHasher.Hash(password);
             var passwordHashUpdated = await _userRepository.TryUpdatePasswordHashAsync(
                 user.UserID,
                 user.PasswordHash,
@@ -115,7 +136,7 @@ public sealed class AuthService : IAuthService
 
             if (!passwordHashUpdated)
             {
-                return (false, "Email hoặc mật khẩu không đúng", null);
+                return (false, "Email or password is incorrect.", null);
             }
 
             user.PasswordHash = upgradedPasswordHash;
@@ -123,37 +144,56 @@ public sealed class AuthService : IAuthService
 
         if (string.Equals(user.Status, LockedStatus, StringComparison.OrdinalIgnoreCase))
         {
-            return (false, "Tài khoản đã bị khoá. Vui lòng liên hệ hỗ trợ", null);
+            return (false, "Account is locked. Please contact support.", null);
         }
 
         if (string.Equals(user.Status, InactiveStatus, StringComparison.OrdinalIgnoreCase))
         {
-            return (false, "Tài khoản chưa được kích hoạt", null);
+            return (false, "Your account is currently inactive. Please contact our Administrator for assistance", null);
         }
 
-        if (!user.EmailVerifiedAt.HasValue)
+        if (string.Equals(user.Status, UserStatuses.Unverified, StringComparison.OrdinalIgnoreCase)
+            && user.EmailVerifiedAt.HasValue)
+        {
+            user.Status = ActiveStatus;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _userRepository.SaveChangesAsync(cancellationToken);
+        }
+
+        if (string.Equals(user.Status, UserStatuses.Unverified, StringComparison.OrdinalIgnoreCase)
+            || !user.EmailVerifiedAt.HasValue)
         {
             return (false, "Please verify your email before logging in.", null);
+        }
+
+        if (!string.Equals(user.Status, ActiveStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            return (false, "Account is not active.", null);
         }
 
         return (true, null, user);
     }
 
-    public async Task<(bool Succeeded, string? ErrorMessage, bool VerificationEmailSent)> ResendVerificationEmailAsync(
+    public async Task<(bool Succeeded, string? Message, bool VerificationEmailSent, int? RetryAfterSeconds)> ResendVerificationEmailAsync(
         string email,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(email))
         {
-            return (true, EnumerationSafeEmailMessage, false);
+            return (false, EmailNotFoundMessage, false, null);
         }
 
         var normalizedEmail = email.Trim();
         var user = await _userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
 
-        if (user is null || user.EmailVerifiedAt.HasValue)
+        if (user is null)
         {
-            return (true, EnumerationSafeEmailMessage, false);
+            return (false, EmailNotFoundMessage, false, null);
+        }
+
+        if (user.EmailVerifiedAt.HasValue)
+        {
+            return (false, EmailAlreadyVerifiedMessage, false, null);
         }
 
         var now = DateTime.UtcNow;
@@ -165,7 +205,12 @@ public sealed class AuthService : IAuthService
         if (lastToken is not null
             && lastToken.CreatedAt > now.AddSeconds(-VerificationEmailResendCooldownSeconds))
         {
-            return (true, EnumerationSafeEmailMessage, false);
+            var retryAfterSeconds = GetRetryAfterSeconds(
+                lastToken.CreatedAt,
+                VerificationEmailResendCooldownSeconds,
+                now);
+
+            return (false, $"Please wait {retryAfterSeconds} seconds before requesting another verification email.", false, retryAfterSeconds);
         }
 
         var verificationToken = new EmailVerificationToken
@@ -181,39 +226,51 @@ public sealed class AuthService : IAuthService
             verificationToken,
             cancellationToken);
 
-        var verificationEmailSent = await _emailSender.SendAsync(
-            user.Email,
-            "Verify your Cinema Booking account",
-            BuildVerificationEmailBody(user.FullName, verificationToken.Token),
-            cancellationToken);
-
-        if (!verificationEmailSent)
+        try
+        {
+            await _authEmailService.QueueVerificationAsync(
+                user.UserID,
+                user.Email,
+                "Verify your Cinema Booking account",
+                BuildVerificationEmailBody(user.FullName, verificationToken.Token, _frontendSettings.BaseUrl),
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
         {
             await _userRepository.DeleteEmailVerificationTokenAsync(
                 verificationToken.Token,
                 cancellationToken);
 
-            return (true, EnumerationSafeEmailMessage, false);
+            return (false, EmailSendFailedMessage, false, null);
         }
 
-        return (true, EnumerationSafeEmailMessage, false);
+        return (true, VerificationEmailSentMessage, true, VerificationEmailResendCooldownSeconds);
     }
 
-    public async Task<(bool Succeeded, string? ErrorMessage)> ForgotPasswordAsync(
+    public async Task<(bool Succeeded, string? Message, bool EmailSent, int? RetryAfterSeconds)> ForgotPasswordAsync(
         string email,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(email))
         {
-            return (true, EnumerationSafeEmailMessage);
+            return (false, EmailNotFoundMessage, false, null);
         }
 
         var normalizedEmail = email.Trim();
         var user = await _userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
 
-        if (user is null || !user.EmailVerifiedAt.HasValue)
+        if (user is null)
         {
-            return (true, EnumerationSafeEmailMessage);
+            return (false, EmailNotFoundMessage, false, null);
+        }
+
+        if (!user.EmailVerifiedAt.HasValue)
+        {
+            return (false, "Email has not been verified.", false, null);
         }
 
         var now = DateTime.UtcNow;
@@ -225,7 +282,12 @@ public sealed class AuthService : IAuthService
         if (lastToken is not null
             && lastToken.CreatedAt > now.AddSeconds(-ForgotPasswordCooldownSeconds))
         {
-            return (true, EnumerationSafeEmailMessage);
+            var retryAfterSeconds = GetRetryAfterSeconds(
+                lastToken.CreatedAt,
+                ForgotPasswordCooldownSeconds,
+                now);
+
+            return (false, $"Please wait {retryAfterSeconds} seconds before requesting another password reset email.", false, retryAfterSeconds);
         }
 
         var resetToken = new PasswordResetToken
@@ -241,20 +303,29 @@ public sealed class AuthService : IAuthService
             resetToken,
             cancellationToken);
 
-        var emailSent = await _emailSender.SendAsync(
-            user.Email,
-            "Reset your Cinema Booking password",
-            BuildResetPasswordEmailBody(user.FullName, resetToken.Token),
-            cancellationToken);
-
-        if (!emailSent)
+        try
+        {
+            await _authEmailService.QueuePasswordResetAsync(
+                user.UserID,
+                user.Email,
+                "Reset your Cinema Booking password",
+                BuildResetPasswordEmailBody(user.FullName, resetToken.Token, _frontendSettings.BaseUrl),
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
         {
             await _userRepository.DeletePasswordResetTokenAsync(
                 resetToken.Token,
                 cancellationToken);
+
+            return (false, EmailSendFailedMessage, false, null);
         }
 
-        return (true, EnumerationSafeEmailMessage);
+        return (true, PasswordResetEmailSentMessage, true, ForgotPasswordCooldownSeconds);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> ResetPasswordAsync(
@@ -270,23 +341,28 @@ public sealed class AuthService : IAuthService
 
         if (string.IsNullOrWhiteSpace(newPassword))
         {
-            return (false, "Vui lòng nhập mật khẩu mới");
+            return (false, "Please enter a new password.");
         }
 
         if (newPassword.Length < 6)
         {
-            return (false, "Mật khẩu mới phải có ít nhất 6 ký tự");
+            return (false, "New password must contain at least 6 characters.");
+        }
+
+        if (!IsStrongPassword(newPassword))
+        {
+            return (false, "Password must contain at least 1 uppercase letter, 1 number, and 1 special character");
         }
 
         if (!string.Equals(newPassword, confirmPassword, StringComparison.Ordinal))
         {
-            return (false, "Mật khẩu xác nhận không khớp");
+            return (false, "Confirm password does not match.");
         }
 
         var now = DateTime.UtcNow;
         var passwordReset = await _userRepository.TryResetPasswordAsync(
             token.Trim(),
-            HashPassword(newPassword),
+            PasswordHasher.Hash(newPassword),
             now,
             cancellationToken);
 
@@ -299,38 +375,38 @@ public sealed class AuthService : IAuthService
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> VerifyEmailAsync(
-        string token,
+        string code,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(token))
+        if (string.IsNullOrWhiteSpace(code))
         {
-            return (false, "Token is required");
+            return (false, "Code is required");
         }
 
         var verificationToken = await _userRepository.GetEmailVerificationTokenAsync(
-            token.Trim(),
+            code.Trim(),
             cancellationToken);
 
         if (verificationToken is null)
         {
-            return (false, "Token không hợp lệ");
+            return (false, "Code is invalid.");
         }
 
         if (verificationToken.VerifiedAt.HasValue)
         {
-            return (false, "Email đã được xác thực trước đó");
+            return (false, "Email has already been verified.");
         }
 
         var now = DateTime.UtcNow;
 
         if (verificationToken.ExpiresAt <= now)
         {
-            return (false, "Token đã hết hạn");
+            return (false, "Code has expired.");
         }
 
         if (verificationToken.User is null)
         {
-            return (false, "Token is invalid");
+            return (false, "Code is invalid");
         }
 
         if (verificationToken.User.EmailVerifiedAt.HasValue)
@@ -339,6 +415,13 @@ public sealed class AuthService : IAuthService
         }
 
         verificationToken.User.EmailVerifiedAt = now;
+        if (string.Equals(
+                verificationToken.User.Status,
+                UserStatuses.Unverified,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            verificationToken.User.Status = ActiveStatus;
+        }
         verificationToken.User.UpdatedAt = now;
         verificationToken.VerifiedAt = now;
         await _userRepository.SaveChangesAsync(cancellationToken);
@@ -346,91 +429,21 @@ public sealed class AuthService : IAuthService
         return (true, null);
     }
 
-    private static string HashPassword(string password)
+    private static bool IsStrongPassword(string password)
     {
-        var salt = RandomNumberGenerator.GetBytes(PasswordSaltSize);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(
-            Encoding.UTF8.GetBytes(password),
-            salt,
-            PasswordHashIterations,
-            HashAlgorithmName.SHA256,
-            PasswordHashSize);
-
-        return $"${PasswordHashAlgorithm}${PasswordHashVersion}${PasswordHashIterations}${Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
+        return password.Length >= 6
+            && Regex.IsMatch(password, "[A-Z]")
+            && Regex.IsMatch(password, @"\d")
+            && Regex.IsMatch(password, "[^A-Za-z0-9]");
     }
 
-    private static bool VerifyPassword(
-        string password,
-        string encodedHash,
-        out bool requiresRehash)
+    private static int GetRetryAfterSeconds(
+        DateTime requestedAt,
+        int cooldownSeconds,
+        DateTime now)
     {
-        requiresRehash = false;
-        var parts = encodedHash.Split('$');
-
-        if (parts.Length == 6
-            && parts[0].Length == 0
-            && parts[1] == PasswordHashAlgorithm
-            && parts[2] == PasswordHashVersion
-            && int.TryParse(parts[3], out var iterations)
-            && iterations == PasswordHashIterations)
-        {
-            return VerifyPbkdf2Password(password, parts, iterations);
-        }
-
-        return VerifyLegacySha256Password(password, encodedHash, out requiresRehash);
-    }
-
-    private static bool VerifyPbkdf2Password(string password, string[] parts, int iterations)
-    {
-        try
-        {
-            var salt = Convert.FromBase64String(parts[4]);
-            var expectedHash = Convert.FromBase64String(parts[5]);
-
-            if (salt.Length != PasswordSaltSize || expectedHash.Length != PasswordHashSize)
-            {
-                return false;
-            }
-
-            var actualHash = Rfc2898DeriveBytes.Pbkdf2(
-                Encoding.UTF8.GetBytes(password),
-                salt,
-                iterations,
-                HashAlgorithmName.SHA256,
-                PasswordHashSize);
-
-            return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-    }
-
-    private static bool VerifyLegacySha256Password(
-        string password,
-        string encodedHash,
-        out bool requiresRehash)
-    {
-        requiresRehash = false;
-
-        if (encodedHash.Length != 64)
-        {
-            return false;
-        }
-
-        try
-        {
-            var expectedHash = Convert.FromHexString(encodedHash);
-            var actualHash = SHA256.HashData(Encoding.UTF8.GetBytes(password));
-            var verified = CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
-            requiresRehash = verified;
-            return verified;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
+        var availableAt = requestedAt.AddSeconds(cooldownSeconds);
+        return Math.Max(1, (int)Math.Ceiling((availableAt - now).TotalSeconds));
     }
 
     private static string GenerateEmailVerificationToken()
@@ -453,10 +466,11 @@ public sealed class AuthService : IAuthService
             .Replace('/', '_');
     }
 
-    private static string BuildVerificationEmailBody(string fullName, string token)
+    private static string BuildVerificationEmailBody(string fullName, string token, string frontendBaseUrl)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
         var encodedToken = WebUtility.HtmlEncode(token);
+        var verificationUrl = $"{frontendBaseUrl.TrimEnd('/')}/registerEmail";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
@@ -476,6 +490,9 @@ public sealed class AuthService : IAuthService
                         <div role="textbox" aria-label="Verification code" title="Select and copy this verification code" style="display: block; background: #f5f5f5; border: 2px dashed #c62828; border-radius: 6px; padding: 16px; color: #222222; font-family: Consolas, 'Courier New', monospace; font-size: 18px; font-weight: 700; letter-spacing: 1px; overflow-wrap: anywhere; cursor: text; user-select: all; -webkit-user-select: all;">
                             {encodedToken}
                         </div>
+                        <a href="{verificationUrl}" style="display: inline-block; margin-top: 16px; background: #c62828; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 40px; border-radius: 6px;">
+                            Verify Email
+                        </a>
                         <p style="margin: 12px 0 0; font-size: 12px; color: #777777;">Select the code, copy it, and paste it into the verification form.</p>
                         <p style="margin: 6px 0 0; font-size: 12px; color: #999999;">This code expires in {VerificationTokenExpirationMinutes} minutes.</p>
                     </div>
@@ -496,10 +513,10 @@ public sealed class AuthService : IAuthService
             """;
     }
 
-    private static string BuildResetPasswordEmailBody(string fullName, string token)
+    private static string BuildResetPasswordEmailBody(string fullName, string token, string frontendBaseUrl)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var resetUrl = $"https://cgv-premium-fe.vercel.app/resetPassword?token={Uri.EscapeDataString(token)}";
+        var resetUrl = $"{frontendBaseUrl.TrimEnd('/')}/resetPassword?token={Uri.EscapeDataString(token)}";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">

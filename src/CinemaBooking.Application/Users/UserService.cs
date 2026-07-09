@@ -1,5 +1,6 @@
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.ImageFiles;
+using CinemaBooking.Application.Common.Security;
 using CinemaBooking.Domain.Entities;
 using Microsoft.Extensions.Logging;
 
@@ -27,7 +28,18 @@ public sealed class UserService : IUserService
 
     public Task<User?> GetProfileAsync(int userId, CancellationToken cancellationToken = default)
     {
-        return _userRepository.GetByIdAsync(userId, cancellationToken);
+        return _userRepository.GetProfileByIdAsync(userId, cancellationToken);
+    }
+
+    public Task<User?> LookupCustomerAsync(
+        string? email,
+        string? phone,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+        var normalizedPhone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
+
+        return _userRepository.LookupCustomerAsync(normalizedEmail, normalizedPhone, cancellationToken);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, User? User)> UpdateProfileAsync(
@@ -52,6 +64,13 @@ public sealed class UserService : IUserService
         var normalizedPhone = string.IsNullOrWhiteSpace(phone)
             ? null
             : phone.Trim();
+
+        if (normalizedPhone is not null
+            && await _userRepository.PhoneExistsAsync(normalizedPhone, userId, cancellationToken))
+        {
+            return (false, "Phone is already in use.", null);
+        }
+
         var updatedUser = await _userRepository.UpdateProfileAsync(
             userId,
             normalizedFullName,
@@ -235,6 +254,45 @@ public sealed class UserService : IUserService
         }
 
         return (true, null);
+    }
+
+    public async Task<(bool Succeeded, string? ErrorMessage)> ChangePasswordAsync(
+        int userId,
+        string oldPassword,
+        string newPassword,
+        string confirmPassword,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        if (user is null)
+        {
+            return (false, "User not found");
+        }
+
+        if (!PasswordHasher.Verify(oldPassword, user.PasswordHash, out _))
+        {
+            return (false, "Current password is incorrect.");
+        }
+
+        if (!string.Equals(newPassword, confirmPassword, StringComparison.Ordinal))
+        {
+            return (false, "Confirm password does not match.");
+        }
+
+        if (PasswordHasher.Verify(newPassword, user.PasswordHash, out _))
+        {
+            return (false, "New password must be different from the current password.");
+        }
+
+        var updated = await _userRepository.TryUpdatePasswordHashAsync(
+            userId,
+            user.PasswordHash,
+            PasswordHasher.Hash(newPassword),
+            cancellationToken);
+
+        return updated
+            ? (true, null)
+            : (false, "Password could not be changed. Please try again.");
     }
 
     private async Task TryDeleteImageAsync(
