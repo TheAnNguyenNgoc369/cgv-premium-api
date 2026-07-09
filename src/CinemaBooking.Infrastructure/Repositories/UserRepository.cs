@@ -137,11 +137,15 @@ public sealed class UserRepository : IUserRepository
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
+            var user = await _dbContext.Users
+                .FirstOrDefaultAsync(u => u.UserID == userId, cancellationToken);
 
-        return await strategy.ExecuteAsync(async () =>
-        {
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+            if (user is null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return false;
+            }
+
             var wallet = await _dbContext.Wallets
                 .FirstOrDefaultAsync(w => w.UserID == userId, cancellationToken);
 
