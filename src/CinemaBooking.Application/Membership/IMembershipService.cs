@@ -27,12 +27,14 @@ public interface IMembershipService
 }
 
 public sealed record MembershipInfo(
-    string Tier,
+    string CurrentTier,
+    string? NextTier,
+    int PointsToNextTier,
     int TotalPoints,
     decimal TotalSpent,
     decimal DiscountPercent,
-    bool IsVip,
-    int PointsToVip
+    int TotalRefunds,
+    int UsedRefunds
 );
 
 public sealed record LoyaltyPointHistory(

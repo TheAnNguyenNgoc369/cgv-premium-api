@@ -1,6 +1,7 @@
 using CinemaBooking.Application.Common.ImageFiles;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Enums;
+using CinemaBooking.Shared.Time;
 using MovieEntity = CinemaBooking.Domain.Entities.Movie;
 
 namespace CinemaBooking.Application.Movie;
@@ -24,13 +25,37 @@ public sealed class MovieService : IMovieService
 
     public Task<List<MovieEntity>> GetMoviesAsync(
         string? status,
+        IReadOnlyCollection<int> genreIds,
         CancellationToken cancellationToken = default)
     {
         var normalizedStatus = NormalizeOptionalStatus(status);
 
         return normalizedStatus == InvalidStatus
             ? Task.FromResult(new List<MovieEntity>())
-            : _movieRepository.GetMoviesAsync(normalizedStatus, cancellationToken);
+            : _movieRepository.GetMoviesAsync(normalizedStatus, genreIds, cancellationToken);
+    }
+
+    public async Task<IReadOnlyDictionary<int, MovieSalesInfo>> GetMovieSalesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var sales = await _movieRepository.GetMovieTicketSalesAsync(cancellationToken);
+        var rankedSales = sales
+            .Where(movie => movie.TicketsSold > 0)
+            .OrderByDescending(movie => movie.TicketsSold)
+            .ThenBy(movie => movie.Title)
+            .ThenBy(movie => movie.MovieId)
+            .ToList();
+
+        return rankedSales
+            .Select((movie, index) => new
+            {
+                movie.MovieId,
+                Sales = new MovieSalesInfo(
+                    movie.TicketsSold,
+                    index < 5,
+                    index + 1)
+            })
+            .ToDictionary(item => item.MovieId, item => item.Sales);
     }
 
     public Task<MovieEntity?> GetMovieByIdAsync(
@@ -65,7 +90,6 @@ public sealed class MovieService : IMovieService
         string? posterUrl,
         string? posterPublicId,
         string? trailerUrl,
-        string? status,
         CancellationToken cancellationToken = default)
     {
         var validation = ValidateMovie(
@@ -74,9 +98,7 @@ public sealed class MovieService : IMovieService
             director,
             durationMinutes,
             showingFromDate,
-            showingToDate,
-            status,
-            defaultStatus: true);
+            showingToDate);
 
         if (!validation.Succeeded)
         {
@@ -101,7 +123,10 @@ public sealed class MovieService : IMovieService
             PosterURL = NormalizeNullable(posterUrl),
             PosterPublicId = NormalizeNullable(posterPublicId),
             TrailerURL = NormalizeNullable(trailerUrl),
-            Status = validation.Status!,
+            Status = CalculateStatus(
+                showingFromDate!.Value,
+                showingToDate!.Value,
+                VietnamTime.GetDate(now)),
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -142,9 +167,7 @@ public sealed class MovieService : IMovieService
             director,
             durationMinutes,
             showingFromDate,
-            showingToDate,
-            status,
-            defaultStatus: false);
+            showingToDate);
 
         if (!validation.Succeeded)
         {
@@ -154,6 +177,12 @@ public sealed class MovieService : IMovieService
         var posterValidationError = ValidatePosterMetadata(posterUrl, posterPublicId);
         if (posterValidationError is not null)
             return (false, posterValidationError, null);
+
+        var normalizedStatus = NormalizeOptionalStatus(status);
+        if (normalizedStatus == InvalidStatus)
+        {
+            return (false, "Status must be coming_soon, now_showing, or ended", null);
+        }
 
         var normalizedPosterUrl = NormalizeNullable(posterUrl);
         var normalizedPosterPublicId = NormalizeNullable(posterPublicId);
@@ -188,7 +217,7 @@ public sealed class MovieService : IMovieService
             normalizedPosterUrl,
             normalizedPosterPublicId,
             NormalizeNullable(trailerUrl),
-            validation.Status!,
+            normalizedStatus ?? existingMovie.Status,
             DateTime.UtcNow,
             cancellationToken);
 
@@ -318,69 +347,70 @@ public sealed class MovieService : IMovieService
 
     private const string InvalidStatus = "__invalid_status__";
 
-    private static (bool Succeeded, string? ErrorMessage, string? Status) ValidateMovie(
+    private static (bool Succeeded, string? ErrorMessage) ValidateMovie(
         string title,
         string? ageRating,
         string director,
         int durationMinutes,
         DateOnly? showingFromDate,
-        DateOnly? showingToDate,
-        string? status,
-        bool defaultStatus)
+        DateOnly? showingToDate)
     {
         if (string.IsNullOrWhiteSpace(title))
         {
-            return (false, "Title is required", null);
+            return (false, "Title is required");
         }
 
         if (string.IsNullOrWhiteSpace(director))
         {
-            return (false, "Director is required", null);
+            return (false, "Director is required");
         }
 
         if (durationMinutes <= 0)
         {
-            return (false, "DurationMinutes must be greater than 0", null);
+            return (false, "DurationMinutes must be greater than 0");
         }
 
         if (string.IsNullOrWhiteSpace(ageRating))
         {
-            return (false, "AgeRating is required", null);
+            return (false, "AgeRating is required");
         }
 
         var normalizedAgeRating = ageRating.Trim().ToUpperInvariant();
         if (!EnumValueMapper.Validate(
                 normalizedAgeRating, "AgeRating", DatabaseEnumMappings.MovieAgeRatings).Succeeded)
         {
-            return (false, "AgeRating must be P, C13, C16, or C18", null);
+            return (false, "AgeRating must be P, C13, C16, or C18");
+        }
+
+        if (!showingFromDate.HasValue)
+        {
+            return (false, "ShowingFromDate is required");
+        }
+
+        if (!showingToDate.HasValue)
+        {
+            return (false, "ShowingToDate is required");
         }
 
         if (showingFromDate.HasValue
             && showingToDate.HasValue
             && showingFromDate.Value > showingToDate.Value)
         {
-            return (false, "ShowingFromDate must be before or equal to ShowingToDate", null);
+            return (false, "ShowingFromDate must be before or equal to ShowingToDate");
         }
 
-        var normalizedStatus = NormalizeStatus(status, defaultStatus);
-        if (normalizedStatus == InvalidStatus)
-        {
-            return (false, "Status must be coming_soon, now_showing, or ended", null);
-        }
-
-        return (true, null, normalizedStatus);
+        return (true, null);
     }
 
-    private static string NormalizeStatus(string? status, bool defaultToComingSoon)
-    {
-        if (string.IsNullOrWhiteSpace(status))
-        {
-            return defaultToComingSoon ? "coming_soon" : InvalidStatus;
-        }
-
-        return EnumValueMapper.Validate(
-            status, "Status", DatabaseEnumMappings.MovieStatuses).DatabaseValue ?? InvalidStatus;
-    }
+    private static string CalculateStatus(
+        DateOnly showingFromDate,
+        DateOnly showingToDate,
+        DateOnly currentDate) =>
+        currentDate < showingFromDate
+            ? "coming_soon"
+            : currentDate <= showingToDate
+                ? "now_showing"
+                : "ended";
 
     private static string? NormalizeOptionalStatus(string? status)
     {

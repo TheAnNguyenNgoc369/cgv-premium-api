@@ -21,6 +21,8 @@ public interface ICinemaRepository
         int cinemaId,
         string cinemaName,
         string address,
+        decimal? latitude,
+        decimal? longitude,
         string status,
         DateTime updatedAt,
         CancellationToken cancellationToken = default);
@@ -28,6 +30,15 @@ public interface ICinemaRepository
     Task<bool> HasRoomsAsync(int cinemaId, CancellationToken cancellationToken = default);
 
     Task<bool> HasAssignedUsersAsync(int cinemaId, CancellationToken cancellationToken = default);
+
+    Task<bool> HasActiveAssignedStaffAsync(int cinemaId, CancellationToken cancellationToken = default);
+
+    Task<bool> HasAssignedStaffAsync(int cinemaId, CancellationToken cancellationToken = default);
+
+    Task<bool> HasUpcomingShowtimesAsync(
+        int cinemaId,
+        DateTime now,
+        CancellationToken cancellationToken = default);
 
     Task<Cinema?> SoftDeleteAsync(
         int cinemaId,

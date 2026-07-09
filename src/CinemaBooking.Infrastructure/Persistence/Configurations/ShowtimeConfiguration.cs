@@ -13,6 +13,7 @@ public class ShowtimeConfiguration : IEntityTypeConfiguration<Showtime>
         builder.HasKey(s => s.ShowtimeID);
 
         builder.Property(s => s.BasePrice).HasColumnType("decimal(18,2)");
+        builder.Property(s => s.RoomExtraPrice).HasColumnType("decimal(18,2)");
         builder.Property(s => s.Status).HasMaxLength(30).IsRequired().HasDefaultValue("scheduled");
         builder.Property(s => s.CreatedAt).HasDefaultValueSql("GETDATE()");
 
@@ -30,11 +31,15 @@ public class ShowtimeConfiguration : IEntityTypeConfiguration<Showtime>
             .HasForeignKey(s => s.RoomID)
             .HasConstraintName("FK_Showtime_Room");
 
+        builder.HasOne(s => s.ShowtimeType).WithMany(x => x.Showtimes)
+            .HasForeignKey(s => s.ShowtimeTypeID)
+            .HasConstraintName("FK_Showtime_ShowtimeType");
+
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_Showtime_Time", "[EndTime] > [StartTime]");
             t.HasCheckConstraint("CK_Showtime_BasePrice", "[BasePrice] >= 0");
-            t.HasCheckConstraint("CK_Showtime_Status", "[Status] IN ('scheduled', 'ongoing', 'completed', 'cancelled')");
+            t.HasCheckConstraint("CK_Showtime_Status", "[Status] IN ('scheduled', 'completed', 'cancelled')");
         });
     }
 }

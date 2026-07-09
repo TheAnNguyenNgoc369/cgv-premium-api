@@ -6,6 +6,11 @@ public interface IUserService
 {
     Task<User?> GetProfileAsync(int userId, CancellationToken cancellationToken = default);
 
+    Task<User?> LookupCustomerAsync(
+        string? email,
+        string? phone,
+        CancellationToken cancellationToken = default);
+
     Task<(bool Succeeded, string? ErrorMessage, User? User)> UpdateProfileAsync(
         int userId,
         string fullName,
@@ -28,5 +33,12 @@ public interface IUserService
 
     Task<(bool Succeeded, string? ErrorMessage)> DeleteAsync(
         int userId,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage)> ChangePasswordAsync(
+        int userId,
+        string oldPassword,
+        string newPassword,
+        string confirmPassword,
         CancellationToken cancellationToken = default);
 }

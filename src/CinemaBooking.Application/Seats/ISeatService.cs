@@ -8,32 +8,69 @@ public interface ISeatService
         int roomId,
         CancellationToken cancellationToken = default);
 
+    Task<Seat?> GetSeatByIdAsync(
+        int roomId,
+        int seatId,
+        CancellationToken cancellationToken = default);
+
+    Task<SeatLayoutResult?> GetLayoutAsync(
+        int roomId,
+        CancellationToken cancellationToken = default);
+
     Task<(bool Succeeded, string? ErrorMessage, Seat? Seat)> CreateSeatAsync(
         int roomId,
         string rowLabel,
         int seatNumber,
-        string? seatCode,
-        string type,
+        int? seatTypeId,
+        string? status,
+        bool isGap,
+        int? managerCinemaId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage, SeatGenerateResult? Result)> GenerateSeatsAsync(
+        int roomId,
+        int rows,
+        int columns,
+        int seatTypeId,
         string status,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, Seat? Seat)> UpdateSeatAsync(
         int roomId,
         int seatId,
-        string type,
-        string status,
+        int? seatTypeId,
+        string? status,
+        bool? isGap,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage)> DeleteSeatAsync(
         int roomId,
         int seatId,
+        int? managerCinemaId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage, List<Seat> Seats)> BulkUpdateAsync(
+        int roomId,
+        IReadOnlyCollection<SeatSelector> selectors,
+        int? seatTypeId,
+        string? status,
+        bool? isGap,
+        int? managerCinemaId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage)> BulkDeleteAsync(
+        int roomId,
+        IReadOnlyCollection<SeatSelector> selectors,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, List<Seat> Seats)> ReplaceLayoutAsync(
         int roomId,
         int totalRows,
-        int seatsPerRow,
-        string seatType,
-        string seatStatus,
+        int totalCols,
+        IReadOnlyCollection<SeatLayoutSeatItem> seats,
+        int? managerCinemaId = null,
         CancellationToken cancellationToken = default);
 }

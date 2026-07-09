@@ -1,13 +1,20 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using CinemaBooking.API.Configuration;
+using CinemaBooking.API.OpenApi;
 using CinemaBooking.API.Services;
+using CinemaBooking.API.Serialization;
 using CinemaBooking.Application;
-using CinemaBooking.Application.Payments.VNPay;
+using CinemaBooking.Application.Configuration;
+using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -21,12 +28,83 @@ public static class DependencyInjection
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        services.AddControllers();
+        services.AddControllers()
+            .AddJsonOptions(options =>
+            {
+                options.JsonSerializerOptions.Converters.Add(
+                    new VietnamDateTimeJsonConverter());
+                options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+            })
+            .ConfigureApiBehaviorOptions(options =>
+            {
+                options.InvalidModelStateResponseFactory = context =>
+                {
+                    var errorEntry = context.ModelState
+                        .Where(kvp => kvp.Value?.Errors.Count > 0)
+                        .Select(kvp => new { Key = kvp.Key, Error = kvp.Value?.Errors.First().ErrorMessage })
+                        .FirstOrDefault();
+
+                    string GetFieldName(string key)
+                    {
+                        var lastDot = key.LastIndexOf('.');
+                        return lastDot >= 0 ? key[(lastDot + 1)..] : key;
+                    }
+
+                    if (errorEntry?.Key is not null)
+                    {
+                        var fieldName = GetFieldName(errorEntry.Key);
+                        var errorText = errorEntry.Error ?? string.Empty;
+
+                        if (context.HttpContext?.Request.Path.StartsWithSegments("/api/showtime-types", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            var message = string.IsNullOrWhiteSpace(errorText)
+                                ? $"{char.ToLowerInvariant(fieldName[0])}{fieldName[1..]} is invalid."
+                                : errorText;
+                            return new BadRequestObjectResult(new { success = false, message });
+                        }
+
+                        if (context.HttpContext?.Request.Path.StartsWithSegments("/api/v1/reports", StringComparison.OrdinalIgnoreCase) == true
+                            && (fieldName == "startDate" || fieldName == "endDate"))
+                        {
+                            return new BadRequestObjectResult(new { success = false, message = $"{fieldName} is required. Expected format: yyyy-MM-dd." });
+                        }
+
+                        if (context.HttpContext?.Request.Path.StartsWithSegments("/api/vouchers", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            var isRequiredError = errorText.Contains("required", StringComparison.OrdinalIgnoreCase)
+                                || errorText.Contains("cannot be null", StringComparison.OrdinalIgnoreCase)
+                                || errorText.Contains("required value", StringComparison.OrdinalIgnoreCase);
+
+                            if (isRequiredError)
+                            {
+                                return new BadRequestObjectResult(new { success = false, message = $"{fieldName} is required and cannot be null." });
+                            }
+
+                            var detail = fieldName switch
+                            {
+                                "category" => "Allowed values: Discount, Combo, Cashback.",
+                                "discountType" => "Allowed values: percent, fixed.",
+                                "discountValue" => "Must be between 0-100 for percent or >= 0 for fixed.",
+                                "validFrom" or "validUntil" => "Use ISO 8601 format (e.g. 2026-07-01T00:00:00+07:00).",
+                                "maxUses" => "maxUses must be greater than 0.",
+                                _ => "Please check the data constraints."
+                            };
+
+                            return new BadRequestObjectResult(new { success = false, message = $"{fieldName} is invalid. {detail}" });
+                        }
+                    }
+
+                    return new BadRequestObjectResult(new ValidationProblemDetails(context.ModelState));
+                };
+            });
 
         //Add Swagger
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen(options =>
         {
+            options.SchemaFilter<AuthRequestSchemaFilter>();
+            options.SchemaFilter<ShowtimeRequestSchemaFilter>();
+
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Name = "Authorization",
@@ -50,6 +128,31 @@ public static class DependencyInjection
         services.AddApplicationServices();
         services.AddScoped<JwtTokenService>();
         services.AddScoped<ITokenRevocationService, DatabaseTokenRevocationService>();
+        services.AddSingleton<IAuthRequestRateLimiter, AuthRequestRateLimiter>();
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy(
+                AuthRateLimitPolicyNames.Login,
+                httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                    GetClientPartitionKey(httpContext, "login"),
+                    _ => CreateFixedWindowOptions(10)));
+            options.AddPolicy(
+                AuthRateLimitPolicyNames.Register,
+                httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                    GetClientPartitionKey(httpContext, "register"),
+                    _ => CreateFixedWindowOptions(5)));
+            options.AddPolicy(
+                AuthRateLimitPolicyNames.EmailAction,
+                httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                    GetClientPartitionKey(httpContext, "email-action"),
+                    _ => CreateFixedWindowOptions(5)));
+            options.AddPolicy(
+                AuthRateLimitPolicyNames.Verify,
+                httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                    GetClientPartitionKey(httpContext, "verify"),
+                    _ => CreateFixedWindowOptions(10)));
+        });
 
         if (environment.IsDevelopment())
         {
@@ -80,8 +183,16 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        services.AddOptions<VNPaySettings>()
-            .Bind(configuration.GetRequiredSection("VNPay"))
+        services.AddOptions<FrontendSettings>()
+            .Bind(configuration.GetRequiredSection(FrontendSettings.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(settings => Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp),
+                "Frontend:BaseUrl must be an absolute HTTP or HTTPS URL.")
+            .ValidateOnStart();
+
+        services.AddOptions<PayOSSettings>()
+            .Bind(configuration.GetRequiredSection(PayOSSettings.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
@@ -133,8 +244,13 @@ public static class DependencyInjection
 
                     OnAuthenticationFailed = context =>
                     {
-                        Console.WriteLine("JWT ERROR:");
-                        Console.WriteLine(context.Exception.Message);
+                        var logger = context.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("JwtAuthentication");
+                        logger.LogWarning(
+                            context.Exception,
+                            "JWT authentication failed for request {Path}.",
+                            context.HttpContext.Request.Path);
 
                         return Task.CompletedTask;
                     }
@@ -150,5 +266,22 @@ public static class DependencyInjection
         });
 
         return services;
+    }
+
+    private static string GetClientPartitionKey(HttpContext httpContext, string action)
+    {
+        var remoteIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return $"{action}:{remoteIp}";
+    }
+
+    private static FixedWindowRateLimiterOptions CreateFixedWindowOptions(int permitLimit)
+    {
+        return new FixedWindowRateLimiterOptions
+        {
+            AutoReplenishment = true,
+            PermitLimit = permitLimit,
+            QueueLimit = 0,
+            Window = TimeSpan.FromMinutes(1)
+        };
     }
 }

@@ -9,6 +9,7 @@ public interface IRoomRepository
     Task<Room?> GetByIdAsync(int roomId, CancellationToken cancellationToken = default);
 
     Task<bool> CinemaExistsAsync(int cinemaId, CancellationToken cancellationToken = default);
+    Task<bool> RoomTypeExistsAsync(int roomTypeId, CancellationToken cancellationToken = default);
 
     Task<bool> NameExistsInCinemaAsync(
         int cinemaId,
@@ -26,8 +27,7 @@ public interface IRoomRepository
         int roomId,
         int cinemaId,
         string roomName,
-        string roomType,
-        int capacity,
+        int roomTypeId,
         string status,
         string? description,
         CancellationToken cancellationToken = default);
@@ -36,5 +36,18 @@ public interface IRoomRepository
         int roomId,
         CancellationToken cancellationToken = default);
 
+    Task<bool> HasUpcomingShowtimesAsync(
+        int roomId,
+        DateTime now,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> HasAnyShowtimesAsync(
+        int roomId,
+        CancellationToken cancellationToken = default);
+
     Task<bool> DeleteAsync(int roomId, CancellationToken cancellationToken = default);
+
+    Task<List<Room>> GetRoomsByCinemaIdAsync(
+    int cinemaId,
+    CancellationToken cancellationToken = default);
 }

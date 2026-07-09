@@ -22,18 +22,6 @@ public sealed record WalletPaymentResponse(
     int PointsEarned
 );
 
-public sealed record VNPayPaymentResponse(
-    bool Success,
-    int PaymentId,
-    int BookingId,
-    string PaymentMethod,
-    decimal Amount,
-    string Status,
-    string QrCodeUrl,
-    int SessionId,
-    DateTime ExpiresAt
-);
-
 public sealed record CashPaymentResponse(
     bool Success,
     int PaymentId,

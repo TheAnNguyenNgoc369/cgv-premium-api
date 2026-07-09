@@ -36,4 +36,8 @@ public interface ILoyaltyRepository
         int userId,
         int totalPoints,
         CancellationToken cancellationToken = default);
+
+    Task<bool> HasPointsForBookingAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default);
 }

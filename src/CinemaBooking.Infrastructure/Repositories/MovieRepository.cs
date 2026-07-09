@@ -1,6 +1,8 @@
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Movie;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
+using CinemaBooking.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
 
 namespace CinemaBooking.Infrastructure.Repositories;
@@ -25,6 +27,7 @@ public sealed class MovieRepository : IMovieRepository
 
     public Task<List<Movie>> GetMoviesAsync(
         string? status,
+        IReadOnlyCollection<int> genreIds,
         CancellationToken cancellationToken = default)
     {
         var query = _dbContext.Movie
@@ -38,8 +41,36 @@ public sealed class MovieRepository : IMovieRepository
             query = query.Where(m => m.Status == status);
         }
 
+        if (genreIds.Count > 0)
+        {
+            query = query.Where(m => m.MovieGenres.Any(mg => genreIds.Contains(mg.GenreID)));
+        }
+
         return query
             .OrderBy(m => m.Title)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<List<MovieTicketSales>> GetMovieTicketSalesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Payments
+            .AsNoTracking()
+            .Where(payment => payment.Status == PaymentStatus.Completed
+                && payment.Booking.Status != BookingStatus.Cancelled
+                && payment.Booking.Status != BookingStatus.Refunded)
+            .SelectMany(payment => payment.Booking.BookingSeats)
+            .GroupBy(bookingSeat => new
+            {
+                bookingSeat.Booking.Showtime.MovieID,
+                bookingSeat.Booking.Showtime.Movie.Title
+            })
+            .Select(group => new MovieTicketSales(
+                group.Key.MovieID,
+                group.Key.Title,
+                group.Sum(bookingSeat => bookingSeat.Seat.SeatType == null
+                    ? 1
+                    : bookingSeat.Seat.SeatType.Capacity)))
             .ToListAsync(cancellationToken);
     }
 
@@ -157,7 +188,7 @@ public sealed class MovieRepository : IMovieRepository
     {
         return _dbContext.Showtimes
             .AnyAsync(s => s.MovieID == movieId
-                && (s.Status == "scheduled" || s.Status == "ongoing")
+                && s.Status == "scheduled"
                 && s.EndTime >= now, cancellationToken);
     }
 

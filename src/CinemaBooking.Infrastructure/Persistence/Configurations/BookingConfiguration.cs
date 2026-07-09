@@ -19,10 +19,12 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.Property(b => b.PointsEarned).HasDefaultValue(0);
         builder.Property(b => b.PointsRedeemed).HasDefaultValue(0);
         builder.Property(b => b.Status).HasMaxLength(30).IsRequired().HasDefaultValue("pending");
+        builder.Property(b => b.QRCode).HasMaxLength(100);
         builder.Property(b => b.BookingDate).HasDefaultValueSql("GETDATE()");
         builder.Property(b => b.UpdatedAt).HasDefaultValueSql("GETDATE()");
 
         builder.HasIndex(b => b.BookingCode).IsUnique().HasDatabaseName("UQ_Booking_BookingCode");
+        builder.HasIndex(b => b.QRCode).IsUnique().HasDatabaseName("UQ_Booking_QRCode");
         builder.HasIndex(b => b.UserID).HasDatabaseName("IX_Booking_UserID");
         builder.HasIndex(b => b.ShowtimeID).HasDatabaseName("IX_Booking_ShowtimeID");
         builder.HasIndex(b => b.Status).HasDatabaseName("IX_Booking_Status");
@@ -30,6 +32,7 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.HasOne(b => b.User)
             .WithMany(u => u.Bookings)
             .HasForeignKey(b => b.UserID)
+            .IsRequired(false)
             .HasConstraintName("FK_Booking_Users");
 
         builder.HasOne(b => b.Showtime)

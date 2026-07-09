@@ -5,6 +5,7 @@ public class Refund
     public int RefundID { get; set; }
     public int BookingID { get; set; }
     public int? PaymentID { get; set; }
+    public int? WalletID { get; set; }
     public decimal Amount { get; set; }
     public string? Reason { get; set; }
     public string Status { get; set; } = "pending";
@@ -14,6 +15,7 @@ public class Refund
 
     public Booking Booking { get; set; } = null!;
     public Payment? Payment { get; set; }
+    public Wallet? Wallet { get; set; }
     public User? ProcessedByUser { get; set; }
     public ICollection<WalletTransaction> WalletTransactions { get; set; } = [];
 }

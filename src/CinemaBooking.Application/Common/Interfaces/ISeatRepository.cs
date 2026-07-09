@@ -1,3 +1,4 @@
+using CinemaBooking.Application.Seats;
 using CinemaBooking.Domain.Entities;
 
 namespace CinemaBooking.Application.Common.Interfaces;
@@ -17,8 +18,16 @@ public interface ISeatRepository
         int seatId,
         CancellationToken cancellationToken = default);
 
+    Task<Seat?> GetSeatByIdAsync(
+        int seatId,
+        CancellationToken cancellationToken = default);
+
     Task<SeatType?> GetSeatTypeByNameAsync(
         string typeName,
+        CancellationToken cancellationToken = default);
+
+    Task<SeatType?> GetSeatTypeByIdAsync(
+        int seatTypeId,
         CancellationToken cancellationToken = default);
 
     Task<int> CountSeatsByRoomAsync(
@@ -32,6 +41,11 @@ public interface ISeatRepository
         int? excludingSeatId = null,
         CancellationToken cancellationToken = default);
 
+    Task<List<Seat>> GetSeatsBySelectorAsync(
+        int roomId,
+        IReadOnlyCollection<SeatSelector> selectors,
+        CancellationToken cancellationToken = default);
+
     Task<bool> HasActiveOrUpcomingShowtimesAsync(
         int roomId,
         CancellationToken cancellationToken = default);
@@ -40,19 +54,34 @@ public interface ISeatRepository
         int seatId,
         CancellationToken cancellationToken = default);
 
-    Task<Seat> AddAsync(
+    Task<Seat?> AddAsync(
         Seat seat,
         CancellationToken cancellationToken = default);
 
     Task<Seat?> UpdateAsync(
         int roomId,
         int seatId,
-        int seatTypeId,
+        int? seatTypeId,
         string status,
+        bool isGap,
         CancellationToken cancellationToken = default);
 
-    Task<bool> DeleteAsync(
+    async Task<List<Seat>> UpdateRangeAsync(
         int roomId,
+        IReadOnlyCollection<Seat> seats,
+        CancellationToken cancellationToken = default)
+    {
+        var updated = new List<Seat>();
+        foreach (var seat in seats)
+        {
+            var result = await UpdateAsync(
+                roomId, seat.SeatID, seat.SeatTypeID, seat.Status, seat.IsGap, cancellationToken);
+            if (result is not null) updated.Add(result);
+        }
+        return updated;
+    }
+
+    Task<bool> DeleteAsync(
         int seatId,
         CancellationToken cancellationToken = default);
 

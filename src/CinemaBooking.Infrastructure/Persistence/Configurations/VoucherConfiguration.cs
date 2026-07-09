@@ -19,8 +19,13 @@ public class VoucherConfiguration : IEntityTypeConfiguration<Voucher>
         builder.Property(v => v.MinOrderValue).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
         builder.Property(v => v.UsedCount).HasDefaultValue(0);
         builder.Property(v => v.ImageURL).HasMaxLength(500);
+        builder.Property(v => v.ImagePublicId).HasMaxLength(255);
         builder.Property(v => v.Description).HasMaxLength(500);
         builder.Property(v => v.IsActive).HasDefaultValue(true);
+        builder.Property(v => v.RequiredPoints);
+        builder.Property(v => v.RemainingQuantity);
+        builder.Property(v => v.ExchangeLimit);
+        builder.Property(v => v.IsRedeemable).HasDefaultValue(false);
         builder.Property(v => v.CreatedAt).HasDefaultValueSql("GETDATE()");
 
         builder.HasIndex(v => v.VoucherCode).IsUnique().HasDatabaseName("UQ_Voucher_VoucherCode");
@@ -34,6 +39,9 @@ public class VoucherConfiguration : IEntityTypeConfiguration<Voucher>
             t.HasCheckConstraint("CK_Voucher_MaxUses", "[MaxUses] IS NULL OR [MaxUses] > 0");
             t.HasCheckConstraint("CK_Voucher_UsedCount", "[UsedCount] >= 0");
             t.HasCheckConstraint("CK_Voucher_ValidDate", "[ValidUntil] > [ValidFrom]");
+            t.HasCheckConstraint("CK_Voucher_RequiredPoints", "[RequiredPoints] IS NULL OR [RequiredPoints] > 0");
+            t.HasCheckConstraint("CK_Voucher_RemainingQuantity", "[RemainingQuantity] IS NULL OR [RemainingQuantity] >= 0");
+            t.HasCheckConstraint("CK_Voucher_ExchangeLimit", "[ExchangeLimit] IS NULL OR [ExchangeLimit] > 0");
         });
     }
 }

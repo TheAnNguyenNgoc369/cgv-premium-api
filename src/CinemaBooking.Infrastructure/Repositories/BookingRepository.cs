@@ -1,11 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
+using CinemaBooking.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
 
 namespace CinemaBooking.Infrastructure.Repositories;
@@ -35,7 +31,7 @@ public sealed class BookingRepository : IBookingRepository
     {
         return await _db.Seats
             .Include(s => s.SeatType)
-            .Where(s => seatIds.Contains(s.SeatID))
+            .Where(s => seatIds.Contains(s.SeatID) && s.IsCurrentLayout)
             .ToListAsync(cancellationToken);
     }
 
@@ -98,6 +94,31 @@ public sealed class BookingRepository : IBookingRepository
             .ToListAsync(cancellationToken);
     }
 
+    public Task<List<SeatHold>> GetMyActiveHoldsForUpdateAsync(
+        int userId,
+        int showtimeId,
+        DateTime now,
+        CancellationToken cancellationToken = default) =>
+        _db.SeatHolds
+            .FromSqlInterpolated($"""
+                SELECT * FROM [SeatHold] WITH (UPDLOCK, HOLDLOCK)
+                WHERE [UserID] = {userId}
+                  AND [ShowtimeID] = {showtimeId}
+                  AND [Status] = {SeatHoldStatus.Holding}
+                  AND [ExpiresAt] > {now}
+                """)
+            .ToListAsync(cancellationToken);
+
+    public async Task ReleaseSeatHoldsAsync(
+        IEnumerable<SeatHold> seatHolds,
+        CancellationToken cancellationToken = default)
+    {
+        foreach (var seatHold in seatHolds)
+            seatHold.Status = SeatHoldStatus.Released;
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task AddBookingAsync(
         Booking booking,
         CancellationToken cancellationToken = default)
@@ -108,11 +129,13 @@ public sealed class BookingRepository : IBookingRepository
 
     public async Task MarkHoldsAsConfirmedAsync(
         IEnumerable<SeatHold> seatHolds,
+        int bookingId,
         CancellationToken cancellationToken = default)
     {
         foreach (var hold in seatHolds)
         {
             hold.Status = "confirmed";
+            hold.BookingID = bookingId;
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -125,10 +148,108 @@ public sealed class BookingRepository : IBookingRepository
         return await _db.Bookings
             .Include(b => b.Showtime).ThenInclude(s => s.Movie)
             .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
-            .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
+            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.RoomType)
+            .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat).ThenInclude(s => s.SeatType)
+            .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket)
+            .Include(b => b.User)
+            .Include(b => b.Payment)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
             .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
+    }
+
+    public async Task<Booking?> GetBookingByQRCodeAsync(
+        string qrCode,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Bookings
+            .FirstOrDefaultAsync(b => b.QRCode == qrCode, cancellationToken);
+    }
+
+    public async Task<Booking?> GetBookingWithFullDetailsForCheckInAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Bookings
+            .Include(b => b.User)
+            .Include(b => b.Showtime).ThenInclude(s => s.Movie)
+            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.RoomType)
+            .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat).ThenInclude(s => s.SeatType)
+            .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket)
+            .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
+            .Include(b => b.Payment)
+            .Include(b => b.Refunds)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
+    }
+
+    public async Task<int?> GetStaffCinemaIdAsync(
+        int staffId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _db.Users
+            .Where(u => u.UserID == staffId)
+            .Select(u => u.CinemaID)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return user;
+    }
+
+    public async Task<(List<Booking> Bookings, int TotalCount)> GetCheckInHistoryAsync(
+        int? staffId,
+        int? cinemaId,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _db.Bookings
+            .Include(b => b.User)
+            .Include(b => b.Showtime).ThenInclude(s => s.Movie)
+            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket).ThenInclude(t => t!.CheckedInBy)
+            .Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.Status == TicketStatus.Used));
+
+        if (staffId.HasValue)
+            query = query.Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.CheckedInByID == staffId.Value));
+
+        if (cinemaId.HasValue)
+            query = query.Where(b => b.Showtime.Room.CinemaID == cinemaId.Value);
+
+        if (from.HasValue)
+            query = query.Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.CheckedInAt >= from.Value));
+
+        if (to.HasValue)
+            query = query.Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.CheckedInAt <= to.Value));
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var bookings = await query
+            .OrderByDescending(b => b.BookingSeats
+                .Where(bs => bs.Ticket != null && bs.Ticket.CheckedInAt != null)
+                .Max(bs => bs.Ticket!.CheckedInAt))
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+
+        return (bookings, totalCount);
+    }
+
+    public async Task UpdateBookingQRCodeAsync(
+        int bookingId,
+        string qrCode,
+        CancellationToken cancellationToken = default)
+    {
+        var booking = await _db.Bookings.FindAsync(new object[] { bookingId }, cancellationToken);
+        if (booking is not null)
+        {
+            booking.QRCode = qrCode;
+            await _db.SaveChangesAsync(cancellationToken);
+        }
     }
 
     public async Task<List<Booking>> GetBookingsByUserAsync(
@@ -141,6 +262,7 @@ public sealed class BookingRepository : IBookingRepository
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
             .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)
+            .AsSplitQuery()
             .Where(b => b.UserID == userId)
             .OrderByDescending(b => b.BookingDate)
             .ToListAsync(cancellationToken);
@@ -152,6 +274,16 @@ public sealed class BookingRepository : IBookingRepository
     {
         return await _db.Products
             .Where(p => productIds.Contains(p.ItemID))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<Product>> GetAvailableProductsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Products
+            .Where(p => p.Status == "active")
+            .OrderBy(p => p.ItemType)
+            .ThenBy(p => p.ItemName)
             .ToListAsync(cancellationToken);
     }
 
@@ -175,6 +307,28 @@ public sealed class BookingRepository : IBookingRepository
         }
     }
 
+    public async Task ExtendBookingHoldsAsync(
+        int bookingId,
+        DateTime expiresAt,
+        CancellationToken cancellationToken = default)
+    {
+        await _db.SeatHolds
+            .Where(hold => hold.BookingID == bookingId && hold.Status == "confirmed")
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(hold => hold.ExpiresAt, expiresAt),
+                cancellationToken);
+    }
+
+    public Task<bool> HasActiveBookingHoldsAsync(
+        int bookingId,
+        DateTime now,
+        CancellationToken cancellationToken = default) =>
+        _db.SeatHolds.AnyAsync(
+            hold => hold.BookingID == bookingId
+                && hold.Status == "confirmed"
+                && hold.ExpiresAt > now,
+            cancellationToken);
+
     public async Task UpdateBookingStatusAsync(
         int bookingId,
         string status,
@@ -189,5 +343,21 @@ public sealed class BookingRepository : IBookingRepository
         booking.Status = status;
         booking.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
+    }
+
+
+    public async Task<Voucher?> GetVoucherByCodeWithLockAsync(
+        string voucherCode,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Vouchers
+            .FromSqlRaw("SELECT * FROM Voucher WITH (UPDLOCK, ROWLOCK) WHERE VoucherCode = {0}", voucherCode)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Database.BeginTransactionAsync(cancellationToken);
     }
 }

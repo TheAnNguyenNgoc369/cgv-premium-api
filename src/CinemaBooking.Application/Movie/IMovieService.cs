@@ -7,6 +7,10 @@ public interface IMovieService
 {
     Task<List<MovieEntity>> GetMoviesAsync(
         string? status,
+        IReadOnlyCollection<int> genreIds,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyDictionary<int, MovieSalesInfo>> GetMovieSalesAsync(
         CancellationToken cancellationToken = default);
 
     Task<MovieEntity?> GetMovieByIdAsync(
@@ -30,7 +34,6 @@ public interface IMovieService
         string? posterUrl,
         string? posterPublicId,
         string? trailerUrl,
-        string? status,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, MovieEntity? Movie)> UpdateMovieAsync(
