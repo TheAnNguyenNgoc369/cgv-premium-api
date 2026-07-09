@@ -55,7 +55,8 @@ using (var scope = app.Services.CreateScope())
     await CinemaBookingDbSeeder.SeedUsersAsync(seeder);
 }
 
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
