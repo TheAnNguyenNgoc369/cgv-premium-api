@@ -2,11 +2,23 @@ using CinemaBooking.API.Controllers;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Products;
+using Microsoft.AspNetCore.Authorization;
 
 namespace CinemaBooking.API.Tests;
 
 public sealed class ProductGlobalTests
 {
+    [Theory]
+    [InlineData(nameof(ProductController.GetProducts))]
+    [InlineData(nameof(ProductController.GetProductById))]
+    public void ProductReadEndpoints_AllowAnonymousAccess(string methodName)
+    {
+        var method = typeof(ProductController).GetMethod(methodName)!;
+
+        Assert.NotEmpty(method.GetCustomAttributes(typeof(AllowAnonymousAttribute), inherit: true));
+        Assert.Empty(method.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true));
+    }
+
     [Fact]
     public void Product_DoesNotHaveCinemaOrStockFields()
     {
