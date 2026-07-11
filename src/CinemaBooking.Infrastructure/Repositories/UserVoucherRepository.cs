@@ -47,11 +47,6 @@ public sealed class UserVoucherRepository : IUserVoucherRepository
             user.TotalPoints -= pointsToDeduct;
             user.UpdatedAt = DateTime.UtcNow;
 
-            if (voucher.RemainingQuantity.HasValue)
-            {
-                voucher.RemainingQuantity--;
-            }
-
             await _db.Set<UserVoucher>().AddAsync(userVoucher, ct);
             await _db.LoyaltyPoints.AddAsync(loyaltyPoint, ct);
             _db.AdminActionLogs.Add(log);

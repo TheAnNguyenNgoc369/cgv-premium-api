@@ -14,7 +14,7 @@ public sealed class VoucherRepository : IVoucherRepository
     {
         var query = _db.Vouchers.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search)) query = query.Where(v => v.VoucherCode.Contains(search)
-            || (v.Description != null && v.Description.Contains(search)) || (v.Category != null && v.Category.Contains(search)));
+            || (v.Description != null && v.Description.Contains(search)));
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(v => v.CreatedAt).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
         return (items, total);
@@ -52,8 +52,7 @@ public sealed class VoucherRepository : IVoucherRepository
                 && v.IsRedeemable
                 && v.RequiredPoints.HasValue
                 && v.ValidFrom <= now
-                && v.ValidUntil >= now
-                && (!v.RemainingQuantity.HasValue || v.RemainingQuantity > 0))
+                && v.ValidUntil >= now)
             .OrderBy(v => v.RequiredPoints)
             .ToListAsync(ct);
     }

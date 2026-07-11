@@ -4,7 +4,6 @@ public class Voucher
 {
     public int VoucherID { get; set; }
     public string VoucherCode { get; set; } = null!;
-    public string? Category { get; set; }
     public string DiscountType { get; set; } = null!;
     public decimal DiscountValue { get; set; }
     public decimal? MinOrderValue { get; set; }
@@ -17,7 +16,6 @@ public class Voucher
     public string? Description { get; set; }
     public bool IsActive { get; set; } = true;
     public int? RequiredPoints { get; set; }
-    public int? RemainingQuantity { get; set; }
     public int? ExchangeLimit { get; set; }
     public bool IsRedeemable { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -25,4 +23,5 @@ public class Voucher
     public ICollection<BookingVoucher> BookingVouchers { get; set; } = [];
     public ICollection<UserVoucher> UserVouchers { get; set; } = [];
     public ICollection<LoyaltyPoints> LoyaltyPointsTransactions { get; set; } = [];
+    public ICollection<VoucherRule> VoucherRules { get; set; } = [];
 }

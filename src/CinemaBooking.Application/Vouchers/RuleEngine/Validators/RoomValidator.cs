@@ -1,0 +1,27 @@
+using CinemaBooking.Domain.Entities;
+using CinemaBooking.Shared.Constants;
+
+namespace CinemaBooking.Application.Vouchers.RuleEngine.Validators;
+
+/// <summary>
+/// Validates Room rules
+/// </summary>
+public sealed class RoomValidator : IVoucherRuleValidator
+{
+    public string RuleType => VoucherRuleTypes.Room;
+
+    public ValidationResult Validate(VoucherRule rule, VoucherValidationContext context)
+    {
+        var requiredRoomId = rule.RuleValue;
+        var bookingRoomId = context.RoomId.ToString();
+
+        if (requiredRoomId != bookingRoomId)
+        {
+            return ValidationResult.Failure(
+                RuleType,
+                "Voucher is not valid for this room.");
+        }
+
+        return ValidationResult.Success(0);
+    }
+}
