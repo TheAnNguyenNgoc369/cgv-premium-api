@@ -6,7 +6,6 @@ namespace CinemaBooking.API.Contracts.Vouchers;
 public sealed class VoucherRequest
 {
     [Required, MaxLength(50)] public string VoucherCode { get; set; } = string.Empty;
-    public string? Category { get; set; }
     [Required] public string DiscountType { get; set; } = string.Empty;
     [Range(0, double.MaxValue)] public decimal DiscountValue { get; set; }
     [Range(0, double.MaxValue)] public decimal? MinOrderValue { get; set; }
@@ -16,21 +15,21 @@ public sealed class VoucherRequest
     [MaxLength(500)] public string? Description { get; set; }
     public bool IsActive { get; set; } = true;
     public IFormFile? Image { get; set; }
+    public List<VoucherRuleRequest>? Rules { get; set; }
 }
 
-public sealed record VoucherResponse(int VoucherId, string VoucherCode, string? Category, string DiscountType,
+public sealed record VoucherResponse(int VoucherId, string VoucherCode, string DiscountType,
     decimal DiscountValue, decimal? MinOrderValue, int? MaxUses, int UsedCount, DateTimeOffset ValidFrom,
-    DateTimeOffset ValidUntil, string? ImageUrl, string? Description, bool IsActive, string Status, DateTime CreatedAt);
+    DateTimeOffset ValidUntil, string? ImageUrl, string? Description, bool IsActive, string Status, DateTime CreatedAt,
+    List<VoucherRuleResponse>? Rules);
 public sealed record VoucherPageResponse(IReadOnlyList<VoucherResponse> Items, int PageIndex, int PageSize, int TotalItems, int TotalPages);
 
 public sealed record RedeemableVoucherResponse(
     int VoucherId,
     string VoucherCode,
-    string? Category,
     string DiscountType,
     decimal DiscountValue,
     int RequiredPoints,
-    int? RemainingQuantity,
     int? ExchangeLimit,
     DateTimeOffset ValidFrom,
     DateTimeOffset ValidUntil,

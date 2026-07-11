@@ -92,14 +92,16 @@ public sealed class VoucherController : ControllerBase
     { "not_found" => NotFound(new { success = false, message = r.Error }), "conflict" => Conflict(new { success = false, message = r.Error }), _ => BadRequest(new { success = false, message = r.Error }) };
     private IActionResult ErrorRedeem(RedeemVoucherResult r) => r.ErrorType switch
     { "not_found" => NotFound(new { success = false, message = r.Error }), "forbidden" => StatusCode(403, new { success = false, message = r.Error }), _ => BadRequest(new { success = false, message = r.Error }) };
-    private static VoucherCommand Command(VoucherRequest r) => new(r.VoucherCode, r.Category, r.DiscountType,
-        r.DiscountValue, r.MinOrderValue, r.MaxUses, r.ValidFrom!.Value, r.ValidUntil!.Value, r.Description, r.IsActive);
+    private static VoucherCommand Command(VoucherRequest r) => new(r.VoucherCode, r.DiscountType,
+        r.DiscountValue, r.MinOrderValue, r.MaxUses, r.ValidFrom!.Value, r.ValidUntil!.Value, r.Description, r.IsActive,
+        r.Rules?.Select(rule => new VoucherRuleDto(rule.RuleType, rule.RuleValue)).ToList());
     private static VoucherResponse Map(Voucher v) => Map(v, DateTime.UtcNow);
-    private static VoucherResponse Map(Voucher v, DateTime currentTime) => new(v.VoucherID, v.VoucherCode, v.Category, v.DiscountType,
+    private static VoucherResponse Map(Voucher v, DateTime currentTime) => new(v.VoucherID, v.VoucherCode, v.DiscountType,
         v.DiscountValue, v.MinOrderValue, v.MaxUses, v.UsedCount, VietnamTime.FromUtc(v.ValidFrom),
-        VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description, v.IsActive, Status(v, currentTime), v.CreatedAt);
-    private static RedeemableVoucherResponse MapRedeemable(Voucher v) => new(v.VoucherID, v.VoucherCode, v.Category,
-        v.DiscountType, v.DiscountValue, v.RequiredPoints!.Value, v.RemainingQuantity, v.ExchangeLimit,
+        VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description, v.IsActive, Status(v, currentTime), v.CreatedAt,
+        v.VoucherRules?.Select(r => new VoucherRuleResponse(r.RuleID, r.RuleType, r.RuleValue, r.CreatedAt)).ToList());
+    private static RedeemableVoucherResponse MapRedeemable(Voucher v) => new(v.VoucherID, v.VoucherCode,
+        v.DiscountType, v.DiscountValue, v.RequiredPoints!.Value, v.ExchangeLimit,
         VietnamTime.FromUtc(v.ValidFrom), VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description);
     private static UserVoucherResponse MapUserVoucher(UserVoucher uv) => new(uv.UserVoucherID, uv.VoucherID,
         uv.Voucher.VoucherCode, uv.Voucher.DiscountType, uv.Voucher.DiscountValue, uv.Status,

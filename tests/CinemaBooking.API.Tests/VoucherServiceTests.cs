@@ -10,11 +10,11 @@ public sealed class VoucherServiceTests
     public async Task Create_PercentWithinRange_CreatesActiveVoucher()
     {
         var repository = new StubRepository();
-        var service = new VoucherService(repository, new StubUserVoucherRepository(), new StubUserRepository(), new StubStorage());
+        var service = new VoucherService(repository, new StubUserVoucherRepository(), new StubUserRepository(), new StubStorage(), new StubVoucherRuleRepository());
         var result = await service.CreateAsync(1,
-            new(" summer10 ", "Discount", "percent", 10, 100_000, 50,
+            new(" summer10 ", "percent", 10, 100_000, 50,
                 new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.FromHours(7)),
-                new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(7)), null, true),
+                new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(7)), null, true, null),
             null, null, null, 0, null, default);
 
         Assert.True(result.Succeeded);
@@ -25,15 +25,15 @@ public sealed class VoucherServiceTests
     [Fact]
     public async Task Create_PercentAboveOneHundred_ReturnsValidationError()
     {
-        var service = new VoucherService(new StubRepository(), new StubUserVoucherRepository(), new StubUserRepository(), new StubStorage());
+        var service = new VoucherService(new StubRepository(), new StubUserVoucherRepository(), new StubUserRepository(), new StubStorage(), new StubVoucherRuleRepository());
         var result = await service.CreateAsync(1,
-            new("TEST", "Discount", "percent", 101, null, null,
+            new("TEST", "percent", 101, null, null,
                 new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.FromHours(7)),
-                new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(7)), null, true),
+                new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(7)), null, true, null),
             null, null, null, 0, null, default);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("DiscountValue is invalid", result.Error);
+        Assert.Equal("discountValue must be between 1-100 for percent or >= 0 for fixed.", result.Error);
     }
 
     private sealed class StubRepository : IVoucherRepository
@@ -63,6 +63,15 @@ public sealed class VoucherServiceTests
         public Task AddUserVoucherAsync(UserVoucher userVoucher, CancellationToken ct) => Task.CompletedTask;
         public Task<UserVoucher?> GetByIdAsync(int id, CancellationToken ct) => throw new NotSupportedException();
         public Task RedeemVoucherAsync(UserVoucher userVoucher, LoyaltyPoints loyaltyPoints, int pointsRedeemed, AdminActionLog actionLog, CancellationToken ct) => throw new NotSupportedException();
+    }
+
+    private sealed class StubVoucherRuleRepository : IVoucherRuleRepository
+    {
+        public Task<List<VoucherRule>> GetByVoucherIdAsync(int voucherId, CancellationToken ct) => Task.FromResult(new List<VoucherRule>());
+        public Task<VoucherRule?> GetByIdAsync(int ruleId, CancellationToken ct) => Task.FromResult<VoucherRule?>(null);
+        public Task<VoucherRule> AddAsync(VoucherRule rule, CancellationToken ct) => Task.FromResult(rule);
+        public Task<bool> DeleteAsync(int ruleId, CancellationToken ct) => Task.FromResult(true);
+        public Task<List<VoucherRule>> GetByRuleTypeAsync(int voucherId, string ruleType, CancellationToken ct) => Task.FromResult(new List<VoucherRule>());
     }
 
     private sealed class StubUserRepository : IUserRepository
