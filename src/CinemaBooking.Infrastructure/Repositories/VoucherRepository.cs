@@ -23,25 +23,52 @@ public sealed class VoucherRepository : IVoucherRepository
     public Task<bool> CodeExistsAsync(string code, int? excludingId, CancellationToken ct) =>
         _db.Vouchers.AnyAsync(v => v.VoucherCode == code && (!excludingId.HasValue || v.VoucherID != excludingId), ct);
     public Task<bool> HasTransactionsAsync(int id, CancellationToken ct) => _db.BookingVouchers.AnyAsync(v => v.VoucherID == id, ct);
-    public async Task<Voucher> AddAsync(Voucher voucher, AdminActionLog log, CancellationToken ct)
+    public async Task<Voucher> SaveWithRulesAsync(
+        Voucher voucher, bool isNew, IReadOnlyList<VoucherRule> newRules, AdminActionLog log, CancellationToken ct)
     {
         var strategy = _db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
             await using var transaction = await _db.Database.BeginTransactionAsync(ct);
-            _db.Vouchers.Add(voucher);
+
+            if (isNew)
+                _db.Vouchers.Add(voucher);
+
+            // Persist the voucher first so its identity is available for rules and the audit log.
             await _db.SaveChangesAsync(ct);
+
+            if (!isNew)
+            {
+                var existingRules = await _db.Set<VoucherRule>()
+                    .Where(r => r.VoucherID == voucher.VoucherID)
+                    .ToListAsync(ct);
+                _db.Set<VoucherRule>().RemoveRange(existingRules);
+            }
+
+            foreach (var rule in newRules)
+                rule.VoucherID = voucher.VoucherID;
+            if (newRules.Count > 0)
+                await _db.Set<VoucherRule>().AddRangeAsync(newRules, ct);
+
             log.TargetID = voucher.VoucherID;
             _db.AdminActionLogs.Add(log);
+
             await _db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
             return voucher;
         });
     }
-    public async Task<Voucher?> UpdateAsync(Voucher voucher, AdminActionLog log, CancellationToken ct)
-    { _db.AdminActionLogs.Add(log); await _db.SaveChangesAsync(ct); return voucher; }
     public async Task<bool> DeactivateAsync(int id, AdminActionLog log, CancellationToken ct)
-    { var voucher = await _db.Vouchers.FindAsync([id], ct); if (voucher is null) return false; voucher.IsActive = false; _db.AdminActionLogs.Add(log); await _db.SaveChangesAsync(ct); return true; }
+    {
+        var voucher = await _db.Vouchers.FindAsync([id], ct);
+        if (voucher is null) return false;
+        if (!voucher.IsActive) return true; // idempotent: already deactivated
+        voucher.IsActive = false;
+        log.TargetID = voucher.VoucherID;
+        _db.AdminActionLogs.Add(log);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
 
     public async Task<List<Voucher>> GetRedeemableVouchersAsync(CancellationToken ct)
     {

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Vouchers.RuleEngine;
 using CinemaBooking.Domain.Entities;
+using CinemaBooking.Shared.Constants;
 
 namespace CinemaBooking.Application.Bookings;
 
@@ -17,17 +18,20 @@ public sealed class BookingService : IBookingService
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IVoucherRuleEngine _voucherRuleEngine;
+    private readonly IUserVoucherRepository _userVoucherRepository;
 
     public BookingService(
         IBookingRepository bookingRepository,
         IUserRepository userRepository,
         IUnitOfWork unitOfWork,
-        IVoucherRuleEngine voucherRuleEngine)
+        IVoucherRuleEngine voucherRuleEngine,
+        IUserVoucherRepository userVoucherRepository)
     {
         _bookingRepository = bookingRepository;
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
         _voucherRuleEngine = voucherRuleEngine;
+        _userVoucherRepository = userVoucherRepository;
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, List<int>? HoldIds, DateTime? ExpiresAt, SeatValidationErrors? SeatErrors)> HoldSeatsAsync(
@@ -179,6 +183,7 @@ public sealed class BookingService : IBookingService
             .ToDictionary(f => f.ItemId, f => f.Quantity);
 
         BookingVoucher? bookingVoucher = null;
+        int? redeemableVoucherId = null;
         if (pricingResult.Result.VoucherDetails is not null)
         {
             var voucher = await _bookingRepository.GetVoucherByCodeAsync(
@@ -193,6 +198,9 @@ public sealed class BookingService : IBookingService
                 DiscountApplied = pricingResult.Result.VoucherDetails.DiscountApplied,
                 UsedAt = DateTime.UtcNow
             };
+
+            if (voucher.IsRedeemable)
+                redeemableVoucherId = voucher.VoucherID;
         }
 
         var booking = new Booking
@@ -266,6 +274,20 @@ public sealed class BookingService : IBookingService
                     throw new InvalidOperationException("Voucher usage limit has been reached.");
             }
 
+            UserVoucher? reservedUserVoucher = null;
+            if (redeemableVoucherId.HasValue && customerId.HasValue)
+            {
+                reservedUserVoucher = await _userVoucherRepository.GetAvailableForUpdateAsync(
+                    customerId.Value, redeemableVoucherId.Value, cancellationToken);
+
+                if (reservedUserVoucher is null)
+                    throw new InvalidOperationException(
+                        "This voucher must be redeemed to your account and be available before use.");
+
+                if (reservedUserVoucher.ExpiredAt < DateTime.UtcNow)
+                    throw new InvalidOperationException("Your redeemed voucher has expired.");
+            }
+
             await _bookingRepository.AddBookingAsync(booking, cancellationToken);
             await _bookingRepository.MarkHoldsAsConfirmedAsync(
                 lockedRequestedHolds, booking.BookingID, cancellationToken);
@@ -277,6 +299,13 @@ public sealed class BookingService : IBookingService
                     throw new InvalidOperationException("Voucher usage would exceed MaxUses limit.");
             }
 
+            if (reservedUserVoucher is not null)
+            {
+                reservedUserVoucher.Status = UserVoucherStatus.Reserved;
+                reservedUserVoucher.BookingID = booking.BookingID;
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
             return true;
         }, cancellationToken);
 
@@ -431,6 +460,14 @@ public sealed class BookingService : IBookingService
 
             if (voucher.MinOrderValue.HasValue && totalBeforeDiscount < voucher.MinOrderValue.Value)
                 return (false, $"A minimum order value of {voucher.MinOrderValue.Value:N0} VND is required to use this voucher.", null);
+
+            if (voucher.IsRedeemable)
+            {
+                var ownedVoucher = await _userVoucherRepository.GetAvailableOwnedAsync(
+                    userId.Value, voucher.VoucherID, now, cancellationToken);
+                if (ownedVoucher is null)
+                    return (false, "This voucher must be redeemed to your account before use, and must be available and not expired.", null);
+            }
 
             var validationContext = new Vouchers.RuleEngine.VoucherValidationContext
             {

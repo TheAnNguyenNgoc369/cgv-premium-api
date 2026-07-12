@@ -79,33 +79,16 @@ public sealed class VoucherService : IVoucherService
         voucher.Description = c.Description?.Trim(); voucher.IsActive = c.IsActive;
         if (upload is not null) { voucher.ImageURL = upload.SecureUrl; voucher.ImagePublicId = upload.PublicId; }
         var log = Log(adminId, id is null ? AdminActionTypes.CreateVoucher : AdminActionTypes.UpdateVoucher, id, ip);
+        var newRules = (c.Rules ?? []).Select(ruleDto => new VoucherRule
+        {
+            RuleType = ruleDto.RuleType,
+            RuleValue = ruleDto.RuleValue,
+            CreatedAt = DateTime.UtcNow
+        }).ToList();
         try
         {
-            voucher = id is null ? await _repository.AddAsync(voucher, log, ct) : (await _repository.UpdateAsync(voucher, log, ct))!;
-
-            if (id.HasValue)
-            {
-                var existingRules = await _ruleRepository.GetByVoucherIdAsync(voucher.VoucherID, ct);
-                foreach (var rule in existingRules)
-                {
-                    await _ruleRepository.DeleteAsync(rule.RuleID, ct);
-                }
-            }
-
-            if (c.Rules is not null && c.Rules.Any())
-            {
-                foreach (var ruleDto in c.Rules)
-                {
-                    var rule = new VoucherRule
-                    {
-                        VoucherID = voucher.VoucherID,
-                        RuleType = ruleDto.RuleType,
-                        RuleValue = ruleDto.RuleValue,
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    await _ruleRepository.AddAsync(rule, ct);
-                }
-            }
+            // Upsert voucher + replace rules + audit log in ONE transaction (rolls back on failure).
+            voucher = await _repository.SaveWithRulesAsync(voucher, id is null, newRules, log, ct);
         }
         catch { if (upload is not null) await _imageStorage.DeleteImageAsync(upload.PublicId, CancellationToken.None); throw; }
         if (upload is not null && !string.IsNullOrWhiteSpace(oldPublicId))
@@ -191,7 +174,10 @@ public sealed class VoucherService : IVoucherService
 
         try
         {
-            await _userVoucherRepository.RedeemVoucherAsync(userVoucher, loyaltyPoint, voucher.RequiredPoints.Value, log, ct);
+            var (succeeded, error) = await _userVoucherRepository.RedeemVoucherAsync(
+                userVoucher, loyaltyPoint, voucher.RequiredPoints.Value, voucher.ExchangeLimit, log, ct);
+            if (!succeeded)
+                return new(false, user.TotalPoints, string.Empty, error ?? "Failed to redeem voucher", "validation");
             return new(true, user.TotalPoints - voucher.RequiredPoints.Value, voucher.VoucherCode);
         }
         catch (Exception ex)

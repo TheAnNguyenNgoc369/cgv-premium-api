@@ -406,5 +406,7 @@ public sealed class SeatServiceTests
             ExecutionCount++;
             return await operation();
         }
+
+        public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

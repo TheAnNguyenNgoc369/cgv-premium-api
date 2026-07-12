@@ -23,6 +23,7 @@ public sealed class PaymentService : IPaymentService
     private readonly ITicketService _ticketService;
     private readonly INotificationOutbox _notificationOutbox;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IUserVoucherRepository _userVoucherRepository;
 
     public PaymentService(
         IPaymentRepository paymentRepository,
@@ -32,7 +33,8 @@ public sealed class PaymentService : IPaymentService
         IInvoiceService invoiceService,
         ITicketService ticketService,
         INotificationOutbox notificationOutbox,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IUserVoucherRepository userVoucherRepository)
     {
         _paymentRepository = paymentRepository;
         _walletRepository = walletRepository;
@@ -42,6 +44,7 @@ public sealed class PaymentService : IPaymentService
         _ticketService = ticketService;
         _notificationOutbox = notificationOutbox;
         _unitOfWork = unitOfWork;
+        _userVoucherRepository = userVoucherRepository;
     }
 
     public async Task<PaymentOperationResult> InitiatePaymentAsync(
@@ -252,6 +255,8 @@ public sealed class PaymentService : IPaymentService
                 payment.BookingID, BookingStatus.Cancelled, cancellationToken);
             await _paymentRepository.UpdatePaymentSessionsForPaymentAsync(
                 payment.PaymentID, "cancelled", cancellationToken);
+            await _userVoucherRepository.ReleaseReservedByBookingAsync(
+                payment.BookingID, cancellationToken);
             return true;
         }, cancellationToken);
 
@@ -454,6 +459,10 @@ public sealed class PaymentService : IPaymentService
     {
         await _bookingRepository.UpdateBookingStatusAsync(
             booking.BookingID, BookingStatus.Paid, cancellationToken);
+
+        // Redeemable voucher: reserved -> used. No-op for non-redeemable bookings.
+        await _userVoucherRepository.MarkReservedAsUsedByBookingAsync(
+            booking.BookingID, DateTime.UtcNow, cancellationToken);
 
         await _ticketService.CreateTicketsForBookingAsync(booking.BookingID, cancellationToken);
 

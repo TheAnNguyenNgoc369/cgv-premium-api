@@ -11,7 +11,7 @@ public sealed class BookingProductAvailabilityTests
     public async Task CreateBooking_InactiveProduct_ReturnsValidationError()
     {
         var repository = new StubBookingRepository();
-        var service = new BookingService(repository, null!, null!, null!);
+        var service = new BookingService(repository, null!, null!, null!, null!);
 
         var result = await service.CreateBookingAsync(
             1, null, true, 1, [1], [new BookingFnBItemDto(10, 1)], null);
@@ -31,7 +31,7 @@ public sealed class BookingProductAvailabilityTests
                 new SeatHold { HoldID = 2, SeatID = 102, Status = "holding" }
             ]
         };
-        var service = new BookingService(repository, null!, new StubUnitOfWork(), null!);
+        var service = new BookingService(repository, null!, new StubUnitOfWork(), null!, null!);
 
         var result = await service.ReleaseSeatHoldsAsync(7, 12, [101, 102]);
 
@@ -49,7 +49,7 @@ public sealed class BookingProductAvailabilityTests
                 new SeatHold { HoldID = 1, SeatID = 101, Status = "holding" }
             ]
         };
-        var service = new BookingService(repository, null!, new StubUnitOfWork(), null!);
+        var service = new BookingService(repository, null!, new StubUnitOfWork(), null!, null!);
 
         var result = await service.ReleaseSeatHoldsAsync(7, 12, [101, 102]);
 
@@ -68,7 +68,7 @@ public sealed class BookingProductAvailabilityTests
             ActiveHolds = [new SeatHold { HoldID = 1, SeatID = 1, Status = "holding" }],
             ActiveHoldsForUpdate = []
         };
-        var service = new BookingService(repository, null!, new StubUnitOfWork(), null!);
+        var service = new BookingService(repository, null!, new StubUnitOfWork(), null!, null!);
 
         var result = await service.CreateBookingAsync(
             actorUserId: 7,
@@ -196,5 +196,7 @@ public sealed class BookingProductAvailabilityTests
         public Task<T> ExecuteInTransactionAsync<T>(
             Func<Task<T>> operation,
             CancellationToken cancellationToken = default) => operation();
+
+        public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

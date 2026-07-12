@@ -1,3 +1,4 @@
+using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
 using CinemaBooking.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
@@ -76,6 +77,24 @@ public sealed class SeatHoldExpirationJob : BackgroundService
 
             foreach (var booking in bookings)
             {
+                // Optimistic concurrency guard: re-check booking status with a row lock.
+                // Between the SELECT above and this mutation, a concurrent payment webhook
+                // may have flipped Pending -> Paid. Rolling back UsedCount then would
+                // corrupt a successfully-used voucher. UPDLOCK serialises us against the
+                // payment transaction so exactly one side wins.
+                var currentStatus = await dbContext.Bookings
+                    .FromSqlRaw("SELECT * FROM Booking WITH (UPDLOCK, ROWLOCK) WHERE BookingID = {0}",
+                        booking.BookingID)
+                    .Select(b => b.Status)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (currentStatus != BookingStatus.Pending
+                    && currentStatus != BookingStatus.PaymentFailed)
+                {
+                    // Payment completed concurrently — leave voucher accounting intact.
+                    continue;
+                }
+
                 booking.Status = BookingStatus.Expired;
                 booking.UpdatedAt = now;
 
@@ -85,6 +104,15 @@ public sealed class SeatHoldExpirationJob : BackgroundService
                         new object[] { booking.BookingVoucher.VoucherID }, cancellationToken);
                     if (voucher is not null && voucher.UsedCount > 0)
                         voucher.UsedCount--;
+
+                    // Redeemable voucher: release the personal reservation back to Available.
+                    // Filter on Status == Reserved so a concurrently-Used voucher stays Used.
+                    await dbContext.Set<UserVoucher>()
+                        .Where(uv => uv.BookingID == booking.BookingID
+                            && uv.Status == UserVoucherStatus.Reserved)
+                        .ExecuteUpdateAsync(setters => setters
+                            .SetProperty(uv => uv.Status, UserVoucherStatus.Available)
+                            .SetProperty(uv => uv.BookingID, (int?)null), cancellationToken);
                 }
 
                 if (booking.Payment is not null)
