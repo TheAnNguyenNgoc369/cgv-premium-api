@@ -105,13 +105,14 @@ public sealed class SeatHoldExpirationJob : BackgroundService
                     if (voucher is not null && voucher.UsedCount > 0)
                         voucher.UsedCount--;
 
-                    // Redeemable voucher: release the personal reservation back to Available.
-                    // Filter on Status == Reserved so a concurrently-Used voucher stays Used.
+                    // Redeemable voucher: release the personal reservation by clearing BookingID.
+                    // Filter on Status == Available so a concurrently-Used voucher stays Used.
+                    // (A "reserved" UserVoucher is one where BookingID is set and Status is still Available;
+                    //  the CHECK constraint on Status has no separate Reserved value.)
                     await dbContext.Set<UserVoucher>()
                         .Where(uv => uv.BookingID == booking.BookingID
-                            && uv.Status == UserVoucherStatus.Reserved)
+                            && uv.Status == UserVoucherStatus.Available)
                         .ExecuteUpdateAsync(setters => setters
-                            .SetProperty(uv => uv.Status, UserVoucherStatus.Available)
                             .SetProperty(uv => uv.BookingID, (int?)null), cancellationToken);
                 }
 
