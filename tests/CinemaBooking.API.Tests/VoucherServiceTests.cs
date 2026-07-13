@@ -42,8 +42,7 @@ public sealed class VoucherServiceTests
         public Task<Voucher?> GetByIdAsync(int id, CancellationToken ct) => Task.FromResult<Voucher?>(null);
         public Task<bool> CodeExistsAsync(string code, int? excludingId, CancellationToken ct) => Task.FromResult(false);
         public Task<bool> HasTransactionsAsync(int id, CancellationToken ct) => Task.FromResult(false);
-        public Task<Voucher> AddAsync(Voucher voucher, AdminActionLog log, CancellationToken ct) { voucher.VoucherID = 1; return Task.FromResult(voucher); }
-        public Task<Voucher?> UpdateAsync(Voucher voucher, AdminActionLog log, CancellationToken ct) => Task.FromResult<Voucher?>(voucher);
+        public Task<Voucher> SaveWithRulesAsync(Voucher voucher, bool isNew, IReadOnlyList<VoucherRule> newRules, AdminActionLog log, CancellationToken ct) { voucher.VoucherID = 1; return Task.FromResult(voucher); }
         public Task<bool> DeactivateAsync(int id, AdminActionLog log, CancellationToken ct) => Task.FromResult(true);
         public Task<List<Voucher>> GetRedeemableVouchersAsync(CancellationToken ct) => Task.FromResult(new List<Voucher>());
         public Task<Voucher?> GetForRedemptionAsync(int voucherId, CancellationToken ct) => Task.FromResult<Voucher?>(null);
@@ -59,10 +58,12 @@ public sealed class VoucherServiceTests
     private sealed class StubUserVoucherRepository : IUserVoucherRepository
     {
         public Task<List<UserVoucher>> GetUserVouchersAsync(int userId, CancellationToken ct) => Task.FromResult(new List<UserVoucher>());
-        public Task<UserVoucher?> GetUserVoucherAsync(int userId, int voucherId, CancellationToken ct) => Task.FromResult<UserVoucher?>(null);
-        public Task AddUserVoucherAsync(UserVoucher userVoucher, CancellationToken ct) => Task.CompletedTask;
         public Task<UserVoucher?> GetByIdAsync(int id, CancellationToken ct) => throw new NotSupportedException();
-        public Task RedeemVoucherAsync(UserVoucher userVoucher, LoyaltyPoints loyaltyPoints, int pointsRedeemed, AdminActionLog actionLog, CancellationToken ct) => throw new NotSupportedException();
+        public Task<(bool Succeeded, string? Error)> RedeemVoucherAsync(UserVoucher userVoucher, LoyaltyPoints loyaltyPoints, int pointsRedeemed, int? exchangeLimit, AdminActionLog actionLog, CancellationToken ct) => throw new NotSupportedException();
+        public Task<UserVoucher?> GetAvailableOwnedAsync(int userId, int voucherId, DateTime now, CancellationToken ct) => Task.FromResult<UserVoucher?>(null);
+        public Task<UserVoucher?> GetAvailableForUpdateAsync(int userId, int voucherId, CancellationToken ct) => Task.FromResult<UserVoucher?>(null);
+        public Task MarkReservedAsUsedByBookingAsync(int bookingId, DateTime usedAt, CancellationToken ct) => Task.CompletedTask;
+        public Task ReleaseReservedByBookingAsync(int bookingId, CancellationToken ct) => Task.CompletedTask;
     }
 
     private sealed class StubVoucherRuleRepository : IVoucherRuleRepository
