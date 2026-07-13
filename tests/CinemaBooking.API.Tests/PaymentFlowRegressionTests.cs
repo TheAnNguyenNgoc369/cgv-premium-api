@@ -6,6 +6,7 @@ using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Application.Common.Enums;
 using System.Text.Json;
 using CinemaBooking.Shared.Constants;
+using CinemaBooking.Infrastructure.Payments.PayOS;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,6 +14,20 @@ namespace CinemaBooking.API.Tests;
 
 public sealed class PaymentFlowRegressionTests
 {
+    [Theory]
+    [InlineData("https://frontend.example/payment-result",
+        "https://frontend.example/payment-result?bookingId=42&orderCode=123456")]
+    [InlineData("https://frontend.example/payment-result?source=payos",
+        "https://frontend.example/payment-result?source=payos&bookingId=42&orderCode=123456")]
+    public void PayOSRedirectUrl_IncludesBookingAndOrderIdentifiers(
+        string baseUrl,
+        string expected)
+    {
+        var result = PayOSService.BuildRedirectUrl(baseUrl, 42, 123456);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void PaymentMethodMapping_AcceptsPayOS()
     {

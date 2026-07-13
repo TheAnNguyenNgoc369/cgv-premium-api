@@ -20,19 +20,22 @@ public sealed class PayOSService : IPayOSService
 
     public async Task<PayOSPaymentLinkResult> CreatePaymentLinkAsync(
         long orderCode,
+        int bookingId,
         int amount,
         string description,
         DateTime expiresAt,
         CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
+        var returnUrl = ResolveRedirectUrl(_settings.ReturnUrl, "payment/success");
+        var cancelUrl = ResolveRedirectUrl(_settings.CancelUrl, "payment/cancel");
         var response = await client.PaymentRequests.CreateAsync(new CreatePaymentLinkRequest
         {
             OrderCode = orderCode,
             Amount = amount,
             Description = description,
-            ReturnUrl = $"{_frontendSettings.BaseUrl.TrimEnd('/')}/payment/success",
-            CancelUrl = $"{_frontendSettings.BaseUrl.TrimEnd('/')}/payment/cancel",
+            ReturnUrl = BuildRedirectUrl(returnUrl, bookingId, orderCode),
+            CancelUrl = BuildRedirectUrl(cancelUrl, bookingId, orderCode),
             ExpiredAt = new DateTimeOffset(expiresAt).ToUnixTimeSeconds()
         });
 
@@ -102,5 +105,19 @@ public sealed class PayOSService : IPayOSService
                 "PayOS credentials are not configured. Set PayOS__ClientId, PayOS__ApiKey and PayOS__ChecksumKey.");
 
         return new PayOSClient(_settings.ClientId, _settings.ApiKey, _settings.ChecksumKey);
+    }
+
+    private string ResolveRedirectUrl(string configuredUrl, string frontendPath)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredUrl))
+            return configuredUrl;
+
+        return $"{_frontendSettings.BaseUrl.TrimEnd('/')}/{frontendPath.TrimStart('/')}";
+    }
+
+    internal static string BuildRedirectUrl(string baseUrl, int bookingId, long orderCode)
+    {
+        var separator = baseUrl.Contains('?', StringComparison.Ordinal) ? '&' : '?';
+        return $"{baseUrl}{separator}bookingId={bookingId}&orderCode={orderCode}";
     }
 }
