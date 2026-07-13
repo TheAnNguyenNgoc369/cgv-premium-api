@@ -1,6 +1,6 @@
 namespace CinemaBooking.Application.Common.ImageFiles;
 
-internal static class ImageFileValidator
+public static class ImageFileValidator
 {
     public const long MaxFileSizeBytes = 5 * 1024 * 1024;
 

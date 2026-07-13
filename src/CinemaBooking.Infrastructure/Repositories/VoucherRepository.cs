@@ -16,10 +16,16 @@ public sealed class VoucherRepository : IVoucherRepository
         if (!string.IsNullOrWhiteSpace(search)) query = query.Where(v => v.VoucherCode.Contains(search)
             || (v.Description != null && v.Description.Contains(search)));
         var total = await query.CountAsync(ct);
-        var items = await query.OrderByDescending(v => v.CreatedAt).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        var items = await query
+            .Include(v => v.VoucherRules)
+            .OrderByDescending(v => v.CreatedAt)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .AsSplitQuery()
+            .ToListAsync(ct);
         return (items, total);
     }
-    public Task<Voucher?> GetByIdAsync(int id, CancellationToken ct) => _db.Vouchers.FirstOrDefaultAsync(v => v.VoucherID == id, ct);
+    public Task<Voucher?> GetByIdAsync(int id, CancellationToken ct) =>
+        _db.Vouchers.Include(v => v.VoucherRules).FirstOrDefaultAsync(v => v.VoucherID == id, ct);
     public Task<bool> CodeExistsAsync(string code, int? excludingId, CancellationToken ct) =>
         _db.Vouchers.AnyAsync(v => v.VoucherCode == code && (!excludingId.HasValue || v.VoucherID != excludingId), ct);
     public Task<bool> HasTransactionsAsync(int id, CancellationToken ct) => _db.BookingVouchers.AnyAsync(v => v.VoucherID == id, ct);

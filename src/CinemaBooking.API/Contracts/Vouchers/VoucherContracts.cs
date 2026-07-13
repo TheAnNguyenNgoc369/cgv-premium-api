@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using Microsoft.AspNetCore.Http;
 
 namespace CinemaBooking.API.Contracts.Vouchers;
 
@@ -14,7 +13,12 @@ public sealed class VoucherRequest
     [Required] public DateTimeOffset? ValidUntil { get; set; }
     [MaxLength(500)] public string? Description { get; set; }
     public bool IsActive { get; set; } = true;
-    public IFormFile? Image { get; set; }
+
+    // Image is uploaded separately via POST /api/uploads/vouchers/image; the client
+    // sends back the returned URL and public id here.
+    [MaxLength(500)] public string? ImageUrl { get; set; }
+    [MaxLength(200)] public string? ImagePublicId { get; set; }
+
     public List<VoucherRuleRequest>? Rules { get; set; }
 }
 

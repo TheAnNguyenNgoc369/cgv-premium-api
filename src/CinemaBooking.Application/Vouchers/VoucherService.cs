@@ -1,4 +1,3 @@
-using CinemaBooking.Application.Common.ImageFiles;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
@@ -7,7 +6,6 @@ namespace CinemaBooking.Application.Vouchers;
 
 public sealed class VoucherService : IVoucherService
 {
-    private const string ImageFolder = "cgvp/vouchers";
     private readonly IVoucherRepository _repository;
     private readonly IUserVoucherRepository _userVoucherRepository;
     private readonly IUserRepository _userRepository;
@@ -25,16 +23,13 @@ public sealed class VoucherService : IVoucherService
         return new(data.Items, pageIndex, pageSize, data.Total);
     }
 
-    public Task<VoucherResult> CreateAsync(int adminId, VoucherCommand command, Stream? image, string? fileName,
-        string? contentType, long fileSize, string? ip, CancellationToken cancellationToken) =>
-        SaveAsync(adminId, null, command, image, fileName, contentType, fileSize, ip, cancellationToken);
+    public Task<VoucherResult> CreateAsync(int adminId, VoucherCommand command, string? ip, CancellationToken cancellationToken) =>
+        SaveAsync(adminId, null, command, ip, cancellationToken);
 
-    public Task<VoucherResult> UpdateAsync(int adminId, int id, VoucherCommand command, Stream? image, string? fileName,
-        string? contentType, long fileSize, string? ip, CancellationToken cancellationToken) =>
-        SaveAsync(adminId, id, command, image, fileName, contentType, fileSize, ip, cancellationToken);
+    public Task<VoucherResult> UpdateAsync(int adminId, int id, VoucherCommand command, string? ip, CancellationToken cancellationToken) =>
+        SaveAsync(adminId, id, command, ip, cancellationToken);
 
-    private async Task<VoucherResult> SaveAsync(int adminId, int? id, VoucherCommand c, Stream? image,
-        string? fileName, string? contentType, long fileSize, string? ip, CancellationToken ct)
+    private async Task<VoucherResult> SaveAsync(int adminId, int? id, VoucherCommand c, string? ip, CancellationToken ct)
     {
         var code = c.VoucherCode?.Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(code)) return Fail("voucherCode is required and cannot be null.");
@@ -65,19 +60,15 @@ public sealed class VoucherService : IVoucherService
         if (await _repository.CodeExistsAsync(code, id, ct)) return new(false, "VoucherCode already exists", null, "conflict");
         if (existing is not null && c.MaxUses.HasValue && c.MaxUses < existing.UsedCount) return Fail("MaxUses cannot be less than UsedCount");
 
-        StoredImageResult? upload = null;
-        if (image is not null)
-        {
-            var error = ImageFileValidator.Validate(fileName!, contentType, fileSize); if (error is not null) return Fail(error);
-            upload = await _imageStorage.UploadImageAsync(image, fileName!, ImageFolder, ct);
-        }
         var voucher = existing ?? new Voucher { UsedCount = 0, CreatedAt = DateTime.UtcNow };
         var oldPublicId = existing?.ImagePublicId;
+        var newImageUrl = string.IsNullOrWhiteSpace(c.ImageUrl) ? null : c.ImageUrl.Trim();
+        var newPublicId = string.IsNullOrWhiteSpace(c.ImagePublicId) ? null : c.ImagePublicId.Trim();
         voucher.VoucherCode = code; voucher.DiscountType = type;
         voucher.DiscountValue = c.DiscountValue; voucher.MinOrderValue = c.MinOrderValue; voucher.MaxUses = c.MaxUses;
         voucher.ValidFrom = c.ValidFrom.UtcDateTime; voucher.ValidUntil = c.ValidUntil.UtcDateTime;
         voucher.Description = c.Description?.Trim(); voucher.IsActive = c.IsActive;
-        if (upload is not null) { voucher.ImageURL = upload.SecureUrl; voucher.ImagePublicId = upload.PublicId; }
+        if (newImageUrl is not null) { voucher.ImageURL = newImageUrl; voucher.ImagePublicId = newPublicId; }
         var log = Log(adminId, id is null ? AdminActionTypes.CreateVoucher : AdminActionTypes.UpdateVoucher, id, ip);
         var newRules = (c.Rules ?? []).Select(ruleDto => new VoucherRule
         {
@@ -85,15 +76,15 @@ public sealed class VoucherService : IVoucherService
             RuleValue = ruleDto.RuleValue,
             CreatedAt = DateTime.UtcNow
         }).ToList();
-        try
+        // Upsert voucher + replace rules + audit log in ONE transaction (rolls back on failure).
+        voucher = await _repository.SaveWithRulesAsync(voucher, id is null, newRules, log, ct);
+        // Delete the old Cloudinary image only after the DB commit succeeded and the caller
+        // actually attached a new image with a different public id.
+        var replacedImage = newPublicId is not null && !string.IsNullOrWhiteSpace(oldPublicId)
+            && !string.Equals(newPublicId, oldPublicId, StringComparison.Ordinal);
+        if (replacedImage)
         {
-            // Upsert voucher + replace rules + audit log in ONE transaction (rolls back on failure).
-            voucher = await _repository.SaveWithRulesAsync(voucher, id is null, newRules, log, ct);
-        }
-        catch { if (upload is not null) await _imageStorage.DeleteImageAsync(upload.PublicId, CancellationToken.None); throw; }
-        if (upload is not null && !string.IsNullOrWhiteSpace(oldPublicId))
-        {
-            try { await _imageStorage.DeleteImageAsync(oldPublicId, ct); }
+            try { await _imageStorage.DeleteImageAsync(oldPublicId!, ct); }
             catch (Exception exception) when (exception is not OperationCanceledException) { }
         }
         return new(true, null, voucher);

@@ -14,8 +14,8 @@ public sealed class VoucherServiceTests
         var result = await service.CreateAsync(1,
             new(" summer10 ", "percent", 10, 100_000, 50,
                 new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.FromHours(7)),
-                new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(7)), null, true, null),
-            null, null, null, 0, null, default);
+                new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(7)), null, true, null, null, null),
+            null, default);
 
         Assert.True(result.Succeeded);
         Assert.Equal("SUMMER10", result.Voucher!.VoucherCode);
@@ -29,8 +29,8 @@ public sealed class VoucherServiceTests
         var result = await service.CreateAsync(1,
             new("TEST", "percent", 101, null, null,
                 new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.FromHours(7)),
-                new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(7)), null, true, null),
-            null, null, null, 0, null, default);
+                new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(7)), null, true, null, null, null),
+            null, default);
 
         Assert.False(result.Succeeded);
         Assert.Equal("discountValue must be between 1-100 for percent or >= 0 for fixed.", result.Error);
