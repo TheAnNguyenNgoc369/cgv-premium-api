@@ -33,6 +33,8 @@ public static class DependencyInjection
             {
                 options.JsonSerializerOptions.Converters.Add(
                     new VietnamDateTimeJsonConverter());
+                options.JsonSerializerOptions.Converters.Add(
+                    new JsonStringEnumConverter(allowIntegerValues: false));
                 options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
             })
             .ConfigureApiBehaviorOptions(options =>
@@ -54,6 +56,15 @@ public static class DependencyInjection
                     {
                         var fieldName = GetFieldName(errorEntry.Key);
                         var errorText = errorEntry.Error ?? string.Empty;
+                        var isEnumError = errorText.Contains("could not be converted", StringComparison.OrdinalIgnoreCase);
+                        if (isEnumError)
+                        {
+                            return new BadRequestObjectResult(new
+                            {
+                                success = false,
+                                message = $"{fieldName} has an invalid enum value."
+                            });
+                        }
 
                         if (context.HttpContext?.Request.Path.StartsWithSegments("/api/showtime-types", StringComparison.OrdinalIgnoreCase) == true)
                         {

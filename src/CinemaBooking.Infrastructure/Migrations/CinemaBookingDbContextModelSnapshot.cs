@@ -606,13 +606,15 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("UQ_LoyaltyTiers_TierName");
 
+                    b.HasIndex("MinPoints")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_LoyaltyTiers_MinPoints");
+
                     b.ToTable("LoyaltyTiers", null, t =>
                         {
                             t.HasCheckConstraint("CK_LoyaltyTiers_DiscountRate", "[DiscountRate] >= 0 AND [DiscountRate] <= 1");
 
                             t.HasCheckConstraint("CK_LoyaltyTiers_MinPoints", "[MinPoints] >= 0");
-
-                            t.HasCheckConstraint("CK_LoyaltyTiers_TierName", "[TierName] IN ('silver', 'gold', 'platinum', 'megavip')");
                         });
 
                     b.HasData(

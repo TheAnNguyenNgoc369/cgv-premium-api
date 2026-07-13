@@ -65,6 +65,11 @@ public sealed class CinemaController : ControllerBase
 
         if (!result.Succeeded)
         {
+            if (result.ErrorMessage == "Cinema name already exists.")
+            {
+                return Conflict(new { success = false, message = result.ErrorMessage });
+            }
+
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
@@ -99,6 +104,10 @@ public sealed class CinemaController : ControllerBase
             if (result.ErrorMessage == "Cinema not found")
             {
                 return NotFound(new { success = false, message = result.ErrorMessage });
+            }
+            if (result.ErrorMessage == "Cinema name already exists.")
+            {
+                return Conflict(new { success = false, message = result.ErrorMessage });
             }
 
             return BadRequest(new { success = false, message = result.ErrorMessage });
