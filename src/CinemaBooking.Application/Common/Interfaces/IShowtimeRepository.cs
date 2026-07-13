@@ -24,6 +24,8 @@ public interface IShowtimeRepository
     Task<bool> HasRoomTypeStartConflictAsync(
         int cinemaId, int roomTypeId, DateTime startTime,
         int? excludingShowtimeId = null, CancellationToken cancellationToken = default);
+    Task<bool> HasValidSeatAsync(
+        int roomId, CancellationToken cancellationToken = default);
     Task<bool> HasActiveBookingOrHoldAsync(int showtimeId, DateTime now,
         CancellationToken cancellationToken = default);
     Task<bool> HasSuccessfulBookingAsync(int showtimeId,

@@ -1,4 +1,5 @@
 using CinemaBooking.Application.Payments.PayOS;
+using CinemaBooking.Application.Configuration;
 using Microsoft.Extensions.Options;
 using PayOS;
 using PayOS.Models.V2.PaymentRequests;
@@ -9,10 +10,12 @@ namespace CinemaBooking.Infrastructure.Payments.PayOS;
 public sealed class PayOSService : IPayOSService
 {
     private readonly PayOSSettings _settings;
+    private readonly FrontendSettings _frontendSettings;
 
-    public PayOSService(IOptions<PayOSSettings> settings)
+    public PayOSService(IOptions<PayOSSettings> settings, IOptions<FrontendSettings> frontendSettings)
     {
         _settings = settings.Value;
+        _frontendSettings = frontendSettings.Value;
     }
 
     public async Task<PayOSPaymentLinkResult> CreatePaymentLinkAsync(
@@ -28,8 +31,8 @@ public sealed class PayOSService : IPayOSService
             OrderCode = orderCode,
             Amount = amount,
             Description = description,
-            ReturnUrl = _settings.ReturnUrl,
-            CancelUrl = _settings.CancelUrl,
+            ReturnUrl = $"{_frontendSettings.BaseUrl.TrimEnd('/')}/payment/success",
+            CancelUrl = $"{_frontendSettings.BaseUrl.TrimEnd('/')}/payment/cancel",
             ExpiredAt = new DateTimeOffset(expiresAt).ToUnixTimeSeconds()
         });
 

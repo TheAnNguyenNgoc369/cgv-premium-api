@@ -8,10 +8,13 @@ public interface IMovieService
     Task<List<MovieEntity>> GetMoviesAsync(
         string? status,
         IReadOnlyCollection<int> genreIds,
+        int? cinemaId,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyDictionary<int, MovieSalesInfo>> GetMovieSalesAsync(
         CancellationToken cancellationToken = default);
+
+    Task<bool> CinemaExistsAsync(int cinemaId, CancellationToken cancellationToken = default);
 
     Task<MovieEntity?> GetMovieByIdAsync(
         int id,

@@ -11,11 +11,5 @@ public sealed class PayOSSettings
     public string ChecksumKey { get; init; } = string.Empty;
 
     [Required, Url]
-    public string ReturnUrl { get; init; } = string.Empty;
-
-    [Required, Url]
-    public string CancelUrl { get; init; } = string.Empty;
-
-    [Required, Url]
     public string WebhookUrl { get; init; } = string.Empty;
 }

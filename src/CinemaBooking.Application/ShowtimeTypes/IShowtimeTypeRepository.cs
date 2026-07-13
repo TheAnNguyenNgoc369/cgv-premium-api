@@ -10,6 +10,7 @@ public interface IShowtimeTypeRepository
     Task<bool> NameExistsAsync(int cinemaId, string name, int? exceptId, CancellationToken ct);
     Task<CinemaBooking.Domain.Entities.Movie?> GetMovieAsync(int id, CancellationToken ct);
     Task<Room?> GetRoomAsync(int id, CancellationToken ct);
+    Task<bool> HasValidSeatAsync(int roomId, CancellationToken ct);
     Task<bool> HasConflictAsync(int roomId, DateTime start, DateTime end, CancellationToken ct);
     Task AddAsync(ShowtimeType value, CancellationToken ct);
     void ReplaceSlots(ShowtimeType value, IEnumerable<TimeSpan> slots);

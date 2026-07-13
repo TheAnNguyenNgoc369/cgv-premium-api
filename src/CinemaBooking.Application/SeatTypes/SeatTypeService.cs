@@ -115,7 +115,7 @@ public sealed class SeatTypeService : ISeatTypeService
     {
         return string.IsNullOrWhiteSpace(typeName)
             ? null
-            : typeName.Trim().ToLowerInvariant();
+            : typeName.Trim();
     }
 
     private static string? Validate(string? typeName, int capacity, decimal extraPrice)

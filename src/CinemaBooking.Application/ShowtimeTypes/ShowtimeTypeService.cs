@@ -41,6 +41,7 @@ public sealed class ShowtimeTypeService(IShowtimeTypeRepository repository) : IS
         var type = await repository.GetAsync(typeId, false, ct); if (type is null) return Fail("Showtime type not found.");
         var movie = await repository.GetMovieAsync(movieId, ct); if (movie is null) return Fail("Movie not found.");
         var room = await repository.GetRoomAsync(roomId, ct); if (room is null) return Fail("Room not found.");
+        if (!await repository.HasValidSeatAsync(roomId, ct)) return Fail("Room must have at least one valid seat before creating a showtime.");
         if (scope.HasValue && room.CinemaID != scope || type.CinemaID != room.CinemaID) return Fail("Access denied.");
         var items = new List<ShowtimeTypeItem>(); var accepted = new List<(DateTime Start, DateTime End)>();
         for (var date = start; date <= end; date = date.AddDays(1)) foreach (var slot in type.Slots.OrderBy(x => x.StartTime))

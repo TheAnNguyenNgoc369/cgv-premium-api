@@ -7,7 +7,7 @@ namespace CinemaBooking.API.Tests;
 public sealed class SeatTypeServiceTests
 {
     [Fact]
-    public async Task CreateSeatType_ValidRequest_CreatesNormalizedSeatType()
+    public async Task CreateSeatType_ValidRequest_TrimsAndPreservesNameCasing()
     {
         var repository = new StubSeatTypeRepository();
         var service = new SeatTypeService(repository);
@@ -15,7 +15,7 @@ public sealed class SeatTypeServiceTests
         var result = await service.CreateSeatTypeAsync(" Premium ", 2, 30000);
 
         Assert.True(result.Succeeded);
-        Assert.Equal("premium", result.SeatType?.TypeName);
+        Assert.Equal("Premium", result.SeatType?.TypeName);
         Assert.Equal(2, result.SeatType?.Capacity);
         Assert.Equal(30000, result.SeatType?.ExtraPrice);
     }

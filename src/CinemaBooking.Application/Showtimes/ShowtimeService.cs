@@ -186,9 +186,8 @@ public sealed class ShowtimeService : IShowtimeService
             return (false, CinemaScopeMessages.AccessDenied, null);
         if (room.Status != "active" || room.Cinema.Status != "active")
             return (false, "Room and cinema must be active", null);
-        if (existing is null
-            && (await _showtimeRepository.GetSeatsByRoomAsync(roomId, cancellationToken)).Count == 0)
-            return (false, "Room has no seats. Please configure seats before creating a showtime.", null);
+        if (existing is null && !await _showtimeRepository.HasValidSeatAsync(roomId, cancellationToken))
+            return (false, "Room must have at least one valid seat before creating a showtime.", null);
 
         DateTime endTime;
         try

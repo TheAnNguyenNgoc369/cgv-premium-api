@@ -79,6 +79,15 @@ public sealed class ShowtimeRepository : IShowtimeRepository
             && (!excludingShowtimeId.HasValue || s.ShowtimeID != excludingShowtimeId.Value),
             cancellationToken);
 
+    public Task<bool> HasValidSeatAsync(
+        int roomId, CancellationToken cancellationToken = default) =>
+        _db.Seats.AsNoTracking().AnyAsync(seat => seat.RoomID == roomId
+            && seat.IsCurrentLayout
+            && !seat.IsGap
+            && seat.Status == "active"
+            && seat.SeatTypeID.HasValue,
+            cancellationToken);
+
     public async Task<bool> HasActiveBookingOrHoldAsync(
         int showtimeId, DateTime now, CancellationToken cancellationToken = default)
     {
