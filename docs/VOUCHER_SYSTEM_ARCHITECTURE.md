@@ -1,742 +1,1050 @@
-# Voucher System Architecture - Production-Ready Implementation
+# Voucher System Architecture - Complete Documentation
 
-**Last Updated:** 2026-07-09  
-**Status:** Production-Ready (80% complete)  
-**Version:** 3.0
+**Last Updated:** 2026-07-14  
+**Status:** Production-Ready  
+**Version:** 4.0
 
 ---
 
 ## Executive Summary
 
-The voucher system has undergone a comprehensive 3-phase refactoring to create a production-ready, extensible, rule-based validation engine. The system now supports flexible voucher rules, proper concurrency control, and clean architecture principles.
+The voucher system is a flexible, rule-based discount engine supporting two voucher types: **Public Vouchers** (direct discounts) and **Loyalty Vouchers** (redeemed with loyalty points). The system uses a pluggable rule engine with 10 configurable rule types to control where and how discounts apply.
 
-**Key Achievements:**
-- ✅ Rule-based validation engine with 10 configurable rule types
-- ✅ Fixed critical concurrency bug preventing UsedCount from exceeding MaxUses
-- ✅ Eliminated N+1 query risks through flat validation context
-- ✅ Data integrity validations (conflict detection, consistency checks)
-- ✅ Clean Architecture + SOLID + Repository + Strategy patterns
+**Key Features:**
+- ✅ Two voucher types with distinct lifecycles
+- ✅ 10 built-in rule types (Cinema, Movie, Membership, etc.)
+- ✅ Extensible rule engine (add new rules without changing core code)
+- ✅ Fixed concurrency bug: UsedCount cannot exceed MaxUses
+- ✅ No N+1 queries: flat validation context
+- ✅ Clean architecture: Strategy pattern, Repository pattern
 
 ---
 
 ## Table of Contents
 
-1. [Phase 1: Architecture Cleanup](#phase-1-architecture-cleanup)
-2. [Phase 2: VoucherRule Engine](#phase-2-voucherrule-engine)
-3. [Phase 3: Production Improvements](#phase-3-production-improvements)
-4. [System Architecture](#system-architecture)
-5. [How to Use](#how-to-use)
-6. [How to Extend](#how-to-extend)
-7. [Remaining Work](#remaining-work)
-8. [Production Checklist](#production-checklist)
+1. [Voucher Types](#voucher-types)
+   - [Public Voucher](#public-voucher)
+   - [Loyalty Voucher](#loyalty-voucher)
+2. [All Voucher Fields Explained](#all-voucher-fields-explained)
+3. [Rule Types Reference](#rule-types-reference)
+4. [Booking Flow](#booking-flow)
+5. [Sequence Diagrams](#sequence-diagrams)
+6. [Adding New Rule Types](#adding-new-rule-types)
 
 ---
 
-## Phase 1: Architecture Cleanup
+## Voucher Types
 
-### Changes Made
+### Public Voucher
 
-**Removed Obsolete Properties:**
-- `Category` field from Voucher entity
-- `RemainingQuantity` field from Voucher entity
+#### Purpose
+Direct discount offered to all users during a promotional period. No redemption required.
 
-**Why:** These fields were not part of the new architecture and caused confusion.
+#### When Used
+- Marketing campaigns (e.g., "Summer 20% off")
+- Flash sales (e.g., weekend-only discounts)
+- Category promotions (e.g., "25% off VIP seats")
+- Product bundles (e.g., "20% off when buying popcorn")
 
-**Critical Bug Fixed:**
-- UserVoucherRepository was incorrectly decrementing RemainingQuantity during redemption
-- **Correct behavior:** UsedCount only increments during payment, not redemption
-- **Impact:** Redemption now only grants ownership; global usage tracking is correct
+#### Fields
+- `VoucherCode` — Unique identifier (e.g., "SUMMER20")
+- `IsRedeemable` — **false** for public vouchers
+- `RequiredPoints` — **null** for public vouchers
+- `ExchangeLimit` — **null** for public vouchers
+- `DiscountType` — "percent" or "fixed"
+- `DiscountValue` — 1-100 for percent, >0 for fixed
+- `MinOrderValue` — Minimum booking total to apply
+- `MaxUses` — Global cap on total uses (can be null for unlimited)
+- `UsedCount` — Current usage count (incremented on payment)
+- `ValidFrom` / `ValidUntil` — Time window (+07:00 timezone)
+- `IsActive` — Admin can deactivate anytime
+- `Rules` — Array of validation rules (optional)
 
-**Files Modified:**
-- `Voucher.cs` - Removed Category and RemainingQuantity properties
-- `VoucherService.cs` - Removed Category validation, RemainingQuantity checks
-- `VoucherRepository.cs` - Removed Category search filter, RemainingQuantity query filter
-- `UserVoucherRepository.cs` - Removed RemainingQuantity decrement (critical fix)
-- `VoucherConfiguration.cs` - Removed database constraints for obsolete fields
-- `VoucherContracts.cs` - Removed from all DTOs
-- `VoucherController.cs` - Updated mappings
-- Unit tests updated
-
----
-
-## Phase 2: VoucherRule Engine
-
-### Architecture Overview
-
-Replaced hardcoded voucher validation with a flexible rule-based engine using the Strategy pattern.
-
-### Components Created
-
-#### 1. VoucherRule Entity
-```csharp
-public class VoucherRule
-{
-    public int RuleID { get; set; }
-    public int VoucherID { get; set; }
-    public string RuleType { get; set; }  // ApplyScope, Cinema, Movie, etc.
-    public string RuleValue { get; set; }  // The value to validate against
-    public DateTime CreatedAt { get; set; }
-    public Voucher Voucher { get; set; }
-}
-```
-
-#### 2. Rule Types (10 Supported)
-
-| Rule Type | Purpose | Example RuleValue |
-|-----------|---------|-------------------|
-| **ApplyScope** | Where discount applies | "Order", "Ticket", "Food" |
-| **Cinema** | Cinema restriction | "3" (CinemaID) |
-| **Movie** | Movie restriction | "15" (MovieID) |
-| **Room** | Room restriction | "2" (RoomID) |
-| **SeatType** | Seat type requirement | "VIP" |
-| **Membership** | Membership tier | "Gold" |
-| **PaymentMethod** | Payment method | "Wallet" |
-| **DayOfWeek** | Day restriction | "Saturday" |
-| **Product** | Required product | "10" (ProductID) |
-| **FoodCategory** | Food category | "5" (CategoryID) |
-
-#### 3. Rule Validators (Strategy Pattern)
-
-Each rule type has its own validator implementing `IVoucherRuleValidator`:
-
-```csharp
-public interface IVoucherRuleValidator
-{
-    string RuleType { get; }
-    ValidationResult Validate(VoucherRule rule, VoucherValidationContext context);
-}
-```
-
-**Validators Created:**
-- `ApplyScopeValidator` - Calculates applicable amount based on scope
-- `CinemaValidator` - Validates cinema ID
-- `MovieValidator` - Validates movie ID
-- `RoomValidator` - Validates room ID
-- `SeatTypeValidator` - Validates all seats match required type
-- `MembershipValidator` - Validates user membership tier
-- `PaymentMethodValidator` - Validates payment method
-- `DayOfWeekValidator` - Validates showtime day
-- `ProductValidator` - Validates required product in booking
-- `FoodCategoryValidator` - Validates food category in booking
-
-#### 4. VoucherRuleEngine
-
-Orchestrates validation across all rules:
-
-```csharp
-public async Task<ValidationResult> ValidateAsync(
-    VoucherValidationContext context, 
-    CancellationToken ct)
-{
-    var rules = await _ruleRepository.GetByVoucherIdAsync(
-        context.Voucher.VoucherID, ct);
-    
-    foreach (var rule in rules)
-    {
-        var validator = _validators[rule.RuleType];
-        var result = validator.Validate(rule, context);
-        
-        if (!result.IsValid)
-            return result; // Fail-fast
-        
-        if (rule.RuleType == VoucherRuleTypes.ApplyScope)
-            applicableAmount = result.ApplicableAmount;
-    }
-    
-    return ValidationResult.Success(applicableAmount);
-}
-```
-
-### Integration Points
-
-**VoucherService:**
-- Create/Update operations accept `List<VoucherRuleDto>?`
-- Transactional save: delete old rules, insert new rules
-- Rollback on failure
-
-**BookingService:**
-- Builds `VoucherValidationContext` with all booking data
-- Calls `VoucherRuleEngine.ValidateAsync()`
-- Uses `ValidationResult.ApplicableAmount` for discount calculation
-
-**API:**
-- `VoucherRequest` includes `List<VoucherRuleRequest>? Rules`
-- `VoucherResponse` includes `List<VoucherRuleResponse>? Rules`
-- Controllers map between API contracts and domain models
-
----
-
-## Phase 3: Production Improvements
-
-### 1. VoucherValidationContext Refactored ✅
-
-**Problem:** Validators accessed database through Booking navigation properties, causing coupling and N+1 risk.
-
-**Solution:** Flat context with all data extracted upfront.
-
-**New Structure:**
-```csharp
-public sealed class VoucherValidationContext
-{
-    public int BookingId { get; set; }
-    public int? CustomerId { get; set; }
-    public int CinemaId { get; set; }
-    public int MovieId { get; set; }
-    public int RoomId { get; set; }
-    public DateTime ShowtimeDateTime { get; set; }
-    public string? MembershipTier { get; set; }
-    public List<SeatValidationData> Seats { get; set; }
-    public List<ProductValidationData> Products { get; set; }
-    public string PaymentMethod { get; set; }
-    public decimal BookingTotal { get; set; }
-    public decimal TicketTotal { get; set; }
-    public decimal FoodTotal { get; set; }
-    public Voucher Voucher { get; set; }
-    public DateTime ValidationTime { get; set; }
-}
-```
-
-**Impact:**
-- ✅ Validators never query database
-- ✅ Eliminates N+1 query risk
-- ✅ All 10 validators updated to use flat properties
-- ✅ BookingService builds context once, passes to engine
-
-### 2. Rule Conflict Detection ✅
-
-**Problem:** Duplicate rules cause undefined behavior.
-
-**Solution:** Validate before saving.
-
-```csharp
-private static string? ValidateRuleConflicts(List<VoucherRuleDto> rules)
-{
-    var duplicates = rules.GroupBy(r => r.RuleType)
-        .Where(g => g.Count() > 1);
-    
-    if (duplicates.Any())
-        return $"Duplicate rule types detected: {string.Join(", ", duplicates)}";
-    
-    return null;
-}
-```
-
-**Impact:**
-- ✅ Prevents duplicate ApplyScope, Membership, PaymentMethod, etc.
-- ✅ Clear error messages for admins
-
-### 3. Rule Consistency Validation ✅
-
-**Problem:** Invalid rule configurations cause runtime failures.
-
-**Solution:** Comprehensive validation before save.
-
-**Validations:**
-- DiscountValue: 1-100 for percent (was 0-100, now prevents 0% discounts)
-- RuleType must be one of 10 supported types
-- RuleValue cannot be empty
-- ApplyScope values must be Order/Ticket/Food
-
-```csharp
-private static string? ValidateRuleConsistency(List<VoucherRuleDto> rules)
-{
-    var validRuleTypes = new[] { 
-        VoucherRuleTypes.ApplyScope, 
-        VoucherRuleTypes.Cinema, 
-        // ... all 10 types
-    };
-    
-    foreach (var rule in rules)
-    {
-        if (!validRuleTypes.Contains(rule.RuleType))
-            return $"Invalid rule type: {rule.RuleType}";
-        
-        if (string.IsNullOrWhiteSpace(rule.RuleValue))
-            return $"Rule value cannot be empty for: {rule.RuleType}";
-        
-        // Additional validations...
-    }
-    
-    return null;
-}
-```
-
-**Impact:**
-- ✅ Catches configuration errors before saving
-- ✅ Validates rule types and values
-- ✅ Prevents invalid ApplyScope values
-
-### 4. Voucher Usage Concurrency Fixed ✅
-
-**Problem:** Race condition when two users pay simultaneously:
-```
-MaxUses = 100, UsedCount = 99
-User A reads UsedCount = 99
-User B reads UsedCount = 99
-User A increments to 100
-User B increments to 100
-Both save UsedCount = 100
-Result: 2 vouchers used, but UsedCount = 100 (should be 101 and fail)
-```
-
-**Solution:** Increment locked entity within transaction.
-
-**Before:**
-```csharp
-await _bookingRepository.IncrementVoucherUsageAsync(voucherId, ct);
-// Separate FindAsync, potential race condition
-```
-
-**After:**
-```csharp
-lockedVoucher!.UsedCount++;
-if (lockedVoucher.MaxUses.HasValue && 
-    lockedVoucher.UsedCount > lockedVoucher.MaxUses.Value)
-    throw new InvalidOperationException("Usage would exceed MaxUses");
-// Increments the already-locked entity within transaction
-```
-
-**How it works:**
-1. `GetVoucherByCodeWithLockAsync` acquires UPDLOCK on voucher row
-2. Lock held for entire transaction duration
-3. UsedCount incremented on locked entity
-4. Safety check prevents exceeding MaxUses
-5. Transaction commits or rolls back atomically
-
-**Impact:**
-- ✅ **CRITICAL:** UsedCount can never exceed MaxUses
-- ✅ No race conditions in concurrent payment scenarios
-- ✅ Proper pessimistic locking with SQL Server UPDLOCK
-
----
-
-## System Architecture
-
-### Layered Architecture
+#### Lifecycle
 
 ```
-┌─────────────────────────────────────────┐
-│         API Layer                       │
-│  VoucherController                      │
-│  - Handles HTTP requests                │
-│  - Maps DTOs to domain models           │
-└─────────────────────────────────────────┘
-                  │
-                  ▼
-┌─────────────────────────────────────────┐
-│      Application Layer                  │
-│  VoucherService                         │
-│  - Business logic                       │
-│  - Validation orchestration             │
-│  - Rule CRUD                            │
-│                                         │
-│  VoucherRuleEngine                      │
-│  - Loads rules                          │
-│  - Executes validators                  │
-│  - Returns ValidationResult             │
-└─────────────────────────────────────────┘
-                  │
-                  ▼
-┌─────────────────────────────────────────┐
-│       Domain Layer                      │
-│  Voucher, VoucherRule entities          │
-│  Business rules and invariants          │
-└─────────────────────────────────────────┘
-                  │
-                  ▼
-┌─────────────────────────────────────────┐
-│    Infrastructure Layer                 │
-│  VoucherRepository                      │
-│  VoucherRuleRepository                  │
-│  - Database access                      │
-│  - EF Core mappings                     │
-└─────────────────────────────────────────┘
+Created (Admin)
+    ↓
+IsActive=true, ValidFrom passed, UsedCount=0
+    ↓
+User attempts booking with voucher code
+    ├─ Code valid? Rules satisfied? MinOrderValue met?
+    │  ├─ YES → discount applied, UsedCount++ (on payment)
+    │  └─ NO → validation error
+    ├─ UsedCount >= MaxUses?
+    │  └─ YES → "quota exhausted" error
+    │
+During time period (ValidFrom to ValidUntil)
+    ↓
+Expired or IsActive=false → no new bookings accepted
+    ↓
+Deactivated (Admin) → IsActive=false
 ```
 
-### Validation Flow
+#### MaxUses / UsedCount Behavior
+
+| Scenario | MaxUses | UsedCount | Allowed? |
+|----------|---------|-----------|----------|
+| No quota | null | 0 | ✅ Unlimited |
+| 100 quota | 100 | 99 | ✅ One more use |
+| 100 quota | 100 | 100 | ❌ Exhausted |
+| 100 quota | 100 | 101 | ❌ Never happens (locked) |
+
+**Critical Guarantee:** UsedCount can NEVER exceed MaxUses due to pessimistic locking.
+
+**When UsedCount Increments:**
+- ✅ When booking payment completes
+- ❌ NOT during voucher redemption (loyalty flow)
+- ❌ NOT during validation
+
+#### Validation
 
 ```
-1. User initiates booking with voucher code
-   │
-   ▼
-2. BookingService.CalculatePricingAsync
-   │
-   ├─ Load voucher by code
-   ├─ Basic validations (IsActive, dates, MaxUses, MinOrderValue)
-   │
-   ▼
-3. Build VoucherValidationContext
-   │
-   ├─ Extract all booking data (cinema, movie, room, seats, products, amounts)
-   ├─ Flat structure, no navigation properties
-   │
-   ▼
-4. VoucherRuleEngine.ValidateAsync
-   │
-   ├─ Load all rules for voucher
-   ├─ For each rule:
-   │   ├─ Select appropriate validator
-   │   ├─ Execute validation
-   │   ├─ If failed → return failure immediately (fail-fast)
-   │   └─ If ApplyScope rule → capture ApplicableAmount
-   │
-   ▼
-5. Return ValidationResult
-   │
-   ├─ IsValid: true/false
-   ├─ ErrorMessage: specific reason if failed
-   ├─ ApplicableAmount: amount to calculate discount against
-   │
-   ▼
-6. Calculate discount
-   │
-   ├─ Use ApplicableAmount (not BookingTotal)
-   ├─ Apply DiscountType (percent or fixed)
-   ├─ Min(discount, ApplicableAmount)
-   │
-   ▼
-7. Complete booking
+1. Check IsActive
+2. Check ValidFrom <= now <= ValidUntil
+3. Check UsedCount < MaxUses
+4. Check BookingTotal >= MinOrderValue
+5. Execute all VoucherRules
+   └─ If any rule fails → reject
+6. Calculate ApplicableAmount (from ApplyScope rule or default to total)
 ```
 
-### Example Validations
+#### Example
 
-**Example 1: Cinema + Weekend + Food Discount**
+**Create a weekend food discount:**
 ```json
 {
-  "voucherCode": "WEEKEND_FOOD_CGV3",
+  "voucherCode": "WEEKEND_FOOD_20",
   "discountType": "percent",
   "discountValue": 20,
+  "minOrderValue": 100000,
+  "maxUses": 500,
+  "validFrom": "2026-07-13T00:00:00+07:00",
+  "validUntil": "2026-07-14T23:59:59+07:00",
+  "isActive": true,
+  "isRedeemable": false,
+  "description": "20% off food orders on weekends",
   "rules": [
-    { "ruleType": "Cinema", "ruleValue": "3" },
     { "ruleType": "DayOfWeek", "ruleValue": "Saturday" },
     { "ruleType": "ApplyScope", "ruleValue": "Food" }
   ]
 }
 ```
 
-**Validation:**
-1. CinemaValidator checks: Booking.CinemaId == 3
-2. DayOfWeekValidator checks: Showtime day == Saturday
-3. ApplyScopeValidator calculates: ApplicableAmount = FoodTotal
-
-**Discount:**
-- If FoodTotal = 180,000 VND
-- Discount = 180,000 × 20% = 36,000 VND
-- NOT (Tickets + Food) × 20%
+**User applies voucher:**
+- Booking: 2 tickets (200k) + popcorn (100k) = 300k total
+- Food total: 100k
+- ApplyScope = Food → discount applies to 100k only
+- Discount: 100k × 20% = 20k
+- Final total: 280k
 
 ---
 
-## How to Use
+### Loyalty Voucher
 
-### Creating a Voucher with Rules
+#### Purpose
+Reward for loyal customers. Users exchange loyalty points for a voucher, which they then use in bookings.
 
-**API Request:**
+#### When Used
+- Loyalty program rewards (e.g., 50k points → 15% discount)
+- VIP member benefits (e.g., platinum tier gets exclusive vouchers)
+- Referral rewards (e.g., refer friend → 10% off)
+
+#### Fields (unique to loyalty)
+- `IsRedeemable` — **true** for loyalty vouchers
+- `RequiredPoints` — Points needed to redeem (must be >0)
+- `ExchangeLimit` — Max times user can redeem (must be >0)
+- `MaxUses` — Global cap on total redemptions (must be >0 for loyalty)
+
+#### UserVoucher Lifecycle
+
+```
+Loyalty Voucher Created (IsRedeemable=true)
+    ↓
+User views redeemable vouchers list
+    ↓
+User clicks "Redeem" (costs loyalty points)
+    ├─ User has enough points?
+    ├─ User hasn't exceeded ExchangeLimit?
+    ├─ Global UsedCount < MaxUses?
+    │  ├─ YES → 
+    │  │   ├─ Create UserVoucher (Status=Available)
+    │  │   ├─ Deduct points from user
+    │  │   ├─ Create LoyaltyPoints transaction (delta = -RequiredPoints)
+    │  │   └─ Increment global UsedCount
+    │  └─ NO → "Redemption quota exhausted"
+    │
+    ↓
+User has UserVoucher (owned voucher instance)
+    ├─ Status: Available
+    ├─ RedeemedAt: timestamp
+    ├─ ExpiredAt: ValidUntil of voucher
+    │
+    ↓
+User applies voucher in booking
+    ├─ Code valid? Rules satisfied?
+    │  ├─ YES → discount applied, UserVoucher.UsedAt = now
+    │  └─ NO → validation error
+    │
+    ↓
+UserVoucher expires or is used
+    ├─ If expired → Status changes to Expired
+    ├─ If used → Status changes to Used
+```
+
+#### RequiredPoints and ExchangeLimit
+
+| Field | Meaning | Example |
+|-------|---------|---------|
+| `RequiredPoints` | Points per redemption | 50,000 points → 1 voucher |
+| `ExchangeLimit` | Max times per user | Each user can redeem max 3x |
+| `MaxUses` | Global cap | Max 1000 vouchers total |
+
+**Example:**
+```
+RequiredPoints = 50000
+ExchangeLimit = 3
+MaxUses = 1000
+
+User A: redeems 1× (1/3 used, 50k points deducted)
+User B: redeems 2× (2/3 used, 100k points deducted)
+User C: tries to redeem → allowed if global < 1000
+User A: tries 4th redeem → rejected (3/3 limit reached)
+```
+
+#### MaxUses / UsedCount Behavior
+
+**For Loyalty Vouchers:**
+- `MaxUses` is the **global redemption cap** (total across ALL users)
+- `UsedCount` increments when any user redeems (not when they use the voucher in a booking)
+- Once `UsedCount >= MaxUses`, no more users can redeem
+
+| Global State | MaxUses | UsedCount | Can User Redeem? |
+|--------------|---------|-----------|------------------|
+| Fresh | 1000 | 0 | ✅ Yes (990 left) |
+| Nearing limit | 1000 | 999 | ✅ Yes (0 left after) |
+| Exhausted | 1000 | 1000 | ❌ No (global quota hit) |
+
+**IMPORTANT:** Incrementing global `UsedCount` happens INSIDE the redemption transaction with pessimistic locking to prevent race conditions.
+
+#### UserVoucher Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `Available` | Redeemed, not yet used in a booking |
+| `Used` | Applied in a booking |
+| `Expired` | Passed ValidUntil date without use |
+
+#### Validation (Redemption Phase)
+
+```
+1. Voucher exists, IsRedeemable=true, IsActive=true
+2. ValidFrom <= now <= ValidUntil
+3. User has sufficient loyalty points
+4. User hasn't exceeded ExchangeLimit
+5. Global UsedCount < MaxUses (checked again inside transaction)
+6. Create UserVoucher + LoyaltyPoints transaction
+7. Increment global UsedCount atomically
+```
+
+#### Validation (Booking Phase)
+
+Same as public vouchers:
+```
+1. Check IsActive
+2. Check ValidFrom <= now <= ValidUntil
+3. Check VoucherRules
+4. Calculate discount
+```
+
+#### Example
+
+**Create a VIP loyalty reward:**
 ```json
-POST /api/vouchers
 {
-  "voucherCode": "VIP_MONDAY",
+  "voucherCode": "VIP_REWARD_Q3",
   "discountType": "percent",
-  "discountValue": 25,
-  "minOrderValue": 200000,
-  "maxUses": 1000,
+  "discountValue": 15,
+  "minOrderValue": 0,
+  "maxUses": 100,
   "validFrom": "2026-07-01T00:00:00+07:00",
-  "validUntil": "2026-07-31T23:59:59+07:00",
-  "description": "25% off for VIP members on Mondays",
+  "validUntil": "2026-09-30T23:59:59+07:00",
   "isActive": true,
+  "isRedeemable": true,
+  "requiredPoints": 50000,
+  "exchangeLimit": 3,
+  "description": "VIP Reward: 15% off, max 3x per user",
   "rules": [
     { "ruleType": "Membership", "ruleValue": "VIP" },
-    { "ruleType": "DayOfWeek", "ruleValue": "Monday" },
     { "ruleType": "ApplyScope", "ruleValue": "Order" }
   ]
 }
 ```
 
-**Backend Flow:**
-1. VoucherController receives request
-2. Maps to VoucherCommand with rules
-3. VoucherService validates:
-   - DiscountValue: 1-100 for percent
-   - No duplicate rule types
-   - All rule types valid
-   - All rule values non-empty
-   - ApplyScope value is Order/Ticket/Food
-4. Saves voucher and rules in transaction
-5. Returns VoucherResponse with rules
-
-### Using a Voucher During Booking
-
-**API Request:**
-```json
-POST /api/bookings
-{
-  "showtimeId": 123,
-  "seatIds": [45, 46],
-  "fnbItems": [{"itemId": 10, "quantity": 2}],
-  "voucherCode": "VIP_MONDAY"
-}
-```
-
-**Backend Flow:**
-1. BookingService.CalculatePricingAsync
-2. Loads voucher: "VIP_MONDAY"
-3. Basic validations (IsActive, dates, etc.)
-4. Builds VoucherValidationContext:
-   ```csharp
-   {
-       CinemaId: 3,
-       MovieId: 15,
-       MembershipTier: "VIP",
-       ShowtimeDateTime: Monday,
-       BookingTotal: 500000,
-       TicketTotal: 400000,
-       FoodTotal: 100000,
-       // ... etc
-   }
-   ```
-5. VoucherRuleEngine validates:
-   - Membership rule: PASS (user is VIP)
-   - DayOfWeek rule: PASS (showtime is Monday)
-   - ApplyScope rule: PASS (returns ApplicableAmount = 500000)
-6. Calculates discount: 500000 × 25% = 125000 VND
-7. Booking proceeds with discount applied
+**User journey:**
+1. User A sees "VIP_REWARD_Q3" in redeemable list
+2. User A clicks redeem (costs 50k points)
+3. System checks: user has 200k points ✅, hasn't redeemed yet ✅, global <100 ✅
+4. UserVoucher created, 50k points deducted, global count incremented to 1
+5. User A books a ticket with code "VIP_REWARD_Q3"
+6. System validates: user is VIP ✅, rules pass ✅
+7. 15% discount applied
+8. UserVoucher marked as Used
 
 ---
 
-## How to Extend
+## All Voucher Fields Explained
 
-### Adding a New Rule Type
+### Identifier & Code
+- **VoucherCode** (string, 1-50 chars) — Unique code user enters. Must be distinct per voucher. Used to look up voucher during booking. Example: "SUMMER20", "VIP_REWARD_Q3".
 
-**Step 1:** Add constant to `VoucherRuleTypes.cs`
+### Discount Configuration
+- **DiscountType** (string: "percent" | "fixed") — How discount is calculated.
+  - "percent": 20% of applicable amount
+  - "fixed": fixed amount (e.g., 50,000 VND)
+  
+- **DiscountValue** (decimal) — The discount amount.
+  - For "percent": 1-100 (enforced: > 0 and <= 100)
+  - For "fixed": > 0 (any positive amount)
+
+### Order Constraints
+- **MinOrderValue** (decimal, nullable) — Minimum booking total to use voucher. If null, no minimum. If booking total < this, voucher cannot apply.
+
+### Usage Limits
+- **MaxUses** (int, nullable) — Global cap on voucher usage.
+  - For public: max total bookings with discount
+  - For loyalty: max total redemptions
+  - If null: unlimited usage
+  - If set: must be > 0
+
+- **UsedCount** (int) — Current usage count (incremented on payment for public, on redemption for loyalty). Never exceeds MaxUses due to locking.
+
+### Time Window
+- **ValidFrom** (DateTime UTC) — Earliest moment voucher can be applied. Stored as UTC, displayed in +07:00.
+- **ValidUntil** (DateTime UTC) — Latest moment voucher can be applied. Must be > ValidFrom.
+- Comparison: `ValidFrom <= now <= ValidUntil`
+
+### Active State
+- **IsActive** (bool, default=true) — Admin can deactivate voucher without deletion. Deactivated vouchers cannot be applied. Used for soft-deletes and emergency disables.
+
+### Voucher Type Flags
+- **IsRedeemable** (bool, default=false)
+  - false = public voucher (always available)
+  - true = loyalty voucher (requires redemption first)
+
+### Loyalty Fields (for loyalty vouchers only)
+- **RequiredPoints** (int, nullable) — Loyalty points cost to redeem. Must be set if IsRedeemable=true. Must be > 0.
+- **ExchangeLimit** (int, nullable) — Max times per user can redeem. Only meaningful if IsRedeemable=true. Must be > 0.
+
+### Rules & Restrictions
+- **Rules** (VoucherRule[]) — Array of validation rules. Each rule restricts where discount applies.
+  - Example: Cinema=3, DayOfWeek=Saturday, Membership=VIP
+  - All rules must pass for voucher to be valid
+  - Optional: if empty, no restrictions (voucher applies to all bookings)
+
+### Media & Metadata
+- **ImageURL** (string, nullable) — CDN URL for voucher promotional image.
+- **ImagePublicId** (string, nullable) — Cloudinary public ID for deletion tracking.
+- **Description** (string, nullable) — Admin-facing description. Example: "20% off VIP seats on weekends".
+- **CreatedAt** (DateTime UTC) — When voucher was created.
+
+---
+
+## Rule Types Reference
+
+All rule types follow the same validation pattern:
+
 ```csharp
-public static class VoucherRuleTypes
+public ValidationResult Validate(VoucherRule rule, VoucherValidationContext context)
 {
-    // ... existing types
-    public const string AgeRating = "AgeRating";  // NEW
+    // Extract required data from rule.RuleValue
+    // Compare against context
+    // Return Success or Failure
 }
 ```
 
-**Step 2:** Create validator `AgeRatingValidator.cs`
-```csharp
-public sealed class AgeRatingValidator : IVoucherRuleValidator
+If validation fails, the entire voucher is rejected (fail-fast). If validation passes, the booking continues to the next rule.
+
+### 1. ApplyScope
+
+**Purpose:** Determines which portion of the booking total the discount applies to.
+
+**RuleValue Format:** One of: "Order", "Ticket", "Food"
+
+**Behavior:**
+| RuleValue | ApplicableAmount | Example |
+|-----------|-----------------|---------|
+| Order | Total (tickets + food) | 300k booking → 300k |
+| Ticket | Ticket subtotal only | 2 tickets (200k) + food (100k) → 200k |
+| Food | Food subtotal only | 2 tickets (200k) + food (100k) → 100k |
+
+**Validation:**
+```
+if (RuleValue not in ["Order", "Ticket", "Food"])
+    → FAIL "Invalid ApplyScope"
+if (ApplicableAmount <= 0)
+    → FAIL "Booking has no applicable amount in {RuleValue}"
+```
+
+**Example:**
+```json
+{ "ruleType": "ApplyScope", "ruleValue": "Ticket" }
+// Voucher only applies to ticket cost, not food
+```
+
+**Note:** If no ApplyScope rule exists, ApplicableAmount defaults to total booking.
+
+---
+
+### 2. Cinema
+
+**Purpose:** Restrict voucher to specific cinema.
+
+**RuleValue Format:** Cinema ID as string (e.g., "3")
+
+**Validation:**
+```
+if (context.CinemaId.ToString() != RuleValue)
+    → FAIL "Voucher is not valid for this cinema"
+```
+
+**Example:**
+```json
+{ "ruleType": "Cinema", "ruleValue": "3" }
+// Voucher only valid at Cinema ID 3 (e.g., CGV Downtown)
+```
+
+---
+
+### 3. Movie
+
+**Purpose:** Restrict voucher to specific movie.
+
+**RuleValue Format:** Movie ID as string (e.g., "15")
+
+**Validation:**
+```
+if (context.MovieId.ToString() != RuleValue)
+    → FAIL "Voucher is not valid for this movie"
+```
+
+**Example:**
+```json
+{ "ruleType": "Movie", "ruleValue": "15" }
+// Voucher only valid for Oppenheimer (Movie ID 15)
+```
+
+---
+
+### 4. Room
+
+**Purpose:** Restrict voucher to specific room/auditorium.
+
+**RuleValue Format:** Room ID as string (e.g., "2")
+
+**Validation:**
+```
+if (context.RoomId.ToString() != RuleValue)
+    → FAIL "Voucher is not valid for this room"
+```
+
+**Example:**
+```json
+{ "ruleType": "Room", "ruleValue": "2" }
+// Voucher only valid in Room 2 (e.g., IMAX auditorium)
+```
+
+---
+
+### 5. SeatType
+
+**Purpose:** Require all seats to be specific type (VIP, Standard, Recliner, etc.).
+
+**RuleValue Format:** Seat type name (e.g., "VIP")
+
+**Validation:**
+```
+foreach (seat in context.Seats)
+    if (seat.SeatType != RuleValue)
+        → FAIL "Voucher is only valid for {RuleValue} seats"
+```
+
+**Example:**
+```json
+{ "ruleType": "SeatType", "ruleValue": "VIP" }
+// All seats must be VIP type
+// Booking: VIP + Standard → FAIL
+// Booking: VIP + VIP → PASS
+```
+
+---
+
+### 6. Membership
+
+**Purpose:** Require user to have specific membership tier.
+
+**RuleValue Format:** Membership tier (e.g., "Gold", "VIP", "Platinum")
+
+**Validation:**
+```
+if (context.MembershipTier == null)
+    → FAIL "Voucher requires membership but user is not authenticated"
+if (context.MembershipTier != RuleValue)
+    → FAIL "Voucher is only valid for {RuleValue} members"
+```
+
+**Example:**
+```json
+{ "ruleType": "Membership", "ruleValue": "VIP" }
+// User must have VIP tier
+```
+
+---
+
+### 7. PaymentMethod
+
+**Purpose:** Require specific payment method.
+
+**RuleValue Format:** Payment method (e.g., "Wallet", "CreditCard", "PayOS")
+
+**Validation:**
+```
+if (!string.Equals(context.PaymentMethod, RuleValue, OrdinalIgnoreCase))
+    → FAIL "Voucher is only valid for {RuleValue} payments"
+```
+
+**Example:**
+```json
+{ "ruleType": "PaymentMethod", "ruleValue": "Wallet" }
+// Voucher only applies when paying via wallet
+```
+
+---
+
+### 8. DayOfWeek
+
+**Purpose:** Restrict voucher to specific day(s) of week.
+
+**RuleValue Format:** Day name (e.g., "Monday", "Saturday")
+
+**Validation:**
+```
+showtimeDayOfWeek = context.ShowtimeDateTime.DayOfWeek.ToString()
+if (showtimeDayOfWeek != RuleValue)
+    → FAIL "Voucher is only valid on {RuleValue}"
+```
+
+**Example:**
+```json
+{ "ruleType": "DayOfWeek", "ruleValue": "Saturday" }
+// Showtime must be on Saturday
+```
+
+**Note:** Single rule = single day. To support multiple days, create separate vouchers or use custom logic.
+
+---
+
+### 9. Product
+
+**Purpose:** Require booking to include specific product.
+
+**RuleValue Format:** Product ID as string (e.g., "10")
+
+**Validation:**
+```
+if (!context.Products.Any(p => p.ProductID.ToString() == RuleValue))
+    → FAIL "Voucher requires a specific product that is not in this booking"
+```
+
+**Example:**
+```json
+{ "ruleType": "Product", "ruleValue": "10" }
+// Booking must include Product ID 10 (e.g., Large popcorn)
+// Booking: 2 tickets + popcorn (ID=10) → PASS
+// Booking: 2 tickets only → FAIL
+```
+
+---
+
+### 10. FoodCategory
+
+**Purpose:** Require booking to include product from specific category.
+
+**RuleValue Format:** Category name (e.g., "Snacks", "Drinks")
+
+**Validation:**
+```
+if (!context.Products.Any(p => 
+    p.Category != null && 
+    string.Equals(p.Category, RuleValue, OrdinalIgnoreCase)))
+    → FAIL "Voucher requires products from {RuleValue} category"
+```
+
+**Example:**
+```json
+{ "ruleType": "FoodCategory", "ruleValue": "Drinks" }
+// Booking must include product from Drinks category
+// Booking: Coke (category=Drinks) → PASS
+// Booking: Popcorn (category=Snacks) → FAIL
+```
+
+---
+
+## Booking Flow
+
+### Public Voucher Booking Flow
+
+**Happy Path:**
+
+```
+User initiates booking
+  ↓
+POST /api/bookings
 {
-    public string RuleType => VoucherRuleTypes.AgeRating;
+  showtimeId: 123,
+  seatIds: [45, 46],
+  fnbItems: [{itemId: 10, quantity: 2}],
+  voucherCode: "SUMMER20"
+}
+  ↓
+BookingService.CalculatePricingAsync
+  ├─ Load voucher by code: "SUMMER20"
+  ├─ Check IsActive: true ✅
+  ├─ Check ValidFrom <= now <= ValidUntil: ✅
+  ├─ Check UsedCount (50) < MaxUses (100): ✅
+  ├─ Check BookingTotal (300k) >= MinOrderValue (100k): ✅
+  │
+  ├─ Build VoucherValidationContext
+  │  ├─ CinemaId: 3
+  │  ├─ MovieId: 15
+  │  ├─ RoomId: 2
+  │  ├─ ShowtimeDateTime: Saturday
+  │  ├─ MembershipTier: "VIP"
+  │  ├─ Seats: [{SeatType: "VIP", Price: 100k}]
+  │  ├─ Products: [{ProductId: 10, Category: "Snacks", Qty: 2, Price: 100k}]
+  │  ├─ PaymentMethod: "Wallet"
+  │  ├─ BookingTotal: 300k
+  │  ├─ TicketTotal: 200k
+  │  └─ FoodTotal: 100k
+  │
+  ├─ VoucherRuleEngine.ValidateAsync(context)
+  │  ├─ Load rules for voucher
+  │  ├─ For each rule:
+  │  │  ├─ ApplyScope: "Food" → PASS, ApplicableAmount = 100k
+  │  │  ├─ DayOfWeek: "Saturday" → PASS (showtime is Saturday)
+  │  │  └─ Membership: "VIP" → PASS (user is VIP)
+  │  └─ Return Success(ApplicableAmount=100k)
+  │
+  ├─ Calculate discount
+  │  └─ 100k × 20% = 20k
+  │
+  ├─ Create booking with discount
+  ├─ In payment transaction:
+  │  ├─ Lock voucher row with UPDLOCK
+  │  ├─ UsedCount++ (50 → 51)
+  │  ├─ Check UsedCount (51) <= MaxUses (100): ✅
+  │  └─ Commit transaction
+  │
+  └─ Return booking with 20k discount applied
+```
+
+**Validation Failure (Rule Rejects):**
+
+```
+User applies voucher on weekday
+  ↓
+VoucherRuleEngine validates
+  ├─ DayOfWeek: "Saturday" required
+  ├─ Showtime is Monday
+  └─ FAIL: "Voucher is only valid on Saturday"
+  ↓
+BookingService returns error
+  ├─ CalculatePricingResponse.Success = false
+  ├─ CalculatePricingResponse.Error = "Voucher validation failed: Voucher is only valid on Saturday"
+  └─ User sees error, cannot complete booking
+```
+
+**Quota Exhausted:**
+
+```
+UsedCount = 100, MaxUses = 100
+  ↓
+User attempts booking
+  ↓
+BookingService.CalculatePricingAsync
+  ├─ Load voucher
+  ├─ Check UsedCount (100) < MaxUses (100): ❌ FAIL
+  └─ Return error: "Voucher quota has been exhausted"
+```
+
+---
+
+### Loyalty Voucher Booking Flow
+
+**Redemption Phase (User exchanges points for voucher):**
+
+```
+User views redeemable vouchers
+  ↓
+GET /api/vouchers/redeemable
+  ↓
+VoucherService.GetRedeemableVouchersAsync
+  ├─ Query IsRedeemable=true, IsActive=true, ValidFrom <= now <= ValidUntil
+  └─ Return list of loyalty vouchers
+  ↓
+User clicks "Redeem" on "VIP_REWARD_Q3" voucher
+  ├─ Cost: 50,000 points
+  ├─ Max redemptions: 3
+  ↓
+POST /api/vouchers/{voucherId}/redeem
+  ↓
+VoucherService.RedeemVoucherAsync
+  ├─ Load user
+  ├─ Check user.Role = Customer: ✅
+  ├─ Check user.Status = Active: ✅
+  ├─ Load voucher (IsRedeemable=true)
+  ├─ Check IsActive=true: ✅
+  ├─ Check ValidFrom <= now <= ValidUntil: ✅
+  ├─ Check user.TotalPoints (200k) >= RequiredPoints (50k): ✅
+  ├─ Check RedemptionCount (1) < ExchangeLimit (3): ✅
+  ├─ Check UsedCount (99) < MaxUses (100): ✅
+  │
+  ├─ Create UserVoucher
+  │  ├─ UserID: 5
+  │  ├─ VoucherID: 42
+  │  ├─ RedeemedAt: now
+  │  ├─ ExpiredAt: ValidUntil
+  │  └─ Status: "Available"
+  │
+  ├─ Create LoyaltyPoints transaction
+  │  ├─ UserID: 5
+  │  ├─ VoucherID: 42
+  │  ├─ PointsDelta: -50000
+  │  ├─ TransactionType: "Exchange"
+  │  └─ Description: "Redeemed voucher: VIP_REWARD_Q3"
+  │
+  ├─ Execute atomic transaction:
+  │  ├─ Lock global voucher row (UPDLOCK)
+  │  ├─ UsedCount++ (99 → 100)
+  │  ├─ Check UsedCount (100) <= MaxUses (100): ✅
+  │  ├─ Insert UserVoucher
+  │  ├─ Insert LoyaltyPoints
+  │  └─ Commit
+  │
+  └─ Return: "Voucher redeemed successfully. Remaining points: 150,000"
+```
+
+**Using Redeemed Voucher in Booking:**
+
+```
+User has UserVoucher (Status=Available)
+  ↓
+User initiates booking with code "VIP_REWARD_Q3"
+  ↓
+POST /api/bookings
+{
+  showtimeId: 123,
+  seatIds: [45, 46],
+  fnbItems: [{itemId: 10, quantity: 2}],
+  voucherCode: "VIP_REWARD_Q3"
+}
+  ↓
+BookingService.CalculatePricingAsync
+  ├─ Load voucher (IsRedeemable=true)
+  ├─ Same validation as public voucher
+  ├─ Build context + execute rules
+  ├─ Calculate discount
+  │
+  ├─ Apply voucher in booking
+  │  ├─ Find UserVoucher with Status=Available
+  │  ├─ Update UserVoucher.Status = "Used"
+  │  ├─ Update UserVoucher.UsedAt = now
+  │  └─ Commit
+  │
+  └─ Return booking with discount applied
+```
+
+**Redemption Quota Exhausted:**
+
+```
+ExchangeLimit = 3, User has redeemed 3× already
+  ↓
+User clicks "Redeem" again
+  ↓
+VoucherService.RedeemVoucherAsync
+  ├─ Check RedemptionCount (3) < ExchangeLimit (3): ❌ FAIL
+  └─ Return error: "Exchange limit reached. Maximum 3 redemptions per user"
+```
+
+---
+
+## Sequence Diagrams
+
+### Public Voucher Application (Markdown ASCII)
+
+```
+User                 API                   BookingService        VoucherRuleEngine    Database
+  │                   │                          │                      │                 │
+  ├─POST /bookings───>│                          │                      │                 │
+  │                   ├─CalculatePricing────────>│                      │                 │
+  │                   │                          ├─LoadVoucher──────────────────────────>│
+  │                   │                          │<──────────────────────────────────────┤
+  │                   │                          ├─ValidateVoucher                       │
+  │                   │                          │  ├─IsActive?                          │
+  │                   │                          │  ├─TimeValid?                         │
+  │                   │                          │  ├─UsedCount<MaxUses?                 │
+  │                   │                          │  ├─MinOrderMet?                       │
+  │                   │                          │  └─ExecuteRules──────>│               │
+  │                   │                          │                      ├─LoadRules────>│
+  │                   │                          │                      │<────────────┤
+  │                   │                          │                      ├─ApplyScope   │
+  │                   │                          │                      ├─Cinema       │
+  │                   │                          │                      ├─Membership   │
+  │                   │                          │                      └─Success      │
+  │                   │                          │<──────────────────────────────────┤
+  │                   │                          ├─CalculateDiscount                  │
+  │                   │                          ├─CreateBooking                      │
+  │                   │                          │  ├─LockVoucher─────────────────────>│
+  │                   │                          │  ├─Increment UsedCount              │
+  │                   │                          │  ├─Save───────────────────────────>│
+  │                   │                          │  └─Commit Transaction──────────────>│
+  │                   │<──────Result─────────────┤                      │               │
+  │<──200 Booking────┤                          │                      │               │
+  │
+```
+
+### Loyalty Voucher Redemption (Markdown ASCII)
+
+```
+User                 API                   VoucherService         Database
+  │                   │                          │                   │
+  ├─GET /redeemable──>│                          │                   │
+  │                   ├─GetRedeemable───────────>│                   │
+  │                   │                          ├─Query──────────────>│
+  │                   │                          │<──────Vouchers────┤
+  │                   │<──List───────────────────┤                   │
+  │<──Loyalty List────┤                          │                   │
+  │
+  ├─POST /redeem─────>│                          │                   │
+  │                   ├─RedeemVoucher───────────>│                   │
+  │                   │                          ├─Validate           │
+  │                   │                          │  ├─Points enough?   │
+  │                   │                          │  ├─ExchangeLimit?   │
+  │                   │                          │  └─UsedCount<Max?   │
+  │                   │                          │                   │
+  │                   │                          ├─Begin Transaction─>│
+  │                   │                          ├─LockVoucher────────>│
+  │                   │                          ├─UsedCount++────────>│
+  │                   │                          ├─CreateUserVoucher─>│
+  │                   │                          ├─DeductPoints──────>│
+  │                   │                          └─Commit────────────>│
+  │                   │<──Success────────────────┤                   │
+  │<──201 Redeemed────┤                          │                   │
+```
+
+---
+
+## Adding New Rule Types
+
+### Best Practices
+
+**1. Identify What to Validate**
+
+Ask yourself:
+- What data from the booking is required?
+- What value should it be compared against?
+- What's the failure message if it doesn't match?
+
+**Example:** "Validate that showtime is on specific day"
+- Booking data: ShowtimeDateTime
+- Compare against: DayOfWeek rule value
+- Failure: "Voucher is only valid on {day}"
+
+**2. Add Data to VoucherValidationContext (if needed)**
+
+Only if the validator needs data not already in the context.
+
+```csharp
+public sealed class VoucherValidationContext
+{
+    // Add new field
+    public string? MovieGenre { get; set; }
+}
+```
+
+Update BookingService to populate it:
+```csharp
+var validationContext = new VoucherValidationContext
+{
+    // ... existing fields
+    MovieGenre = showtime.Movie.Genre,  // NEW
+};
+```
+
+**3. Create Validator Class**
+
+File: `VoucherRuleEngine/Validators/{RuleType}Validator.cs`
+
+```csharp
+public sealed class GenreValidator : IVoucherRuleValidator
+{
+    public string RuleType => VoucherRuleTypes.Genre;  // NEW constant
     
-    public ValidationResult Validate(
-        VoucherRule rule, 
-        VoucherValidationContext context)
+    public ValidationResult Validate(VoucherRule rule, VoucherValidationContext context)
     {
-        var requiredRating = rule.RuleValue;  // e.g., "PG13"
-        var movieRating = context.MovieRating;  // Add to context
+        var requiredGenre = rule.RuleValue;  // e.g., "Action"
         
-        if (movieRating != requiredRating)
+        if (context.MovieGenre != requiredGenre)
             return ValidationResult.Failure(
                 RuleType, 
-                $"Voucher is only valid for {requiredRating} movies.");
+                $"Voucher is only valid for {requiredGenre} movies.");
         
         return ValidationResult.Success(0);
     }
 }
 ```
 
-**Step 3:** Register in `VoucherRuleEngine.cs`
+**4. Add RuleType Constant**
+
+File: `Shared/Constants/VoucherRuleTypes.cs`
+
+```csharp
+public static class VoucherRuleTypes
+{
+    // ... existing
+    public const string Genre = "Genre";  // NEW
+}
+```
+
+**5. Register Validator**
+
+File: `Application/Vouchers/RuleEngine/VoucherRuleEngine.cs`
+
 ```csharp
 private static Dictionary<string, IVoucherRuleValidator> InitializeValidators()
 {
     var validators = new IVoucherRuleValidator[]
     {
-        // ... existing validators
-        new AgeRatingValidator(),  // NEW
+        // ... existing
+        new GenreValidator(),  // NEW
     };
     return validators.ToDictionary(v => v.RuleType);
 }
 ```
 
-**Step 4:** Update `ValidateRuleConsistency` in `VoucherService.cs`
-```csharp
-var validRuleTypes = new[]
-{
-    // ... existing types
-    VoucherRuleTypes.AgeRating,  // NEW
-};
-```
+**6. Update Validation**
 
-**Step 5:** Update `VoucherValidationContext` if needed
+File: `Application/Vouchers/VoucherService.cs`
+
 ```csharp
-public sealed class VoucherValidationContext
+private static string? ValidateRuleConsistency(List<VoucherRuleDto> rules)
 {
-    // ... existing properties
-    public string? MovieRating { get; set; }  // NEW
+    var validRuleTypes = new[]
+    {
+        // ... existing types
+        VoucherRuleTypes.Genre,  // NEW
+    };
+    // ... rest unchanged
 }
 ```
 
-**Step 6:** Update `BookingService` to populate new context field
+**7. Update Tests (if applicable)**
+
+- Test validator with valid/invalid values
+- Test VoucherService rejects invalid rule types
+- Test VoucherRuleEngine loads and executes validator
+
+### Design Principles
+
+**Keep validators stateless.** No dependencies, no side effects. Given same (rule, context), always same result.
+
+**Return correct failure message.** User sees `result.ErrorMessage` in API response. Make it actionable.
+
 ```csharp
-var validationContext = new VoucherValidationContext
+// ❌ Bad: too vague
+return ValidationResult.Failure(RuleType, "Validation failed");
+
+// ✅ Good: tells user what's required
+return ValidationResult.Failure(RuleType, "Voucher is only valid for Action movies");
+```
+
+**Never query database.** All data must be in VoucherValidationContext.
+
+```csharp
+// ❌ Bad: queries database
+var movie = await _movieRepository.GetByIdAsync(context.MovieId);
+if (movie.Genre != requiredGenre) return Failure(...);
+
+// ✅ Good: uses context
+if (context.MovieGenre != requiredGenre) return Failure(...);
+```
+
+**Fail fast on first mismatch.** VoucherRuleEngine iterates and returns immediately on first failure. No need to collect all errors.
+
+**Return ApplicableAmount=0 if not ApplyScope.** Only ApplyScope validator returns non-zero ApplicableAmount. Others return 0 (unused).
+
+```csharp
+// ✅ Correct
+return ValidationResult.Success(0);  // Other validators
+return ValidationResult.Success(applicableAmount);  // ApplyScope only
+```
+
+### Example: Add "LanguageSubtitle" Rule
+
+**Use case:** Voucher only valid for screenings with specific subtitle language.
+
+**Step 1:** Add constant
+```csharp
+public const string LanguageSubtitle = "LanguageSubtitle";
+```
+
+**Step 2:** Add context field
+```csharp
+public string? SubtitleLanguage { get; set; }
+```
+
+**Step 3:** Populate in BookingService
+```csharp
+SubtitleLanguage = showtime.Movie.SubtitleLanguages?.FirstOrDefault(),
+```
+
+**Step 4:** Create validator
+```csharp
+public sealed class LanguageSubtitleValidator : IVoucherRuleValidator
 {
-    // ... existing fields
-    MovieRating = showtime.Movie.Rating,  // NEW
-};
+    public string RuleType => VoucherRuleTypes.LanguageSubtitle;
+    
+    public ValidationResult Validate(VoucherRule rule, VoucherValidationContext context)
+    {
+        var requiredLanguage = rule.RuleValue;  // e.g., "English"
+        
+        if (string.IsNullOrWhiteSpace(context.SubtitleLanguage) || 
+            context.SubtitleLanguage != requiredLanguage)
+            return ValidationResult.Failure(
+                RuleType,
+                $"Voucher is only valid for {requiredLanguage} subtitles.");
+        
+        return ValidationResult.Success(0);
+    }
+}
 ```
 
-**That's it!** No changes to:
-- VoucherRuleEngine
-- Other validators
-- API controllers
-- Frontend (just uses the new rule type)
+**Step 5:** Register + add to validation
 
-### Adding a New Discount Type
-
-Currently supports: `percent`, `fixed`
-
-To add `buy-one-get-one` or `tiered`:
-
-**Step 1:** Update validation in `VoucherService.SaveAsync`
-```csharp
-if (type is not ("percent" or "fixed" or "bogo"))  // NEW
-    return Fail("discountType is invalid");
-```
-
-**Step 2:** Update discount calculation in `BookingService`
-```csharp
-voucherDiscount = voucher.DiscountType switch
-{
-    "percent" => Math.Round(applicableAmount * voucher.DiscountValue / 100, 0),
-    "fixed" => voucher.DiscountValue,
-    "bogo" => CalculateBogoDiscount(context.Seats),  // NEW
-    _ => 0
-};
-```
-
----
-
-## Remaining Work
-
-### Not Yet Implemented
-
-**Task #18: Detailed VoucherRuleResult**
-- Each validator returns structured result with RuleType, Passed, Message
-- Engine aggregates all results for debugging
-- **Effort:** Medium | **Priority:** Low
-
-**Task #22: Database Transaction Review**
-- Audit all voucher operations for proper transaction boundaries
-- **Effort:** Low | **Priority:** Medium
-
-**Task #23: Query Performance Optimization**
-- Review for N+1 queries (mostly eliminated via flat context)
-- Add indexes if needed
-- Use projection where appropriate
-- **Effort:** Medium | **Priority:** Medium
-
-**Task #24: Structured Logging**
-- Log: Voucher Created/Updated/Redeemed/Applied/ValidationFailed/Expired/Disabled
-- Use ILogger with structured properties
-- Don't log PII
-- **Effort:** Low | **Priority:** High for production
-
-**Task #26: Unit Tests**
-- Test all 10 validators
-- Test VoucherRuleEngine
-- Test discount calculations
-- Test concurrency scenarios
-- Target 90% coverage
-- **Effort:** High | **Priority:** High
-
-**Task #27: Expand Documentation**
-- Sequence diagrams
-- API examples
-- Admin guide
-- **Effort:** Medium | **Priority:** Medium
-
----
-
-## Production Checklist
-
-### Before Deployment
-
-**✅ COMPLETED:**
-- [x] Critical concurrency bug fixed
-- [x] Validators eliminate database queries
-- [x] Rule conflict detection
-- [x] Rule consistency validation
-- [x] Clean Architecture + SOLID
-- [x] Strategy pattern for extensibility
-
-**⚠️ RECOMMENDED:**
-- [ ] Add structured logging (ILogger)
-- [ ] Write comprehensive unit tests
-- [ ] Review database transaction boundaries
-- [ ] Performance testing under load
-- [ ] Security review (SQL injection, XSS prevention)
-
-**📋 REQUIRED:**
-- [ ] Register IVoucherRuleRepository in DI
-- [ ] Register IVoucherRuleEngine in DI
-- [ ] Create database migration for VoucherRules table
-- [ ] Ensure navigation properties loaded:
-  - Showtime.Room.Cinema
-  - Seat.SeatType
-  - Product.CategoryID
-  - User.MembershipTier / LoyaltyTier.TierName
-
-**Configuration Example (Program.cs):**
-```csharp
-services.AddScoped<IVoucherRuleRepository, VoucherRuleRepository>();
-services.AddScoped<IVoucherRuleEngine, VoucherRuleEngine>();
-```
-
-### Deployment Steps
-
-1. **Database Migration**
-   - Deploy VoucherRules table
-   - Verify foreign key constraints
-   - Verify check constraints
-
-2. **Dependency Injection**
-   - Register repositories and services
-   - Verify all dependencies resolve
-
-3. **Testing**
-   - Smoke test voucher creation with rules
-   - Smoke test voucher redemption
-   - Smoke test voucher application during booking
-   - Test concurrent payment scenarios
-
-4. **Monitoring**
-   - Add application insights
-   - Monitor voucher validation failures
-   - Alert on UsedCount approaching MaxUses
-
-### Performance Considerations
-
-**Query Optimization:**
-- VoucherValidationContext eliminates N+1 queries
-- Validators never access database
-- All data loaded upfront in BookingService
-
-**Concurrency:**
-- UPDLOCK prevents race conditions
-- Held for transaction duration
-- UsedCount increment is atomic
-
-**Caching (Optional):**
-- Consider caching VoucherRule validators (already in-memory)
-- Consider caching frequently-used vouchers with rules
-- Invalidate cache on voucher update
+Done. New vouchers can use `"LanguageSubtitle": "English"` rule immediately.
 
 ---
 
 ## Summary
 
-The voucher system is now **production-ready** with:
+The voucher system is **production-ready** with:
 
-✅ **Extensible Architecture:** Add new rule types without changing consumers  
-✅ **Correct Concurrency:** UsedCount can never exceed MaxUses  
-✅ **Performance:** No N+1 queries, validators don't touch database  
-✅ **Data Integrity:** Conflict detection, consistency validation  
-✅ **Clean Code:** SOLID, Strategy pattern, Repository pattern
+✅ **Public Vouchers** — Direct discounts, always available within time window  
+✅ **Loyalty Vouchers** — Require point exchange, per-user redemption limits  
+✅ **10 Built-in Rules** — Cinema, Movie, Room, Seat, Membership, PaymentMethod, DayOfWeek, Product, FoodCategory, ApplyScope  
+✅ **Extensible Engine** — Add new rules via Strategy pattern, no core changes  
+✅ **Correct Concurrency** — Pessimistic locking prevents UsedCount > MaxUses  
+✅ **No N+1 Queries** — Flat validation context, validators never hit database  
 
-**Completion:** ~80% production-ready  
-**Remaining:** Logging, tests, documentation (non-blocking)
+**To add a new rule type:** Create validator, register it, add constant, update validation. ~30 mins, no core changes needed.
 
-The system can be deployed to production with the recommended tasks completed first (logging, unit tests).

@@ -20,5 +20,6 @@ public sealed class CheckInHistoryResponse
         public string StaffName { get; set; } = string.Empty;
         public int SeatCount { get; set; }
         public decimal TotalAmount { get; set; }
+        public List<CheckedInSeatDto> CheckedInSeats { get; set; } = [];
     }
 }
