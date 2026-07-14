@@ -149,7 +149,7 @@ public sealed class CheckInService : ICheckInService
         var now = DateTime.UtcNow;
         var showtimeStart = booking.Showtime.StartTime;
         var earliestCheckIn = showtimeStart.AddMinutes(-30);
-        var latestCheckIn = showtimeStart.AddMinutes(15);
+        var latestCheckIn = booking.Showtime.EndTime;
 
         if (now < earliestCheckIn || now > latestCheckIn)
             return (false, "Check-in time has expired.", null, null);
