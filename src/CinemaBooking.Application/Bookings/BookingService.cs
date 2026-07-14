@@ -301,7 +301,10 @@ public sealed class BookingService : IBookingService
 
             if (reservedUserVoucher is not null)
             {
-                reservedUserVoucher.Status = UserVoucherStatus.Reserved;
+                // "Reserved for this booking" = Status stays Available + BookingID is set.
+                // The DB CHECK constraint only allows available/used/expired, so we don't
+                // introduce a fourth state; concurrent bookings are blocked by the UPDLOCK
+                // in GetAvailableForUpdateAsync plus the BookingID IS NULL read filter.
                 reservedUserVoucher.BookingID = booking.BookingID;
             }
 

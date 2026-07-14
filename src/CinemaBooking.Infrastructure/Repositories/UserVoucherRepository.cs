@@ -32,6 +32,7 @@ public sealed class UserVoucherRepository : IUserVoucherRepository
             .Where(uv => uv.UserID == userId
                 && uv.VoucherID == voucherId
                 && uv.Status == UserVoucherStatus.Available
+                && uv.BookingID == null
                 && uv.ExpiredAt >= now)
             .OrderBy(uv => uv.ExpiredAt)
             .FirstOrDefaultAsync(ct);
@@ -39,23 +40,24 @@ public sealed class UserVoucherRepository : IUserVoucherRepository
     public async Task<UserVoucher?> GetAvailableForUpdateAsync(int userId, int voucherId, CancellationToken ct) =>
         await _db.Set<UserVoucher>()
             .FromSqlRaw(
-                "SELECT * FROM UserVoucher WITH (UPDLOCK, ROWLOCK) WHERE UserID = {0} AND VoucherID = {1} AND Status = {2}",
+                "SELECT * FROM UserVoucher WITH (UPDLOCK, ROWLOCK) WHERE UserID = {0} AND VoucherID = {1} AND Status = {2} AND BookingID IS NULL",
                 userId, voucherId, UserVoucherStatus.Available)
             .OrderBy(uv => uv.ExpiredAt)
             .FirstOrDefaultAsync(ct);
 
+    // A UserVoucher is "reserved for a booking" when BookingID is set and Status is still Available.
+    // The Status column has no separate Reserved value (DB CHECK constraint disallows it).
     public async Task MarkReservedAsUsedByBookingAsync(int bookingId, DateTime usedAt, CancellationToken ct) =>
         await _db.Set<UserVoucher>()
-            .Where(uv => uv.BookingID == bookingId && uv.Status == UserVoucherStatus.Reserved)
+            .Where(uv => uv.BookingID == bookingId && uv.Status == UserVoucherStatus.Available)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(uv => uv.Status, UserVoucherStatus.Used)
                 .SetProperty(uv => uv.UsedAt, usedAt), ct);
 
     public async Task ReleaseReservedByBookingAsync(int bookingId, CancellationToken ct) =>
         await _db.Set<UserVoucher>()
-            .Where(uv => uv.BookingID == bookingId && uv.Status == UserVoucherStatus.Reserved)
+            .Where(uv => uv.BookingID == bookingId && uv.Status == UserVoucherStatus.Available)
             .ExecuteUpdateAsync(setters => setters
-                .SetProperty(uv => uv.Status, UserVoucherStatus.Available)
                 .SetProperty(uv => uv.BookingID, (int?)null), ct);
 
     public async Task<(bool Succeeded, string? Error)> RedeemVoucherAsync(
