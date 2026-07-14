@@ -242,6 +242,24 @@ public sealed class PaymentService : IPaymentService
             return payment;
         }
 
+        if (string.Equals(paymentLink.Status, "PAID", StringComparison.OrdinalIgnoreCase))
+        {
+            var completed = await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                if (!await CompletePaymentAsync(payment, null, cancellationToken))
+                    return false;
+
+                await _paymentRepository.UpdatePaymentSessionsForPaymentAsync(
+                    payment.PaymentID, "completed", cancellationToken);
+                return true;
+            }, cancellationToken);
+
+            if (completed)
+                await _notificationOutbox.EnqueueBookingSuccessAsync(payment.BookingID, cancellationToken);
+
+            return await _paymentRepository.GetPaymentByIdAsync(payment.PaymentID, cancellationToken);
+        }
+
         if (!string.Equals(paymentLink.Status, "CANCELLED", StringComparison.OrdinalIgnoreCase))
             return payment;
 
