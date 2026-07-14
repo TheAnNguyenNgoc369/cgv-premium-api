@@ -16,7 +16,15 @@ public sealed class ManagerCinemaScopeService : IManagerCinemaScopeService
         int userId,
         CancellationToken cancellationToken = default)
     {
+        return await GetAssignedCinemaIdAsync(userId, Roles.Manager, cancellationToken);
+    }
+
+    public async Task<int?> GetAssignedCinemaIdAsync(
+        int userId,
+        string role,
+        CancellationToken cancellationToken = default)
+    {
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
-        return user?.Role == Roles.Manager ? user.CinemaID : null;
+        return user?.Role == role ? user.CinemaID : null;
     }
 }

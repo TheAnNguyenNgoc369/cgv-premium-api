@@ -39,11 +39,18 @@ public sealed class ShowtimeController : ControllerBase
         [FromQuery] string? sortBy = "startTime", [FromQuery] string? sortDir = "asc",
         CancellationToken cancellationToken = default)
     {
-        var scope = await GetManagerCinemaIdAsync(cancellationToken);
+        var scope = await GetViewerCinemaIdAsync(cancellationToken);
         if (scope.Forbidden) return CinemaScopeForbidden();
+        if (scope.IsStaff)
+        {
+            if (cinemaId.HasValue && cinemaId != scope.CinemaId)
+                return CinemaScopeForbidden();
+            cinemaId = scope.CinemaId;
+        }
         var result = await _showtimeService.GetShowtimesAsync(
             movieId, cinemaId, movieName, roomName, date, status,
-            page, pageSize, sortBy, sortDir, scope.CinemaId, cancellationToken);
+            page, pageSize, sortBy, sortDir,
+            scope.IsManager ? scope.CinemaId : null, cancellationToken);
         if (!result.Succeeded)
             return result.ErrorMessage == CinemaScopeMessages.AccessDenied
                 ? CinemaScopeForbidden()
@@ -86,14 +93,20 @@ public sealed class ShowtimeController : ControllerBase
         if (!endDate.HasValue)
             return BadRequest(new { success = false, message = "endDate is required" });
 
-        var scope = await GetManagerCinemaIdAsync(cancellationToken);
+        var scope = await GetViewerCinemaIdAsync(cancellationToken);
         if (scope.Forbidden) return CinemaScopeForbidden();
+        if (scope.IsStaff)
+        {
+            if (cinemaId.HasValue && cinemaId != scope.CinemaId)
+                return CinemaScopeForbidden();
+            cinemaId = scope.CinemaId;
+        }
 
         var result = await _showtimeService.GetShowtimesByRangeAsync(
             startDate.Value,
             endDate.Value,
             cinemaId,
-            scope.CinemaId,
+            scope.IsManager ? scope.CinemaId : null,
             cancellationToken);
 
         if (!result.Succeeded)
@@ -149,12 +162,12 @@ public sealed class ShowtimeController : ControllerBase
         CancellationToken cancellationToken)
     {
         Showtime? showtime;
-        if (User.Identity?.IsAuthenticated == true && User.IsInRole(Roles.Manager))
+        var scope = await GetViewerCinemaIdAsync(cancellationToken);
+        if (scope.Forbidden) return CinemaScopeForbidden();
+        if (scope.CinemaId.HasValue)
         {
-            var managerCinemaId = await GetRequiredManagerCinemaIdAsync(cancellationToken);
-            if (!managerCinemaId.HasValue) return CinemaScopeForbidden();
             showtime = await _showtimeService.GetManagedShowtimeByIdAsync(id, cancellationToken);
-            if (showtime is not null && showtime.Room.CinemaID != managerCinemaId)
+            if (showtime is not null && showtime.Room.CinemaID != scope.CinemaId.Value)
                 return CinemaScopeForbidden();
         }
         else
@@ -174,11 +187,17 @@ public sealed class ShowtimeController : ControllerBase
         int showtimeId,
         CancellationToken cancellationToken)
     {
-        var result = await _showtimeService.GetSeatMapAsync(showtimeId, cancellationToken);
+        var scope = await GetViewerCinemaIdAsync(cancellationToken);
+        if (scope.Forbidden) return CinemaScopeForbidden();
+
+        var result = await _showtimeService.GetSeatMapAsync(
+            showtimeId, scope.CinemaId, cancellationToken);
 
         if (result.SeatMap is null)
             return result.ErrorMessage == "Showtime not found."
                 ? NotFound(new { success = false, message = result.ErrorMessage })
+                : result.ErrorMessage == CinemaScopeMessages.AccessDenied
+                    ? CinemaScopeForbidden()
                 : BadRequest(new { success = false, message = result.ErrorMessage });
 
         return Ok(result.SeatMap);
@@ -229,20 +248,44 @@ public sealed class ShowtimeController : ControllerBase
         _ => BadRequest(new { success = false, message })
     };
 
-    private async Task<(bool Forbidden, int? CinemaId)> GetManagerCinemaIdAsync(
-        CancellationToken cancellationToken)
-    {
-        if (User.Identity?.IsAuthenticated != true || !User.IsInRole(Roles.Manager))
-            return (false, null);
-        var cinemaId = await GetRequiredManagerCinemaIdAsync(cancellationToken);
-        return (!cinemaId.HasValue, cinemaId);
-    }
-
     private async Task<int?> GetRequiredManagerCinemaIdAsync(CancellationToken cancellationToken)
     {
         return int.TryParse(User.FindFirst("userId")?.Value, out var userId)
             ? await _managerCinemaScopeService.GetAssignedCinemaIdAsync(userId, cancellationToken)
             : null;
+    }
+
+    private async Task<(bool Forbidden, int? CinemaId, bool IsManager, bool IsStaff)> GetViewerCinemaIdAsync(
+        CancellationToken cancellationToken)
+    {
+        if (User.Identity?.IsAuthenticated != true)
+            return (false, null, false, false);
+
+        if (User.IsInRole(Roles.Manager))
+        {
+            var scope = await GetRoleCinemaIdAsync(Roles.Manager, cancellationToken);
+            return (scope.Forbidden, scope.CinemaId, true, false);
+        }
+
+        if (User.IsInRole(Roles.Staff))
+        {
+            var scope = await GetRoleCinemaIdAsync(Roles.Staff, cancellationToken);
+            return (scope.Forbidden, scope.CinemaId, false, true);
+        }
+
+        return (false, null, false, false);
+    }
+
+    private async Task<(bool Forbidden, int? CinemaId)> GetRoleCinemaIdAsync(
+        string role,
+        CancellationToken cancellationToken)
+    {
+        if (!int.TryParse(User.FindFirst("userId")?.Value, out var userId))
+            return (true, null);
+
+        var cinemaId = await _managerCinemaScopeService.GetAssignedCinemaIdAsync(
+            userId, role, cancellationToken);
+        return (!cinemaId.HasValue, cinemaId);
     }
 
     private ObjectResult CinemaScopeForbidden() =>

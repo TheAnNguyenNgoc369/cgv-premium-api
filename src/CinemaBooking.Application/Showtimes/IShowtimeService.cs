@@ -45,6 +45,7 @@ public interface IShowtimeService
 
     Task<(SeatMapResult? SeatMap, string? ErrorMessage)> GetSeatMapAsync(
         int showtimeId,
+        int? viewerCinemaId = null,
         CancellationToken cancellationToken = default);
 
     string GetDisplayStatus(Showtime showtime, DateTime now);

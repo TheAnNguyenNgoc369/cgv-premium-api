@@ -40,6 +40,9 @@ public sealed class RoomControllerScopeTests
     {
         public Task<int?> GetAssignedCinemaIdAsync(
             int userId, CancellationToken cancellationToken = default) => Task.FromResult(cinemaId);
+
+        public Task<int?> GetAssignedCinemaIdAsync(
+            int userId, string role, CancellationToken cancellationToken = default) => Task.FromResult(cinemaId);
     }
 
     private sealed class StubRoomService(Room room) : IRoomService
