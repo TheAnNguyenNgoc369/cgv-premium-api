@@ -91,12 +91,14 @@ public sealed class VoucherController : ControllerBase
     private static VoucherCommand Command(VoucherRequest r) => new(r.VoucherCode, r.DiscountType,
         r.DiscountValue, r.MinOrderValue, r.MaxUses, r.ValidFrom!.Value, r.ValidUntil!.Value, r.Description, r.IsActive,
         r.ImageUrl, r.ImagePublicId,
-        r.Rules?.Select(rule => new VoucherRuleDto(rule.RuleType, rule.RuleValue)).ToList());
+        r.Rules?.Select(rule => new VoucherRuleDto(rule.RuleType, rule.RuleValue)).ToList(),
+        r.IsRedeemable, r.RequiredPoints, r.ExchangeLimit);
     private static VoucherResponse Map(Voucher v) => Map(v, DateTime.UtcNow);
     private static VoucherResponse Map(Voucher v, DateTime currentTime) => new(v.VoucherID, v.VoucherCode, v.DiscountType,
         v.DiscountValue, v.MinOrderValue, v.MaxUses, v.UsedCount, VietnamTime.FromUtc(v.ValidFrom),
         VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description, v.IsActive, Status(v, currentTime), v.CreatedAt,
-        v.VoucherRules?.Select(r => new VoucherRuleResponse(r.RuleID, r.RuleType, r.RuleValue, r.CreatedAt)).ToList());
+        v.VoucherRules?.Select(r => new VoucherRuleResponse(r.RuleID, r.RuleType, r.RuleValue, r.CreatedAt)).ToList(),
+        v.IsRedeemable, v.RequiredPoints, v.ExchangeLimit);
     private static RedeemableVoucherResponse MapRedeemable(Voucher v) => new(v.VoucherID, v.VoucherCode,
         v.DiscountType, v.DiscountValue, v.RequiredPoints!.Value, v.ExchangeLimit,
         VietnamTime.FromUtc(v.ValidFrom), VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description);

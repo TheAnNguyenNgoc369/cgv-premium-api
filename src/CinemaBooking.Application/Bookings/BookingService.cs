@@ -270,7 +270,12 @@ public sealed class BookingService : IBookingService
                 if (now > lockedVoucher.ValidUntil)
                     throw new InvalidOperationException("Voucher has expired.");
 
-                if (lockedVoucher.MaxUses.HasValue && lockedVoucher.UsedCount >= lockedVoucher.MaxUses.Value)
+                // Public voucher: MaxUses gates booking consumption (the "use" step).
+                // Loyalty voucher: MaxUses is enforced at redeem time; the UserVoucher itself
+                // is the proof of entitlement and booking neither reads nor writes UsedCount.
+                if (!lockedVoucher.IsRedeemable
+                    && lockedVoucher.MaxUses.HasValue
+                    && lockedVoucher.UsedCount >= lockedVoucher.MaxUses.Value)
                     throw new InvalidOperationException("Voucher usage limit has been reached.");
             }
 
@@ -292,12 +297,10 @@ public sealed class BookingService : IBookingService
             await _bookingRepository.MarkHoldsAsConfirmedAsync(
                 lockedRequestedHolds, booking.BookingID, cancellationToken);
 
-            if (bookingVoucher is not null)
-            {
-                lockedVoucher!.UsedCount++;
-                if (lockedVoucher.MaxUses.HasValue && lockedVoucher.UsedCount > lockedVoucher.MaxUses.Value)
-                    throw new InvalidOperationException("Voucher usage would exceed MaxUses limit.");
-            }
+            // Voucher.UsedCount is intentionally NOT modified here:
+            //   Public  -> bumped on payment success (see PaymentService.FinalizeSuccessfulBookingAsync)
+            //   Loyalty -> bumped at redeem (see UserVoucherRepository.RedeemVoucherAsync);
+            //              booking must never touch Voucher.UsedCount for loyalty vouchers.
 
             if (reservedUserVoucher is not null)
             {
@@ -458,7 +461,11 @@ public sealed class BookingService : IBookingService
             if (now > voucher.ValidUntil)
                 return (false, "Voucher has expired.", null);
 
-            if (voucher.MaxUses.HasValue && voucher.UsedCount >= voucher.MaxUses.Value)
+            // Public voucher only: MaxUses gates booking use. For loyalty vouchers, MaxUses is
+            // enforced at redeem; the presence of an owned UserVoucher is the entitlement check.
+            if (!voucher.IsRedeemable
+                && voucher.MaxUses.HasValue
+                && voucher.UsedCount >= voucher.MaxUses.Value)
                 return (false, "Voucher usage limit has been reached.", null);
 
             if (voucher.MinOrderValue.HasValue && totalBeforeDiscount < voucher.MinOrderValue.Value)

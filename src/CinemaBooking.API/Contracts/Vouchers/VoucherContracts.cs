@@ -19,13 +19,20 @@ public sealed class VoucherRequest
     [MaxLength(500)] public string? ImageUrl { get; set; }
     [MaxLength(200)] public string? ImagePublicId { get; set; }
 
+    // Voucher type discriminator.
+    // false (default) => Public voucher: usable via VoucherCode; RequiredPoints & ExchangeLimit must be null.
+    // true            => Loyalty voucher: must be redeemed with points; RequiredPoints > 0 and ExchangeLimit > 0.
+    public bool IsRedeemable { get; set; }
+    [Range(1, int.MaxValue)] public int? RequiredPoints { get; set; }
+    [Range(1, int.MaxValue)] public int? ExchangeLimit { get; set; }
+
     public List<VoucherRuleRequest>? Rules { get; set; }
 }
 
 public sealed record VoucherResponse(int VoucherId, string VoucherCode, string DiscountType,
     decimal DiscountValue, decimal? MinOrderValue, int? MaxUses, int UsedCount, DateTimeOffset ValidFrom,
     DateTimeOffset ValidUntil, string? ImageUrl, string? Description, bool IsActive, string Status, DateTime CreatedAt,
-    List<VoucherRuleResponse>? Rules);
+    List<VoucherRuleResponse>? Rules, bool IsRedeemable, int? RequiredPoints, int? ExchangeLimit);
 public sealed record VoucherPageResponse(IReadOnlyList<VoucherResponse> Items, int PageIndex, int PageSize, int TotalItems, int TotalPages);
 
 public sealed record RedeemableVoucherResponse(

@@ -31,19 +31,59 @@ public sealed class VoucherService : IVoucherService
 
     private async Task<VoucherResult> SaveAsync(int adminId, int? id, VoucherCommand c, string? ip, CancellationToken ct)
     {
+        // Basic voucher validation.
         var code = c.VoucherCode?.Trim().ToUpperInvariant();
-        if (string.IsNullOrWhiteSpace(code)) return Fail("voucherCode is required and cannot be null.");
-        if (code.Length > 50) return Fail("voucherCode is invalid. Maximum length is 50 characters.");
-        var type = c.DiscountType?.Trim().ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(type)) return Fail("discountType is required and cannot be null.");
-        if (type is not ("percent" or "fixed")) return Fail("discountType is invalid. Allowed values: percent, fixed.");
-        if (c.DiscountValue < 0 || type == "percent" && (c.DiscountValue < 1 || c.DiscountValue > 100)) return Fail("discountValue must be between 1-100 for percent or >= 0 for fixed.");
-        if (c.MinOrderValue < 0) return Fail("MinOrderValue must be greater than or equal to 0.");
-        if (c.MaxUses <= 0) return Fail("maxUses must be greater than 0.");
-        if (c.ValidFrom.Offset != TimeSpan.FromHours(7)) return Fail("validFrom is invalid. Use ISO 8601 format with +07:00.");
-        if (c.ValidUntil.Offset != TimeSpan.FromHours(7)) return Fail("validUntil is invalid. Use ISO 8601 format with +07:00.");
-        if (c.ValidFrom >= c.ValidUntil) return Fail("validUntil must be a date after validFrom (ISO 8601 format with +07:00).");
+        if (string.IsNullOrWhiteSpace(code)) return Fail("Voucher code is required.");
+        if (code.Length > 50) return Fail("Voucher code must not exceed 50 characters.");
 
+        var type = c.DiscountType?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(type)) return Fail("Discount type is required.");
+        if (type is not ("percent" or "fixed")) return Fail("Discount type must be either 'percent' or 'fixed'.");
+
+        // DiscountValue validation per type.
+        if (type == "percent")
+        {
+            if (c.DiscountValue <= 0 || c.DiscountValue > 100)
+                return Fail("Discount percent must be between 0 (exclusive) and 100 (inclusive).");
+        }
+        else // fixed
+        {
+            if (c.DiscountValue <= 0)
+                return Fail("Discount amount must be greater than 0.");
+        }
+
+        // MinOrderValue and MaxUses validation.
+        if (c.MinOrderValue.HasValue && c.MinOrderValue.Value < 0)
+            return Fail("Minimum order value must be greater than or equal to 0.");
+        if (c.MaxUses.HasValue && c.MaxUses.Value <= 0)
+            return Fail("Maximum uses must be greater than 0.");
+
+        // ValidFrom and ValidUntil validation.
+        if (c.ValidFrom.Offset != TimeSpan.FromHours(7)) return Fail("ValidFrom must be in +07:00 timezone.");
+        if (c.ValidUntil.Offset != TimeSpan.FromHours(7)) return Fail("ValidUntil must be in +07:00 timezone.");
+        if (c.ValidFrom >= c.ValidUntil) return Fail("ValidFrom must be before ValidUntil.");
+
+        // Voucher type rules: public vs loyalty. RequiredPoints & ExchangeLimit are only
+        // meaningful for loyalty (IsRedeemable=true) vouchers; loyalty vouchers must also
+        // declare an explicit MaxUses (the global redemption cap).
+        if (c.IsRedeemable)
+        {
+            if (!c.MaxUses.HasValue || c.MaxUses.Value <= 0)
+                return Fail("Loyalty voucher must have maxUses greater than 0.");
+            if (!c.RequiredPoints.HasValue || c.RequiredPoints.Value <= 0)
+                return Fail("Loyalty voucher must have requiredPoints greater than 0.");
+            if (!c.ExchangeLimit.HasValue || c.ExchangeLimit.Value <= 0)
+                return Fail("Loyalty voucher must have exchangeLimit greater than 0.");
+        }
+        else
+        {
+            if (c.RequiredPoints.HasValue)
+                return Fail("Public voucher must have requiredPoints as null.");
+            if (c.ExchangeLimit.HasValue)
+                return Fail("Public voucher must have exchangeLimit as null.");
+        }
+
+        // Rules validation.
         if (c.Rules is not null && c.Rules.Any())
         {
             var conflictError = ValidateRuleConflicts(c.Rules);
@@ -53,22 +93,48 @@ public sealed class VoucherService : IVoucherService
             if (consistencyError is not null) return Fail(consistencyError);
         }
 
+        // Database checks.
         Voucher? existing = null;
-        if (id.HasValue) { existing = await _repository.GetByIdAsync(id.Value, ct); if (existing is null) return new(false, "Voucher not found", null, "not_found"); }
+        if (id.HasValue)
+        {
+            existing = await _repository.GetByIdAsync(id.Value, ct);
+            if (existing is null) return new(false, "Voucher not found.", null, "not_found");
+        }
+
         if (existing is not null && !string.Equals(existing.VoucherCode, code, StringComparison.OrdinalIgnoreCase)
-            && await _repository.HasTransactionsAsync(existing.VoucherID, ct)) return new(false, "VoucherCode cannot be changed after transactions exist", null, "conflict");
-        if (await _repository.CodeExistsAsync(code, id, ct)) return new(false, "VoucherCode already exists", null, "conflict");
-        if (existing is not null && c.MaxUses.HasValue && c.MaxUses < existing.UsedCount) return Fail("MaxUses cannot be less than UsedCount");
+            && await _repository.HasTransactionsAsync(existing.VoucherID, ct))
+            return new(false, "Voucher code cannot be changed after transactions exist.", null, "conflict");
+
+        if (await _repository.CodeExistsAsync(code, id, ct))
+            return new(false, "Voucher code already exists.", null, "conflict");
+
+        if (existing is not null && c.MaxUses.HasValue && c.MaxUses < existing.UsedCount)
+            return Fail("MaxUses cannot be less than current UsedCount.");
 
         var voucher = existing ?? new Voucher { UsedCount = 0, CreatedAt = DateTime.UtcNow };
         var oldPublicId = existing?.ImagePublicId;
         var newImageUrl = string.IsNullOrWhiteSpace(c.ImageUrl) ? null : c.ImageUrl.Trim();
         var newPublicId = string.IsNullOrWhiteSpace(c.ImagePublicId) ? null : c.ImagePublicId.Trim();
-        voucher.VoucherCode = code; voucher.DiscountType = type;
-        voucher.DiscountValue = c.DiscountValue; voucher.MinOrderValue = c.MinOrderValue; voucher.MaxUses = c.MaxUses;
-        voucher.ValidFrom = c.ValidFrom.UtcDateTime; voucher.ValidUntil = c.ValidUntil.UtcDateTime;
-        voucher.Description = c.Description?.Trim(); voucher.IsActive = c.IsActive;
-        if (newImageUrl is not null) { voucher.ImageURL = newImageUrl; voucher.ImagePublicId = newPublicId; }
+
+        voucher.VoucherCode = code;
+        voucher.DiscountType = type;
+        voucher.DiscountValue = c.DiscountValue;
+        voucher.MinOrderValue = c.MinOrderValue;
+        voucher.MaxUses = c.MaxUses;
+        voucher.ValidFrom = c.ValidFrom.UtcDateTime;
+        voucher.ValidUntil = c.ValidUntil.UtcDateTime;
+        voucher.Description = c.Description?.Trim();
+        voucher.IsActive = c.IsActive;
+        voucher.IsRedeemable = c.IsRedeemable;
+        voucher.RequiredPoints = c.IsRedeemable ? c.RequiredPoints : null;
+        voucher.ExchangeLimit = c.IsRedeemable ? c.ExchangeLimit : null;
+
+        if (newImageUrl is not null)
+        {
+            voucher.ImageURL = newImageUrl;
+            voucher.ImagePublicId = newPublicId;
+        }
+
         var log = Log(adminId, id is null ? AdminActionTypes.CreateVoucher : AdminActionTypes.UpdateVoucher, id, ip);
         var newRules = (c.Rules ?? []).Select(ruleDto => new VoucherRule
         {
@@ -76,8 +142,10 @@ public sealed class VoucherService : IVoucherService
             RuleValue = ruleDto.RuleValue,
             CreatedAt = DateTime.UtcNow
         }).ToList();
+
         // Upsert voucher + replace rules + audit log in ONE transaction (rolls back on failure).
         voucher = await _repository.SaveWithRulesAsync(voucher, id is null, newRules, log, ct);
+
         // Delete the old Cloudinary image only after the DB commit succeeded and the caller
         // actually attached a new image with a different public id.
         var replacedImage = newPublicId is not null && !string.IsNullOrWhiteSpace(oldPublicId)
@@ -124,6 +192,11 @@ public sealed class VoucherService : IVoucherService
         if (now < voucher.ValidFrom) return new(false, 0, string.Empty, "Voucher is not yet valid", "validation");
         if (now > voucher.ValidUntil) return new(false, 0, string.Empty, "Voucher has expired", "validation");
 
+        // Global cap: total redeemed UserVouchers cannot exceed MaxUses. Re-checked
+        // inside the redeem transaction against a locked counter.
+        if (voucher.MaxUses.HasValue && voucher.UsedCount >= voucher.MaxUses.Value)
+            return new(false, user.TotalPoints, string.Empty, "Voucher redemption limit has been reached.", "validation");
+
         if (user.TotalPoints < voucher.RequiredPoints.Value)
             return new(false, user.TotalPoints, string.Empty, $"Insufficient points. Required: {voucher.RequiredPoints.Value}, Available: {user.TotalPoints}", "validation");
 
@@ -166,7 +239,8 @@ public sealed class VoucherService : IVoucherService
         try
         {
             var (succeeded, error) = await _userVoucherRepository.RedeemVoucherAsync(
-                userVoucher, loyaltyPoint, voucher.RequiredPoints.Value, voucher.ExchangeLimit, log, ct);
+                userVoucher, loyaltyPoint, voucher.RequiredPoints.Value,
+                voucher.MaxUses, voucher.ExchangeLimit, log, ct);
             if (!succeeded)
                 return new(false, user.TotalPoints, string.Empty, error ?? "Failed to redeem voucher", "validation");
             return new(true, user.TotalPoints - voucher.RequiredPoints.Value, voucher.VoucherCode);

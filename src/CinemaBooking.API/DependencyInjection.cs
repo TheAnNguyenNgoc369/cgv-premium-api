@@ -115,6 +115,7 @@ public static class DependencyInjection
         {
             options.SchemaFilter<AuthRequestSchemaFilter>();
             options.SchemaFilter<ShowtimeRequestSchemaFilter>();
+            options.SchemaFilter<VoucherRequestSchemaFilter>();
 
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
