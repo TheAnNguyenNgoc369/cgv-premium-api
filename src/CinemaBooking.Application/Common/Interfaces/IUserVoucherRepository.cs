@@ -7,14 +7,16 @@ public interface IUserVoucherRepository
     Task<List<UserVoucher>> GetUserVouchersAsync(int userId, CancellationToken cancellationToken);
     Task<UserVoucher?> GetByIdAsync(int userVoucherId, CancellationToken cancellationToken);
     /// <summary>
-    /// Concurrency-safe redemption. Locks the user row, re-validates points, exchange limit and
-    /// voucher validity INSIDE the transaction, then deducts points and creates the UserVoucher.
-    /// Returns (false, error) on a failed re-check without mutating state.
+    /// Concurrency-safe redemption. Locks the user AND voucher rows, re-validates points,
+    /// MaxUses (global redemption cap), exchange limit (per-user cap) and voucher validity
+    /// INSIDE the transaction, then deducts points, creates the UserVoucher and bumps
+    /// Voucher.UsedCount. Returns (false, error) on a failed re-check without mutating state.
     /// </summary>
     Task<(bool Succeeded, string? Error)> RedeemVoucherAsync(
         UserVoucher userVoucher,
         LoyaltyPoints loyaltyPoint,
         int pointsToDeduct,
+        int? maxUses,
         int? exchangeLimit,
         AdminActionLog log,
         CancellationToken cancellationToken);

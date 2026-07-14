@@ -77,11 +77,12 @@ public sealed class SeatHoldExpirationJob : BackgroundService
 
             foreach (var booking in bookings)
             {
-                // Optimistic concurrency guard: re-check booking status with a row lock.
-                // Between the SELECT above and this mutation, a concurrent payment webhook
-                // may have flipped Pending -> Paid. Rolling back UsedCount then would
-                // corrupt a successfully-used voucher. UPDLOCK serialises us against the
-                // payment transaction so exactly one side wins.
+                // Concurrency guard: re-check booking status with a row lock before releasing
+                // the voucher reservation. A concurrent payment webhook may have flipped
+                // Pending -> Paid; in that case we must leave the UserVoucher marked Used.
+                // Voucher.UsedCount is not touched here: for public vouchers it is only
+                // incremented on payment success, for loyalty it is incremented at redeem —
+                // an expired booking never contributed to the counter.
                 var currentStatus = await dbContext.Bookings
                     .FromSqlRaw("SELECT * FROM Booking WITH (UPDLOCK, ROWLOCK) WHERE BookingID = {0}",
                         booking.BookingID)
@@ -100,12 +101,7 @@ public sealed class SeatHoldExpirationJob : BackgroundService
 
                 if (booking.BookingVoucher is not null)
                 {
-                    var voucher = await dbContext.Vouchers.FindAsync(
-                        new object[] { booking.BookingVoucher.VoucherID }, cancellationToken);
-                    if (voucher is not null && voucher.UsedCount > 0)
-                        voucher.UsedCount--;
-
-                    // Redeemable voucher: release the personal reservation by clearing BookingID.
+                    // Loyalty voucher: release the personal reservation by clearing BookingID.
                     // Filter on Status == Available so a concurrently-Used voucher stays Used.
                     // (A "reserved" UserVoucher is one where BookingID is set and Status is still Available;
                     //  the CHECK constraint on Status has no separate Reserved value.)

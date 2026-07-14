@@ -24,6 +24,7 @@ public sealed class PaymentService : IPaymentService
     private readonly INotificationOutbox _notificationOutbox;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserVoucherRepository _userVoucherRepository;
+    private readonly IVoucherRepository _voucherRepository;
 
     public PaymentService(
         IPaymentRepository paymentRepository,
@@ -34,7 +35,8 @@ public sealed class PaymentService : IPaymentService
         ITicketService ticketService,
         INotificationOutbox notificationOutbox,
         IUnitOfWork unitOfWork,
-        IUserVoucherRepository userVoucherRepository)
+        IUserVoucherRepository userVoucherRepository,
+        IVoucherRepository voucherRepository)
     {
         _paymentRepository = paymentRepository;
         _walletRepository = walletRepository;
@@ -45,6 +47,7 @@ public sealed class PaymentService : IPaymentService
         _notificationOutbox = notificationOutbox;
         _unitOfWork = unitOfWork;
         _userVoucherRepository = userVoucherRepository;
+        _voucherRepository = voucherRepository;
     }
 
     public async Task<PaymentOperationResult> InitiatePaymentAsync(
@@ -459,6 +462,12 @@ public sealed class PaymentService : IPaymentService
     {
         await _bookingRepository.UpdateBookingStatusAsync(
             booking.BookingID, BookingStatus.Paid, cancellationToken);
+
+        // Public voucher: bump the global UsedCount now that the booking is Paid. The repo
+        // filters on IsRedeemable = 0 so loyalty vouchers (which are counted at redeem time)
+        // are untouched — and so is any booking without a voucher.
+        await _voucherRepository.IncrementPublicVoucherUsageForBookingAsync(
+            booking.BookingID, cancellationToken);
 
         // Redeemable voucher: reserved -> used. No-op for non-redeemable bookings.
         await _userVoucherRepository.MarkReservedAsUsedByBookingAsync(

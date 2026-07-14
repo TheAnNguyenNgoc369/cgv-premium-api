@@ -7,7 +7,8 @@ public sealed record VoucherPage(IReadOnlyList<Voucher> Items, int PageIndex, in
 public sealed record VoucherCommand(
     string VoucherCode, string DiscountType, decimal DiscountValue,
     decimal? MinOrderValue, int? MaxUses, DateTimeOffset ValidFrom, DateTimeOffset ValidUntil,
-    string? Description, bool IsActive, string? ImageUrl, string? ImagePublicId, List<VoucherRuleDto>? Rules);
+    string? Description, bool IsActive, string? ImageUrl, string? ImagePublicId, List<VoucherRuleDto>? Rules,
+    bool IsRedeemable = false, int? RequiredPoints = null, int? ExchangeLimit = null);
 
 public sealed record VoucherRuleDto(
     string RuleType,
