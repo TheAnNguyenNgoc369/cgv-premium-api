@@ -201,11 +201,19 @@ public static class DependencyInjection
             .Validate(settings => Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri)
                 && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp),
                 "Frontend:BaseUrl must be an absolute HTTP or HTTPS URL.")
+            .Validate(settings => settings.AllowedOrigins.All(origin =>
+                Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)),
+                "Frontend:AllowedOrigins entries must be absolute HTTP or HTTPS URLs.")
             .ValidateOnStart();
 
         services.AddOptions<PayOSSettings>()
             .Bind(configuration.GetRequiredSection(PayOSSettings.SectionName))
             .ValidateDataAnnotations()
+            .Validate(settings => IsOptionalHttpUrl(settings.ReturnUrl),
+                "PayOS:ReturnUrl must be empty or an absolute HTTP or HTTPS URL.")
+            .Validate(settings => IsOptionalHttpUrl(settings.CancelUrl),
+                "PayOS:CancelUrl must be empty or an absolute HTTP or HTTPS URL.")
             .ValidateOnStart();
 
         var jwtSettings = configuration
@@ -295,5 +303,12 @@ public static class DependencyInjection
             QueueLimit = 0,
             Window = TimeSpan.FromMinutes(1)
         };
+    }
+
+    private static bool IsOptionalHttpUrl(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            || (Uri.TryCreate(value, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp));
     }
 }

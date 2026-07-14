@@ -284,10 +284,14 @@ public sealed class ShowtimeService : IShowtimeService
         _showtimeRepository.GetManagedShowtimeByIdAsync(id, cancellationToken);
 
     public async Task<(SeatMapResult? SeatMap, string? ErrorMessage)> GetSeatMapAsync(
-        int showtimeId, CancellationToken cancellationToken = default)
+        int showtimeId,
+        int? viewerCinemaId = null,
+        CancellationToken cancellationToken = default)
     {
         var showtime = await _showtimeRepository.GetShowtimeByIdAsync(showtimeId, cancellationToken);
         if (showtime is null) return (null, "Showtime not found.");
+        if (viewerCinemaId.HasValue && showtime.Room.CinemaID != viewerCinemaId.Value)
+            return (null, CinemaScopeMessages.AccessDenied);
         if (showtime.Status != "scheduled")
             return (null, "This showtime is not scheduled and its seat map is unavailable.");
         if (showtime.Room.Status != "active")

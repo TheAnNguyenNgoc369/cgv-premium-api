@@ -8,6 +8,7 @@ public interface IPayOSService
         int amount,
         string description,
         DateTime expiresAt,
+        string? backendOrigin = null,
         CancellationToken cancellationToken = default);
 
     Task<PayOSVerifiedWebhookData> VerifyWebhookAsync(
@@ -16,5 +17,8 @@ public interface IPayOSService
 
     Task<PayOSPaymentLinkStatusResult> GetPaymentLinkStatusAsync(
         long orderCode,
+        CancellationToken cancellationToken = default);
+
+    Task ConfirmConfiguredWebhookAsync(
         CancellationToken cancellationToken = default);
 }

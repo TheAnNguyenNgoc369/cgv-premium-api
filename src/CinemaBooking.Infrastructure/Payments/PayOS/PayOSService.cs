@@ -9,6 +9,9 @@ namespace CinemaBooking.Infrastructure.Payments.PayOS;
 
 public sealed class PayOSService : IPayOSService
 {
+    private const string DefaultReturnPath = "payment/result";
+    private const string DefaultCancelPath = "payment/cancel";
+
     private readonly PayOSSettings _settings;
     private readonly FrontendSettings _frontendSettings;
 
@@ -24,11 +27,12 @@ public sealed class PayOSService : IPayOSService
         int amount,
         string description,
         DateTime expiresAt,
+        string? backendOrigin = null,
         CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var returnUrl = ResolveRedirectUrl(_settings.ReturnUrl, "payment/success");
-        var cancelUrl = ResolveRedirectUrl(_settings.CancelUrl, "payment/cancel");
+        var returnUrl = ResolveRedirectUrl(_settings.ReturnUrl, DefaultReturnPath, backendOrigin);
+        var cancelUrl = ResolveRedirectUrl(_settings.CancelUrl, DefaultCancelPath, backendOrigin);
         var response = await client.PaymentRequests.CreateAsync(new CreatePaymentLinkRequest
         {
             OrderCode = orderCode,
@@ -96,6 +100,16 @@ public sealed class PayOSService : IPayOSService
         return new PayOSPaymentLinkStatusResult(paymentLink.Status.ToString());
     }
 
+    public async Task ConfirmConfiguredWebhookAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_settings.WebhookUrl))
+            return;
+
+        var client = CreateClient();
+        await client.Webhooks.ConfirmAsync(_settings.WebhookUrl);
+    }
+
     private PayOSClient CreateClient()
     {
         if (string.IsNullOrWhiteSpace(_settings.ClientId)
@@ -107,12 +121,23 @@ public sealed class PayOSService : IPayOSService
         return new PayOSClient(_settings.ClientId, _settings.ApiKey, _settings.ChecksumKey);
     }
 
-    private string ResolveRedirectUrl(string configuredUrl, string frontendPath)
+    internal string ResolveRedirectUrl(string configuredUrl, string frontendPath, string? backendOrigin = null)
     {
         if (!string.IsNullOrWhiteSpace(configuredUrl))
             return configuredUrl;
 
-        return $"{_frontendSettings.BaseUrl.TrimEnd('/')}/{frontendPath.TrimStart('/')}";
+        var baseUrl = IsPublicHttpsUrl(backendOrigin)
+            ? backendOrigin!
+            : _frontendSettings.BaseUrl;
+
+        return $"{baseUrl.TrimEnd('/')}/{frontendPath.TrimStart('/')}";
+    }
+
+    private static bool IsPublicHttpsUrl(string? url)
+    {
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && uri.Scheme == Uri.UriSchemeHttps
+            && !uri.IsLoopback;
     }
 
     internal static string BuildRedirectUrl(string baseUrl, int bookingId, long orderCode)

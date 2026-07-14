@@ -10,10 +10,8 @@ public sealed class PayOSSettings
     public string ApiKey { get; init; } = string.Empty;
     public string ChecksumKey { get; init; } = string.Empty;
 
-    [Url]
     public string ReturnUrl { get; init; } = string.Empty;
 
-    [Url]
     public string CancelUrl { get; init; } = string.Empty;
 
     [Required, Url]
