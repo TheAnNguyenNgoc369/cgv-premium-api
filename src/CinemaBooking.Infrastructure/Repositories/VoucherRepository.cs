@@ -95,4 +95,19 @@ public sealed class VoucherRepository : IVoucherRepository
 
     public async Task<int> GetUserRedemptionCountAsync(int userId, int voucherId, CancellationToken ct) =>
         await _db.Set<UserVoucher>().CountAsync(uv => uv.UserID == userId && uv.VoucherID == voucherId, ct);
+
+    public async Task IncrementPublicVoucherUsageForBookingAsync(int bookingId, CancellationToken ct)
+    {
+        // Single UPDATE gated on IsRedeemable = 0. Loyalty vouchers are skipped by the JOIN
+        // predicate, so this method is safe to call for every paid booking regardless of
+        // voucher type (or absence of a voucher). The BookingVoucher row is the source of
+        // truth for which voucher this booking used.
+        await _db.Database.ExecuteSqlInterpolatedAsync($@"
+            UPDATE v
+               SET v.UsedCount = v.UsedCount + 1
+              FROM Voucher v
+              JOIN BookingVoucher bv ON bv.VoucherID = v.VoucherID
+             WHERE bv.BookingID = {bookingId}
+               AND v.IsRedeemable = 0", ct);
+    }
 }

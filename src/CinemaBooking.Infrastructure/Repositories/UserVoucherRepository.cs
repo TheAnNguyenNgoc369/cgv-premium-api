@@ -64,6 +64,7 @@ public sealed class UserVoucherRepository : IUserVoucherRepository
         UserVoucher userVoucher,
         LoyaltyPoints loyaltyPoint,
         int pointsToDeduct,
+        int? maxUses,
         int? exchangeLimit,
         AdminActionLog log,
         CancellationToken ct)
@@ -80,7 +81,11 @@ public sealed class UserVoucherRepository : IUserVoucherRepository
                 .FirstOrDefaultAsync(ct);
             if (user is null) return (false, "User not found");
 
-            var voucher = await _db.Vouchers.FirstOrDefaultAsync(v => v.VoucherID == userVoucher.VoucherID, ct);
+            // Lock the voucher row: the global UsedCount is bumped here, so concurrent
+            // redeems must serialize on this row for the MaxUses gate to be exact.
+            var voucher = await _db.Vouchers
+                .FromSqlRaw("SELECT * FROM Voucher WITH (UPDLOCK, ROWLOCK) WHERE VoucherID = {0}", userVoucher.VoucherID)
+                .FirstOrDefaultAsync(ct);
             if (voucher is null) return (false, "Voucher not found");
 
             // Re-validate voucher state inside the transaction (it may have changed since the pre-check).
@@ -88,6 +93,10 @@ public sealed class UserVoucherRepository : IUserVoucherRepository
             if (!voucher.IsActive) return (false, "Voucher is not active");
             if (now < voucher.ValidFrom) return (false, "Voucher is not yet valid");
             if (now > voucher.ValidUntil) return (false, "Voucher has expired");
+
+            // Re-check the global redemption cap against the locked counter.
+            if (maxUses.HasValue && voucher.UsedCount >= maxUses.Value)
+                return (false, "Voucher redemption limit has been reached.");
 
             // Re-check point sufficiency against the locked balance: points must never go negative.
             if (user.TotalPoints < pointsToDeduct)
@@ -104,6 +113,9 @@ public sealed class UserVoucherRepository : IUserVoucherRepository
 
             user.TotalPoints -= pointsToDeduct;
             user.UpdatedAt = now;
+
+            // Loyalty: bump the global counter at redeem, NOT at booking.
+            voucher.UsedCount++;
 
             await _db.Set<UserVoucher>().AddAsync(userVoucher, ct);
             await _db.LoyaltyPoints.AddAsync(loyaltyPoint, ct);

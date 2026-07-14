@@ -18,5 +18,14 @@ public sealed class CheckInHistoryResult
         public string StaffName { get; set; } = string.Empty;
         public int SeatCount { get; set; }
         public decimal TotalAmount { get; set; }
+        public List<CheckedInSeatRecord> CheckedInSeats { get; set; } = [];
+    }
+
+    public sealed class CheckedInSeatRecord
+    {
+        public string SeatCode { get; set; } = string.Empty;
+        public string SeatType { get; set; } = string.Empty;
+        public decimal TicketPrice { get; set; }
+        public DateTime CheckedInAt { get; set; }
     }
 }

@@ -22,4 +22,12 @@ public interface IVoucherRepository
     Task<List<Voucher>> GetRedeemableVouchersAsync(CancellationToken cancellationToken);
     Task<Voucher?> GetForRedemptionAsync(int voucherId, CancellationToken cancellationToken);
     Task<int> GetUserRedemptionCountAsync(int userId, int voucherId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Post-payment counter bump for public vouchers only. Increments Voucher.UsedCount for
+    /// the voucher attached to <paramref name="bookingId"/> when Voucher.IsRedeemable is false.
+    /// No-op if the booking has no voucher or the voucher is a loyalty voucher (loyalty
+    /// UsedCount is bumped at redeem time, not at booking).
+    /// </summary>
+    Task IncrementPublicVoucherUsageForBookingAsync(int bookingId, CancellationToken cancellationToken);
 }

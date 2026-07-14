@@ -211,6 +211,7 @@ public sealed class BookingRepository : IBookingRepository
             .Include(b => b.Showtime).ThenInclude(s => s.Movie)
             .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket).ThenInclude(t => t!.CheckedInBy)
+            .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat).ThenInclude(s => s.SeatType)
             .Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.Status == TicketStatus.Used));
 
         if (staffId.HasValue)
