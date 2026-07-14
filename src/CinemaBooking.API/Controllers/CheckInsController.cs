@@ -201,7 +201,14 @@ public sealed class CheckInsController : ControllerBase
                 CheckedInAt = r.CheckedInAt,
                 StaffName = r.StaffName,
                 SeatCount = r.SeatCount,
-                TotalAmount = r.TotalAmount
+                TotalAmount = r.TotalAmount,
+                CheckedInSeats = r.CheckedInSeats.Select(s => new CheckedInSeatDto
+                {
+                    SeatCode = s.SeatCode,
+                    SeatType = s.SeatType,
+                    TicketPrice = s.TicketPrice,
+                    CheckedInAt = s.CheckedInAt
+                }).ToList()
             }).ToList(),
             TotalCount = result.TotalCount,
             Page = request.Page,

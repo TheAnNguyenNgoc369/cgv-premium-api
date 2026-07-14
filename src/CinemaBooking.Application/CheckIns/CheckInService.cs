@@ -210,6 +210,19 @@ public sealed class CheckInService : ICheckInService
                 .Select(bs => bs.Ticket)
                 .FirstOrDefault();
 
+            var checkedInSeats = b.BookingSeats
+                .Where(bs => bs.Ticket != null && bs.Ticket.Status == TicketStatus.Used)
+                .OrderBy(bs => bs.Seat.SeatRow)
+                .ThenBy(bs => bs.Seat.SeatCol)
+                .Select(bs => new CheckInHistoryResult.CheckedInSeatRecord
+                {
+                    SeatCode = $"{bs.Seat.SeatRow}{bs.Seat.SeatCol}",
+                    SeatType = bs.Seat.SeatType?.TypeName ?? "Standard",
+                    TicketPrice = bs.TicketPrice,
+                    CheckedInAt = bs.Ticket!.CheckedInAt ?? DateTime.MinValue
+                })
+                .ToList();
+
             return new CheckInHistoryResult.CheckInRecord
             {
                 BookingId = b.BookingID,
@@ -222,7 +235,8 @@ public sealed class CheckInService : ICheckInService
                 CheckedInAt = mostRecentTicket?.CheckedInAt ?? DateTime.MinValue,
                 StaffName = mostRecentTicket?.CheckedInBy?.FullName ?? "Unknown",
                 SeatCount = b.BookingSeats.Count,
-                TotalAmount = b.FinalAmount
+                TotalAmount = b.FinalAmount,
+                CheckedInSeats = checkedInSeats
             };
         }).ToList();
 
