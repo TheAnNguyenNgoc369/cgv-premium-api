@@ -7,8 +7,10 @@ using CinemaBooking.Application.Common.Enums;
 using System.Text.Json;
 using CinemaBooking.Shared.Constants;
 using CinemaBooking.Infrastructure.Payments.PayOS;
+using CinemaBooking.Application.Configuration;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace CinemaBooking.API.Tests;
 
@@ -24,6 +26,29 @@ public sealed class PaymentFlowRegressionTests
         string expected)
     {
         var result = PayOSService.BuildRedirectUrl(baseUrl, 42, 123456);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("", "customer/booking/confirmation",
+        "https://frontend.example/customer/booking/confirmation")]
+    [InlineData("https://frontend.example/customer", "customer/booking/confirmation",
+        "https://frontend.example/customer/booking/confirmation")]
+    [InlineData("", "customer/booking",
+        "https://frontend.example/customer/booking")]
+    [InlineData("https://frontend.example/customer", "customer/booking",
+        "https://frontend.example/customer/booking")]
+    public void PayOSRedirectUrl_UsesBookingRoutesWhenConfigIsMissingOrTooBroad(
+        string configuredUrl,
+        string frontendPath,
+        string expected)
+    {
+        var service = new PayOSService(
+            Options.Create(new PayOSSettings()),
+            Options.Create(new FrontendSettings { BaseUrl = "https://frontend.example" }));
+
+        var result = service.ResolveRedirectUrl(configuredUrl, frontendPath);
 
         Assert.Equal(expected, result);
     }

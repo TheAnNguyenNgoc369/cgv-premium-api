@@ -9,6 +9,9 @@ namespace CinemaBooking.Infrastructure.Payments.PayOS;
 
 public sealed class PayOSService : IPayOSService
 {
+    private const string DefaultReturnPath = "customer/booking/confirmation";
+    private const string DefaultCancelPath = "customer/booking";
+
     private readonly PayOSSettings _settings;
     private readonly FrontendSettings _frontendSettings;
 
@@ -27,8 +30,8 @@ public sealed class PayOSService : IPayOSService
         CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var returnUrl = ResolveRedirectUrl(_settings.ReturnUrl, "payment/success");
-        var cancelUrl = ResolveRedirectUrl(_settings.CancelUrl, "payment/cancel");
+        var returnUrl = ResolveRedirectUrl(_settings.ReturnUrl, DefaultReturnPath);
+        var cancelUrl = ResolveRedirectUrl(_settings.CancelUrl, DefaultCancelPath);
         var response = await client.PaymentRequests.CreateAsync(new CreatePaymentLinkRequest
         {
             OrderCode = orderCode,
@@ -107,12 +110,32 @@ public sealed class PayOSService : IPayOSService
         return new PayOSClient(_settings.ClientId, _settings.ApiKey, _settings.ChecksumKey);
     }
 
-    private string ResolveRedirectUrl(string configuredUrl, string frontendPath)
+    internal string ResolveRedirectUrl(string configuredUrl, string frontendPath)
     {
-        if (!string.IsNullOrWhiteSpace(configuredUrl))
+        if (!string.IsNullOrWhiteSpace(configuredUrl)
+            && !IsFrontendRootOrCustomerUrl(configuredUrl))
+        {
             return configuredUrl;
+        }
 
         return $"{_frontendSettings.BaseUrl.TrimEnd('/')}/{frontendPath.TrimStart('/')}";
+    }
+
+    private bool IsFrontendRootOrCustomerUrl(string configuredUrl)
+    {
+        if (!Uri.TryCreate(configuredUrl, UriKind.Absolute, out var configured)
+            || !Uri.TryCreate(_frontendSettings.BaseUrl, UriKind.Absolute, out var frontend))
+        {
+            return false;
+        }
+
+        if (!Uri.Compare(configured, frontend, UriComponents.SchemeAndServer, UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase).Equals(0))
+        {
+            return false;
+        }
+
+        var path = configured.AbsolutePath.TrimEnd('/');
+        return path.Length == 0 || path.Equals("/customer", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static string BuildRedirectUrl(string baseUrl, int bookingId, long orderCode)
