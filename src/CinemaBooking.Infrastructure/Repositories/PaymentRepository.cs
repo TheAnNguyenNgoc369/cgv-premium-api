@@ -79,6 +79,9 @@ public sealed class PaymentRepository : IPaymentRepository
                 .SetProperty(payment => payment.TransactionCode, transactionCode),
                 cancellationToken);
 
+        if (affectedRows == 1)
+            _db.ChangeTracker.Clear();
+
         return affectedRows == 1;
     }
 
@@ -114,6 +117,9 @@ public sealed class PaymentRepository : IPaymentRepository
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(payment => payment.Status, PaymentStatus.Cancelled),
                 cancellationToken);
+
+        if (affectedRows == 1)
+            _db.ChangeTracker.Clear();
 
         return affectedRows == 1;
     }

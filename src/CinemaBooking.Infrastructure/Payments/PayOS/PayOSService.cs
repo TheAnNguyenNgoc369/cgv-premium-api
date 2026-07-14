@@ -9,8 +9,8 @@ namespace CinemaBooking.Infrastructure.Payments.PayOS;
 
 public sealed class PayOSService : IPayOSService
 {
-    private const string DefaultReturnPath = "customer/booking/confirmation";
-    private const string DefaultCancelPath = "customer/booking";
+    private const string DefaultReturnPath = "api/payments/payos/return";
+    private const string DefaultCancelPath = "api/payments/payos/cancel";
 
     private readonly PayOSSettings _settings;
     private readonly FrontendSettings _frontendSettings;
@@ -112,30 +112,10 @@ public sealed class PayOSService : IPayOSService
 
     internal string ResolveRedirectUrl(string configuredUrl, string frontendPath)
     {
-        if (!string.IsNullOrWhiteSpace(configuredUrl)
-            && !IsFrontendRootOrCustomerUrl(configuredUrl))
-        {
+        if (!string.IsNullOrWhiteSpace(configuredUrl))
             return configuredUrl;
-        }
 
         return $"{_frontendSettings.BaseUrl.TrimEnd('/')}/{frontendPath.TrimStart('/')}";
-    }
-
-    private bool IsFrontendRootOrCustomerUrl(string configuredUrl)
-    {
-        if (!Uri.TryCreate(configuredUrl, UriKind.Absolute, out var configured)
-            || !Uri.TryCreate(_frontendSettings.BaseUrl, UriKind.Absolute, out var frontend))
-        {
-            return false;
-        }
-
-        if (!Uri.Compare(configured, frontend, UriComponents.SchemeAndServer, UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase).Equals(0))
-        {
-            return false;
-        }
-
-        var path = configured.AbsolutePath.TrimEnd('/');
-        return path.Length == 0 || path.Equals("/customer", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static string BuildRedirectUrl(string baseUrl, int bookingId, long orderCode)

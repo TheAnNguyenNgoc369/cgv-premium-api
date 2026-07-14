@@ -200,6 +200,10 @@ public static class DependencyInjection
             .Validate(settings => Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri)
                 && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp),
                 "Frontend:BaseUrl must be an absolute HTTP or HTTPS URL.")
+            .Validate(settings => settings.AllowedOrigins.All(origin =>
+                Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)),
+                "Frontend:AllowedOrigins entries must be absolute HTTP or HTTPS URLs.")
             .ValidateOnStart();
 
         services.AddOptions<PayOSSettings>()

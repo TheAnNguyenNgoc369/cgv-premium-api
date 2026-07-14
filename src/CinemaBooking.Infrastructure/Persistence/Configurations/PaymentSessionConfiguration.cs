@@ -15,6 +15,7 @@ public class PaymentSessionConfiguration : IEntityTypeConfiguration<PaymentSessi
         builder.Property(p => p.GatewayName).HasMaxLength(50).IsRequired();
         builder.Property(p => p.GatewayOrderNo).HasMaxLength(200);
         builder.Property(p => p.QRCodeURL).HasMaxLength(500);
+        builder.Property(p => p.ReturnFrontendUrl).HasMaxLength(500);
         builder.Property(p => p.Status).HasMaxLength(30).IsRequired().HasDefaultValue("waiting");
         builder.Property(p => p.CreatedAt).HasDefaultValueSql("GETDATE()");
 

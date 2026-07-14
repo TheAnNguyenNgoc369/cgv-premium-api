@@ -31,24 +31,24 @@ public sealed class PaymentFlowRegressionTests
     }
 
     [Theory]
-    [InlineData("", "customer/booking/confirmation",
-        "https://frontend.example/customer/booking/confirmation")]
-    [InlineData("https://frontend.example/customer", "customer/booking/confirmation",
-        "https://frontend.example/customer/booking/confirmation")]
-    [InlineData("", "customer/booking",
-        "https://frontend.example/customer/booking")]
-    [InlineData("https://frontend.example/customer", "customer/booking",
-        "https://frontend.example/customer/booking")]
-    public void PayOSRedirectUrl_UsesBookingRoutesWhenConfigIsMissingOrTooBroad(
+    [InlineData("", "api/payments/payos/return",
+        "https://api.example/api/payments/payos/return")]
+    [InlineData("https://api.example/api/payments/payos/return", "api/payments/payos/return",
+        "https://api.example/api/payments/payos/return")]
+    [InlineData("", "api/payments/payos/cancel",
+        "https://api.example/api/payments/payos/cancel")]
+    [InlineData("https://api.example/api/payments/payos/cancel", "api/payments/payos/cancel",
+        "https://api.example/api/payments/payos/cancel")]
+    public void PayOSRedirectUrl_UsesBackendRoutes(
         string configuredUrl,
-        string frontendPath,
+        string backendPath,
         string expected)
     {
         var service = new PayOSService(
             Options.Create(new PayOSSettings()),
-            Options.Create(new FrontendSettings { BaseUrl = "https://frontend.example" }));
+            Options.Create(new FrontendSettings { BaseUrl = "https://api.example" }));
 
-        var result = service.ResolveRedirectUrl(configuredUrl, frontendPath);
+        var result = service.ResolveRedirectUrl(configuredUrl, backendPath);
 
         Assert.Equal(expected, result);
     }
@@ -189,6 +189,7 @@ public sealed class PaymentFlowRegressionTests
             InitiatePaymentRequest request,
             int actorUserId,
             bool isStaff,
+            string? frontendOrigin = null,
             string ipAddress = "127.0.0.1",
             CancellationToken cancellationToken = default) => Task.FromResult(
                 request.BookingId switch
@@ -213,6 +214,18 @@ public sealed class PaymentFlowRegressionTests
                 webhook.Signature == "valid"
                     ? new PayOSWebhookResult(true, "Payment completed successfully.", 1, 1, "success", "paid")
                     : new PayOSWebhookResult(false, "Invalid signature from PayOS."));
+
+        public Task<PaymentOperationResult> SyncPayOSPaymentAsync(
+            int bookingId,
+            long orderCode,
+            int actorUserId,
+            bool isStaff,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<PayOSRedirectResult> HandlePayOSRedirectAsync(
+            long orderCode,
+            bool isCancel,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<PaymentOperationResult> GetPaymentByIdAsync(
             int paymentId,

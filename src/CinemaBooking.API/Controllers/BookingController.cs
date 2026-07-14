@@ -1,6 +1,7 @@
 using CinemaBooking.API.Contracts.Bookings;
 using CinemaBooking.Application.Bookings;
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Payments;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -15,13 +16,16 @@ public sealed class BookingController : ControllerBase
 {
     private readonly IBookingService _bookingService;
     private readonly IBookingRepository _bookingRepository;
+    private readonly IPaymentService _paymentService;
 
     public BookingController(
         IBookingService bookingService,
-        IBookingRepository bookingRepository)
+        IBookingRepository bookingRepository,
+        IPaymentService paymentService)
     {
         _bookingService = bookingService;
         _bookingRepository = bookingRepository;
+        _paymentService = paymentService;
     }
 
     [HttpPost("seat-holds")]
@@ -167,6 +171,9 @@ public sealed class BookingController : ControllerBase
                 return Forbid();
         }
 
+        booking = await SynchronizePendingPayOSBookingAsync(
+            booking, currentUserId, User.IsInRole(Roles.Staff), cancellationToken);
+
         return Ok(MapToResponse(booking));
     }
 
@@ -175,13 +182,38 @@ public sealed class BookingController : ControllerBase
     {
         var userId = GetCurrentUserId();
         var bookings = await _bookingService.GetMyBookingsAsync(userId, cancellationToken);
+        var synchronized = new List<Booking>(bookings.Count);
 
-        return Ok(bookings.Select(MapToMyResponse));
+        foreach (var booking in bookings)
+        {
+            synchronized.Add(await SynchronizePendingPayOSBookingAsync(
+                booking, userId, isStaff: false, cancellationToken));
+        }
+
+        return Ok(synchronized.Select(MapToMyResponse));
     }
 
     private int GetCurrentUserId()
     {
         return int.Parse(User.FindFirst("userId")!.Value);
+    }
+
+    private async Task<Booking> SynchronizePendingPayOSBookingAsync(
+        Booking booking,
+        int currentUserId,
+        bool isStaff,
+        CancellationToken cancellationToken)
+    {
+        if (booking.Status != BookingStatus.Pending)
+            return booking;
+
+        var result = await _paymentService.GetPaymentByBookingIdAsync(
+            booking.BookingID, currentUserId, isStaff, cancellationToken);
+        if (!result.Succeeded)
+            return booking;
+
+        return await _bookingService.GetBookingByIdAsync(booking.BookingID, cancellationToken)
+            ?? booking;
     }
 
     private static BookingResponse MapToResponse(Booking booking)

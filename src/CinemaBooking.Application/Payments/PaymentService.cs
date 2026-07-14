@@ -1,5 +1,6 @@
 using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Configuration;
 using CinemaBooking.Application.Contracts.Payment;
 using CinemaBooking.Application.Invoices;
 using CinemaBooking.Application.Notifications;
@@ -7,6 +8,7 @@ using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Application.Tickets;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
+using Microsoft.Extensions.Options;
 
 namespace CinemaBooking.Application.Payments;
 
@@ -24,6 +26,7 @@ public sealed class PaymentService : IPaymentService
     private readonly INotificationOutbox _notificationOutbox;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserVoucherRepository _userVoucherRepository;
+    private readonly FrontendSettings _frontendSettings;
 
     public PaymentService(
         IPaymentRepository paymentRepository,
@@ -34,7 +37,8 @@ public sealed class PaymentService : IPaymentService
         ITicketService ticketService,
         INotificationOutbox notificationOutbox,
         IUnitOfWork unitOfWork,
-        IUserVoucherRepository userVoucherRepository)
+        IUserVoucherRepository userVoucherRepository,
+        IOptions<FrontendSettings> frontendSettings)
     {
         _paymentRepository = paymentRepository;
         _walletRepository = walletRepository;
@@ -45,12 +49,14 @@ public sealed class PaymentService : IPaymentService
         _notificationOutbox = notificationOutbox;
         _unitOfWork = unitOfWork;
         _userVoucherRepository = userVoucherRepository;
+        _frontendSettings = frontendSettings.Value;
     }
 
     public async Task<PaymentOperationResult> InitiatePaymentAsync(
         InitiatePaymentRequest request,
         int actorUserId,
         bool isStaff,
+        string? frontendOrigin = null,
         string ipAddress = "127.0.0.1",
         CancellationToken cancellationToken = default)
     {
@@ -80,7 +86,8 @@ public sealed class PaymentService : IPaymentService
         return method.DatabaseValue switch
         {
             PaymentMethod.Wallet => await ProcessWalletPaymentAsync(booking!, existingPayment, cancellationToken),
-            PaymentMethod.PayOS => await ProcessPayOSPaymentAsync(booking!, existingPayment, cancellationToken),
+            PaymentMethod.PayOS => await ProcessPayOSPaymentAsync(
+                booking!, existingPayment, frontendOrigin, cancellationToken),
             PaymentMethod.Cash => await ProcessCashPaymentAsync(booking!, existingPayment, cancellationToken),
             _ => Error(PaymentErrorType.Validation, method.ErrorMessage ?? "Payment method is not supported.")
         };
@@ -197,8 +204,64 @@ public sealed class PaymentService : IPaymentService
         if (!accessResult.Succeeded)
             return accessResult;
 
-        payment = await SynchronizePendingPayOSPaymentAsync(payment, cancellationToken);
+        payment = await SynchronizePendingPayOSPaymentAsync(payment, cancellationToken: cancellationToken);
         return await MapAccessiblePaymentAsync(payment, actorUserId, isStaff, cancellationToken);
+    }
+
+    public async Task<PaymentOperationResult> SyncPayOSPaymentAsync(
+        int bookingId,
+        long orderCode,
+        int actorUserId,
+        bool isStaff,
+        CancellationToken cancellationToken = default)
+    {
+        if (orderCode <= 0)
+            return Error(PaymentErrorType.Validation, "Invalid PayOS order code.");
+
+        var session = await _paymentRepository.GetPaymentSessionByOrderNoAsync(
+            orderCode.ToString(), cancellationToken);
+        if (session is null || session.GatewayName != PaymentMethod.PayOS)
+            return Error(PaymentErrorType.NotFound, "PayOS payment session not found.");
+        if (session.Payment.BookingID != bookingId)
+            return Error(PaymentErrorType.Conflict, "PayOS order code does not belong to this booking.");
+
+        var payment = await _paymentRepository.GetPaymentByIdAsync(
+            session.PaymentID, cancellationToken);
+        var accessResult = await MapAccessiblePaymentAsync(
+            payment, actorUserId, isStaff, cancellationToken);
+        if (!accessResult.Succeeded)
+            return accessResult;
+
+        payment = await SynchronizePendingPayOSPaymentAsync(payment, orderCode, cancellationToken);
+        return await MapAccessiblePaymentAsync(payment, actorUserId, isStaff, cancellationToken);
+    }
+
+    public async Task<PayOSRedirectResult> HandlePayOSRedirectAsync(
+        long orderCode,
+        bool isCancel,
+        CancellationToken cancellationToken = default)
+    {
+        if (orderCode <= 0)
+            return new(false, null, "Invalid PayOS order code.");
+
+        var session = await _paymentRepository.GetPaymentSessionByOrderNoAsync(
+            orderCode.ToString(), cancellationToken);
+        if (session is null || session.GatewayName != PaymentMethod.PayOS)
+            return new(false, null, "PayOS payment session not found.");
+
+        var frontendUrl = ResolveStoredFrontendUrl(session.ReturnFrontendUrl);
+        var resultPath = isCancel ? "payment/cancel" : "payment/result";
+        var redirectUrl = BuildFrontendRedirectUrl(
+            frontendUrl,
+            resultPath,
+            session.Payment.BookingID,
+            orderCode);
+
+        var payment = await _paymentRepository.GetPaymentByIdAsync(
+            session.PaymentID, cancellationToken);
+        await SynchronizePendingPayOSPaymentAsync(payment, orderCode, cancellationToken);
+
+        return new(true, redirectUrl, "PayOS redirect processed.");
     }
 
     public async Task<PaymentOperationResult> GetPaymentByBookingIdAsync(
@@ -213,29 +276,35 @@ public sealed class PaymentService : IPaymentService
         if (!accessResult.Succeeded)
             return accessResult;
 
-        payment = await SynchronizePendingPayOSPaymentAsync(payment, cancellationToken);
+        payment = await SynchronizePendingPayOSPaymentAsync(payment, cancellationToken: cancellationToken);
         return await MapAccessiblePaymentAsync(payment, actorUserId, isStaff, cancellationToken);
     }
 
     private async Task<Payment?> SynchronizePendingPayOSPaymentAsync(
         Payment? payment,
-        CancellationToken cancellationToken)
+        long? orderCode = null,
+        CancellationToken cancellationToken = default)
     {
         if (payment is null
             || payment.PaymentMethod != PaymentMethod.PayOS
             || payment.Status != PaymentStatus.Pending)
             return payment;
 
-        var session = await _paymentRepository.GetLatestPaymentSessionAsync(
-            payment.PaymentID, cancellationToken);
-        if (session?.GatewayOrderNo is null
-            || !long.TryParse(session.GatewayOrderNo, out var orderCode))
-            return payment;
+        if (!orderCode.HasValue)
+        {
+            var session = await _paymentRepository.GetLatestPaymentSessionAsync(
+                payment.PaymentID, cancellationToken);
+            if (session?.GatewayOrderNo is null
+                || !long.TryParse(session.GatewayOrderNo, out var parsedOrderCode))
+                return payment;
+
+            orderCode = parsedOrderCode;
+        }
 
         PayOSPaymentLinkStatusResult paymentLink;
         try
         {
-            paymentLink = await _payOSService.GetPaymentLinkStatusAsync(orderCode, cancellationToken);
+            paymentLink = await _payOSService.GetPaymentLinkStatusAsync(orderCode.Value, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -386,6 +455,7 @@ public sealed class PaymentService : IPaymentService
     private async Task<PaymentOperationResult> ProcessPayOSPaymentAsync(
         Booking booking,
         Payment? existingPayment,
+        string? frontendOrigin,
         CancellationToken cancellationToken)
     {
         if (booking.FinalAmount != decimal.Truncate(booking.FinalAmount)
@@ -395,6 +465,10 @@ public sealed class PaymentService : IPaymentService
 
         try
         {
+            var returnFrontendUrl = ValidateFrontendOrigin(frontendOrigin);
+            if (returnFrontendUrl is null)
+                return Error(PaymentErrorType.Validation, "Frontend URL is invalid.");
+
             return await _unitOfWork.ExecuteInTransactionAsync(async () =>
             {
                 Payment payment;
@@ -433,6 +507,7 @@ public sealed class PaymentService : IPaymentService
                     GatewayName = PaymentMethod.PayOS,
                     GatewayOrderNo = paymentLink.OrderCode.ToString(),
                     QRCodeURL = paymentLink.CheckoutUrl,
+                    ReturnFrontendUrl = returnFrontendUrl,
                     ExpiresAt = expiresAt,
                     Status = "waiting",
                     CreatedAt = DateTime.UtcNow
@@ -563,4 +638,32 @@ public sealed class PaymentService : IPaymentService
     private static long CreatePayOSOrderCode() =>
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() * 1_000_000L
         + Random.Shared.Next(1, 1_000_000);
+
+    private string? ValidateFrontendOrigin(string? frontendOrigin)
+    {
+        var origin = string.IsNullOrWhiteSpace(frontendOrigin)
+            ? _frontendSettings.BaseUrl
+            : frontendOrigin.Trim().TrimEnd('/');
+
+        var allowedOrigins = _frontendSettings.AllowedOrigins.Length > 0
+            ? _frontendSettings.AllowedOrigins
+            : [_frontendSettings.BaseUrl];
+
+        return allowedOrigins
+            .Select(allowed => allowed.Trim().TrimEnd('/'))
+            .FirstOrDefault(allowed => string.Equals(allowed, origin, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string ResolveStoredFrontendUrl(string? returnFrontendUrl) =>
+        ValidateFrontendOrigin(returnFrontendUrl) ?? _frontendSettings.BaseUrl.TrimEnd('/');
+
+    private static string BuildFrontendRedirectUrl(
+        string frontendUrl,
+        string path,
+        int bookingId,
+        long orderCode)
+    {
+        var baseUrl = $"{frontendUrl.TrimEnd('/')}/{path.TrimStart('/')}";
+        return $"{baseUrl}?bookingId={bookingId}&orderCode={orderCode}";
+    }
 }
