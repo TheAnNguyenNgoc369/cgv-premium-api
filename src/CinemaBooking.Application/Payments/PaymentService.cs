@@ -8,6 +8,7 @@ using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Application.Tickets;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace CinemaBooking.Application.Payments;
@@ -27,6 +28,7 @@ public sealed class PaymentService : IPaymentService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserVoucherRepository _userVoucherRepository;
     private readonly FrontendSettings _frontendSettings;
+    private readonly ILogger<PaymentService> _logger;
 
     public PaymentService(
         IPaymentRepository paymentRepository,
@@ -38,7 +40,8 @@ public sealed class PaymentService : IPaymentService
         INotificationOutbox notificationOutbox,
         IUnitOfWork unitOfWork,
         IUserVoucherRepository userVoucherRepository,
-        IOptions<FrontendSettings> frontendSettings)
+        IOptions<FrontendSettings> frontendSettings,
+        ILogger<PaymentService> logger)
     {
         _paymentRepository = paymentRepository;
         _walletRepository = walletRepository;
@@ -50,6 +53,7 @@ public sealed class PaymentService : IPaymentService
         _unitOfWork = unitOfWork;
         _userVoucherRepository = userVoucherRepository;
         _frontendSettings = frontendSettings.Value;
+        _logger = logger;
     }
 
     public async Task<PaymentOperationResult> InitiatePaymentAsync(
@@ -57,6 +61,7 @@ public sealed class PaymentService : IPaymentService
         int actorUserId,
         bool isStaff,
         string? frontendOrigin = null,
+        string? backendOrigin = null,
         string ipAddress = "127.0.0.1",
         CancellationToken cancellationToken = default)
     {
@@ -87,7 +92,7 @@ public sealed class PaymentService : IPaymentService
         {
             PaymentMethod.Wallet => await ProcessWalletPaymentAsync(booking!, existingPayment, cancellationToken),
             PaymentMethod.PayOS => await ProcessPayOSPaymentAsync(
-                booking!, existingPayment, frontendOrigin, cancellationToken),
+                booking!, existingPayment, frontendOrigin, backendOrigin, cancellationToken),
             PaymentMethod.Cash => await ProcessCashPaymentAsync(booking!, existingPayment, cancellationToken),
             _ => Error(PaymentErrorType.Validation, method.ErrorMessage ?? "Payment method is not supported.")
         };
@@ -249,7 +254,7 @@ public sealed class PaymentService : IPaymentService
         if (session is null || session.GatewayName != PaymentMethod.PayOS)
             return new(false, null, "PayOS payment session not found.");
 
-        var frontendUrl = ResolveStoredFrontendUrl(session.ReturnFrontendUrl);
+        var frontendUrl = ResolveStoredFrontendUrl();
         var resultPath = isCancel ? "payment/cancel" : "payment/result";
         var redirectUrl = BuildFrontendRedirectUrl(
             frontendUrl,
@@ -262,6 +267,32 @@ public sealed class PaymentService : IPaymentService
         await SynchronizePendingPayOSPaymentAsync(payment, orderCode, cancellationToken);
 
         return new(true, redirectUrl, "PayOS redirect processed.");
+    }
+
+    public async Task<int> ReconcilePendingPayOSPaymentsAsync(
+        int batchSize = 50,
+        CancellationToken cancellationToken = default)
+    {
+        if (batchSize <= 0)
+            return 0;
+
+        var payments = await _paymentRepository.GetPendingPayOSPaymentsAsync(
+            batchSize, cancellationToken);
+        var updatedCount = 0;
+
+        foreach (var payment in payments)
+        {
+            var previousStatus = payment.Status;
+            var synchronized = await SynchronizePendingPayOSPaymentAsync(
+                payment, cancellationToken: cancellationToken);
+            if (synchronized is not null
+                && !string.Equals(previousStatus, synchronized.Status, StringComparison.Ordinal))
+            {
+                updatedCount++;
+            }
+        }
+
+        return updatedCount;
     }
 
     public async Task<PaymentOperationResult> GetPaymentByBookingIdAsync(
@@ -325,6 +356,26 @@ public sealed class PaymentService : IPaymentService
 
             if (completed)
                 await _notificationOutbox.EnqueueBookingSuccessAsync(payment.BookingID, cancellationToken);
+
+            return await _paymentRepository.GetPaymentByIdAsync(payment.PaymentID, cancellationToken);
+        }
+
+        if (string.Equals(paymentLink.Status, "EXPIRED", StringComparison.OrdinalIgnoreCase))
+        {
+            await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                if (!await _paymentRepository.TryExpirePendingPaymentAsync(
+                        payment.PaymentID, cancellationToken))
+                    return false;
+
+                await _bookingRepository.UpdateBookingStatusAsync(
+                    payment.BookingID, BookingStatus.Expired, cancellationToken);
+                await _paymentRepository.UpdatePaymentSessionsForPaymentAsync(
+                    payment.PaymentID, "expired", cancellationToken);
+                await _userVoucherRepository.ReleaseReservedByBookingAsync(
+                    payment.BookingID, cancellationToken);
+                return true;
+            }, cancellationToken);
 
             return await _paymentRepository.GetPaymentByIdAsync(payment.PaymentID, cancellationToken);
         }
@@ -404,12 +455,15 @@ public sealed class PaymentService : IPaymentService
 
             await FinalizeSuccessfulBookingAsync(booking, cancellationToken);
             var invoice = await _invoiceService.CreateInvoiceAsync(booking.BookingID, cancellationToken);
-            return PaymentOperationResult.Success(new WalletPaymentResponse(
+            var paymentResponse = new WalletPaymentResponse(
                 true, payment.PaymentID, booking.BookingID,
                 EnumValueMapper.ToApiValue(PaymentMethod.Wallet), booking.FinalAmount,
                 EnumValueMapper.ToApiValue(PaymentStatus.Completed),
                 EnumValueMapper.ToApiValue(BookingStatus.Paid), invoice.InvoiceCode,
-                CalculatePointsEarned(booking.FinalAmount)));
+                CalculatePointsEarned(booking.FinalAmount));
+
+            return PaymentOperationResult.Success(CreateInitiatePaymentResponse(
+                paymentResponse, booking, BookingStatus.Paid));
         }, cancellationToken);
         await _notificationOutbox.EnqueueBookingSuccessAsync(booking.BookingID, cancellationToken);
         await _notificationOutbox.EnqueueWalletPaymentAsync(
@@ -444,11 +498,14 @@ public sealed class PaymentService : IPaymentService
                 await _bookingRepository.UpdateBookingStatusAsync(
                     booking.BookingID, BookingStatus.Pending, cancellationToken);
             }
-            return PaymentOperationResult.Success(new CashPaymentResponse(
+            var paymentResponse = new CashPaymentResponse(
                 true, payment.PaymentID, booking.BookingID,
                 EnumValueMapper.ToApiValue(PaymentMethod.Cash), booking.FinalAmount,
                 EnumValueMapper.ToApiValue(PaymentStatus.Pending),
-                "Please pay at the counter before the showtime"));
+                "Please pay at the counter before the showtime");
+
+            return PaymentOperationResult.Success(CreateInitiatePaymentResponse(
+                paymentResponse, booking, BookingStatus.Pending));
         }, cancellationToken);
     }
 
@@ -456,6 +513,7 @@ public sealed class PaymentService : IPaymentService
         Booking booking,
         Payment? existingPayment,
         string? frontendOrigin,
+        string? backendOrigin,
         CancellationToken cancellationToken)
     {
         if (booking.FinalAmount != decimal.Truncate(booking.FinalAmount)
@@ -500,6 +558,7 @@ public sealed class PaymentService : IPaymentService
                     decimal.ToInt32(booking.FinalAmount),
                     $"PAY {payment.PaymentID}",
                     expiresAt,
+                    backendOrigin,
                     cancellationToken);
                 var session = await _paymentRepository.CreatePaymentSessionAsync(new PaymentSession
                 {
@@ -507,13 +566,12 @@ public sealed class PaymentService : IPaymentService
                     GatewayName = PaymentMethod.PayOS,
                     GatewayOrderNo = paymentLink.OrderCode.ToString(),
                     QRCodeURL = paymentLink.CheckoutUrl,
-                    ReturnFrontendUrl = returnFrontendUrl,
                     ExpiresAt = expiresAt,
                     Status = "waiting",
                     CreatedAt = DateTime.UtcNow
                 }, cancellationToken);
 
-                return PaymentOperationResult.Success(new PayOSPaymentResponse(
+                var paymentResponse = new PayOSPaymentResponse(
                     true,
                     payment.PaymentID,
                     booking.BookingID,
@@ -525,11 +583,20 @@ public sealed class PaymentService : IPaymentService
                     paymentLink.PaymentLinkId,
                     paymentLink.OrderCode,
                     session.SessionID,
-                    expiresAt));
+                    expiresAt);
+
+                return PaymentOperationResult.Success(CreateInitiatePaymentResponse(
+                    paymentResponse, booking, BookingStatus.Pending));
             }, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            _logger.LogError(
+                exception,
+                "Failed to create PayOS payment link for booking {BookingId} with amount {Amount}.",
+                booking.BookingID,
+                booking.FinalAmount);
+
             return Error(PaymentErrorType.Gateway,
                 "Unable to create PayOS payment link. Please try again later.");
         }
@@ -633,6 +700,59 @@ public sealed class PaymentService : IPaymentService
             EnumValueMapper.ToApiValue(payment.PaymentMethod), payment.Amount,
             EnumValueMapper.ToApiValue(payment.Status), payment.PaidAt, payment.CreatedAt);
 
+    private static InitiatePaymentResponse CreateInitiatePaymentResponse(
+        object payment,
+        Booking booking,
+        string bookingStatus)
+    {
+        var bookingResponse = new PaymentBookingResponse(
+            booking.BookingID,
+            booking.BookingCode,
+            booking.SubTotal,
+            booking.DiscountAmount,
+            booking.FinalAmount,
+            EnumValueMapper.ToApiValue(bookingStatus),
+            booking.BookingDate);
+
+        return payment switch
+        {
+            PayOSPaymentResponse payos => new(
+                true,
+                payos,
+                bookingResponse,
+                payos.PaymentId,
+                payos.BookingId,
+                payos.PaymentMethod,
+                payos.Amount,
+                payos.Status,
+                payos.CheckoutUrl,
+                payos.QrCode,
+                payos.PaymentLinkId,
+                payos.OrderCode,
+                payos.SessionId,
+                payos.ExpiresAt),
+            WalletPaymentResponse wallet => new(
+                true,
+                wallet,
+                bookingResponse,
+                wallet.PaymentId,
+                wallet.BookingId,
+                wallet.PaymentMethod,
+                wallet.Amount,
+                wallet.Status),
+            CashPaymentResponse cash => new(
+                true,
+                cash,
+                bookingResponse,
+                cash.PaymentId,
+                cash.BookingId,
+                cash.PaymentMethod,
+                cash.Amount,
+                cash.Status),
+            _ => throw new InvalidOperationException("Unsupported initiate payment response type.")
+        };
+    }
+
     private static int CalculatePointsEarned(decimal amount) => (int)(amount / 1000m);
 
     private static long CreatePayOSOrderCode() =>
@@ -654,8 +774,8 @@ public sealed class PaymentService : IPaymentService
             .FirstOrDefault(allowed => string.Equals(allowed, origin, StringComparison.OrdinalIgnoreCase));
     }
 
-    private string ResolveStoredFrontendUrl(string? returnFrontendUrl) =>
-        ValidateFrontendOrigin(returnFrontendUrl) ?? _frontendSettings.BaseUrl.TrimEnd('/');
+    private string ResolveStoredFrontendUrl() =>
+        _frontendSettings.BaseUrl.TrimEnd('/');
 
     private static string BuildFrontendRedirectUrl(
         string frontendUrl,

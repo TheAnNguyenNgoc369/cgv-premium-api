@@ -124,6 +124,23 @@ public sealed class PaymentRepository : IPaymentRepository
         return affectedRows == 1;
     }
 
+    public async Task<bool> TryExpirePendingPaymentAsync(
+        int paymentId,
+        CancellationToken cancellationToken = default)
+    {
+        var affectedRows = await _db.Payments
+            .Where(payment => payment.PaymentID == paymentId
+                && payment.Status == PaymentStatus.Pending)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(payment => payment.Status, PaymentStatus.Expired),
+                cancellationToken);
+
+        if (affectedRows == 1)
+            _db.ChangeTracker.Clear();
+
+        return affectedRows == 1;
+    }
+
     public async Task<PaymentSession> CreatePaymentSessionAsync(
         PaymentSession session,
         CancellationToken cancellationToken = default)
@@ -161,6 +178,24 @@ public sealed class PaymentRepository : IPaymentRepository
             .OrderByDescending(session => session.CreatedAt)
             .ThenByDescending(session => session.SessionID)
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<List<Payment>> GetPendingPayOSPaymentsAsync(
+        int batchSize,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Payments
+            .Include(payment => payment.Booking)
+            .Include(payment => payment.PaymentSessions)
+            .Where(payment => payment.PaymentMethod == PaymentMethod.PayOS
+                && payment.Status == PaymentStatus.Pending
+                && payment.PaymentSessions.Any(session =>
+                    session.GatewayName == PaymentMethod.PayOS
+                    && session.GatewayOrderNo != null
+                    && (session.Status == "waiting" || session.Status == "processing")))
+            .OrderBy(payment => payment.CreatedAt)
+            .Take(batchSize)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task UpdatePaymentSessionStatusAsync(

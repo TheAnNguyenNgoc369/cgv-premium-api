@@ -7,7 +7,6 @@ public class PaymentSession
     public string GatewayName { get; set; } = null!;
     public string? GatewayOrderNo { get; set; }
     public string? QRCodeURL { get; set; }
-    public string? ReturnFrontendUrl { get; set; }
     public DateTime ExpiresAt { get; set; }
     public string Status { get; set; } = "waiting";
     public DateTime CreatedAt { get; set; }

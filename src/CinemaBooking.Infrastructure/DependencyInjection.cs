@@ -74,6 +74,7 @@ public static class DependencyInjection
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IActivityLogService, ActivityLogService>();
         services.AddHostedService<SeatHoldExpirationJob>();
+        services.AddHostedService<PayOSReconciliationJob>();
         services.AddHostedService<ShowtimeCompletionJob>();
         services.AddHostedService<EmailDeliveryJob>();
         services.AddHostedService<NotificationOutboxJob>();

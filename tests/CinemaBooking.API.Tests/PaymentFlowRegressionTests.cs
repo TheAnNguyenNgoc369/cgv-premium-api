@@ -31,12 +31,12 @@ public sealed class PaymentFlowRegressionTests
     }
 
     [Theory]
-    [InlineData("", "api/payments/payos/return",
-        "https://api.example/api/payments/payos/return")]
+    [InlineData("", "payment/result",
+        "https://api.example/payment/result")]
     [InlineData("https://api.example/api/payments/payos/return", "api/payments/payos/return",
         "https://api.example/api/payments/payos/return")]
-    [InlineData("", "api/payments/payos/cancel",
-        "https://api.example/api/payments/payos/cancel")]
+    [InlineData("", "payment/cancel",
+        "https://api.example/payment/cancel")]
     [InlineData("https://api.example/api/payments/payos/cancel", "api/payments/payos/cancel",
         "https://api.example/api/payments/payos/cancel")]
     public void PayOSRedirectUrl_UsesBackendRoutes(
@@ -51,6 +51,36 @@ public sealed class PaymentFlowRegressionTests
         var result = service.ResolveRedirectUrl(configuredUrl, backendPath);
 
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void PayOSRedirectUrl_UsesRuntimeBackendOriginWhenConfigIsEmpty()
+    {
+        var service = new PayOSService(
+            Options.Create(new PayOSSettings()),
+            Options.Create(new FrontendSettings { BaseUrl = "https://frontend.example" }));
+
+        var result = service.ResolveRedirectUrl(
+            configuredUrl: "",
+            frontendPath: "payment/result",
+            backendOrigin: "https://api.example");
+
+        Assert.Equal("https://api.example/payment/result", result);
+    }
+
+    [Fact]
+    public void PayOSRedirectUrl_FallsBackToFrontendWhenRuntimeOriginIsLocalhost()
+    {
+        var service = new PayOSService(
+            Options.Create(new PayOSSettings()),
+            Options.Create(new FrontendSettings { BaseUrl = "https://frontend.example" }));
+
+        var result = service.ResolveRedirectUrl(
+            configuredUrl: "",
+            frontendPath: "payment/result",
+            backendOrigin: "http://localhost:5000");
+
+        Assert.Equal("https://frontend.example/payment/result", result);
     }
 
     [Fact]
@@ -127,6 +157,22 @@ public sealed class PaymentFlowRegressionTests
     }
 
     [Fact]
+    public async Task InitiatePayment_PayOS_ReturnsRootCheckoutUrlForFrontendCompatibility()
+    {
+        var controller = CreateController(new ExistingPaymentService());
+
+        var result = await controller.InitiatePayment(
+            new InitiatePaymentRequest { BookingId = 2, PaymentMethod = "PAYOS" },
+            CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<InitiatePaymentResponse>(ok.Value);
+        var payment = Assert.IsType<PayOSPaymentResponse>(response.Payment);
+        Assert.Equal(payment.PaymentId, response.PaymentId);
+        Assert.Equal(payment.CheckoutUrl, response.CheckoutUrl);
+    }
+
+    [Fact]
     public async Task ProcessPayOSWebhook_ValidWebhook_ReturnsOk()
     {
         var controller = CreateController(new ExistingPaymentService());
@@ -190,6 +236,7 @@ public sealed class PaymentFlowRegressionTests
             int actorUserId,
             bool isStaff,
             string? frontendOrigin = null,
+            string? backendOrigin = null,
             string ipAddress = "127.0.0.1",
             CancellationToken cancellationToken = default) => Task.FromResult(
                 request.BookingId switch
@@ -198,6 +245,40 @@ public sealed class PaymentFlowRegressionTests
                         PaymentErrorType.Forbidden,
                         "You cannot access another customer's booking."),
                     1 => PaymentOperationResult.Success(new { paymentId = 1 }),
+                    2 => PaymentOperationResult.Success(new InitiatePaymentResponse(
+                        true,
+                        new PayOSPaymentResponse(
+                            true,
+                            22,
+                            2,
+                            "payos",
+                            100000,
+                            "pending",
+                            "https://pay.payos.vn/checkout/abc",
+                            "qr",
+                            "link-id",
+                            123456,
+                            7,
+                            DateTime.UtcNow.AddMinutes(15)),
+                        new PaymentBookingResponse(
+                            2,
+                            "BK0002",
+                            100000,
+                            0,
+                            100000,
+                            "pending",
+                            DateTime.UtcNow),
+                        22,
+                        2,
+                        "payos",
+                        100000,
+                        "pending",
+                        "https://pay.payos.vn/checkout/abc",
+                        "qr",
+                        "link-id",
+                        123456,
+                        7,
+                        DateTime.UtcNow.AddMinutes(15))),
                     _ => PaymentOperationResult.Failure(
                         PaymentErrorType.Conflict,
                         "Payment already exists for this booking.")
@@ -220,6 +301,10 @@ public sealed class PaymentFlowRegressionTests
             long orderCode,
             int actorUserId,
             bool isStaff,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<int> ReconcilePendingPayOSPaymentsAsync(
+            int batchSize = 50,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<PayOSRedirectResult> HandlePayOSRedirectAsync(

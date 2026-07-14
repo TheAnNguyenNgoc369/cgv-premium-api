@@ -10,6 +10,7 @@ public interface IPaymentService
         int actorUserId,
         bool isStaff,
         string? frontendOrigin = null,
+        string? backendOrigin = null,
         string ipAddress = "127.0.0.1",
         CancellationToken cancellationToken = default);
 
@@ -27,6 +28,10 @@ public interface IPaymentService
         long orderCode,
         int actorUserId,
         bool isStaff,
+        CancellationToken cancellationToken = default);
+
+    Task<int> ReconcilePendingPayOSPaymentsAsync(
+        int batchSize = 50,
         CancellationToken cancellationToken = default);
 
     Task<PayOSRedirectResult> HandlePayOSRedirectAsync(

@@ -41,6 +41,10 @@ public interface IPaymentRepository
         int paymentId,
         CancellationToken cancellationToken = default);
 
+    Task<bool> TryExpirePendingPaymentAsync(
+        int paymentId,
+        CancellationToken cancellationToken = default);
+
     Task<PaymentSession> CreatePaymentSessionAsync(
         PaymentSession session,
         CancellationToken cancellationToken = default);
@@ -55,6 +59,10 @@ public interface IPaymentRepository
 
     Task<PaymentSession?> GetLatestPaymentSessionAsync(
         int paymentId,
+        CancellationToken cancellationToken = default);
+
+    Task<List<Payment>> GetPendingPayOSPaymentsAsync(
+        int batchSize,
         CancellationToken cancellationToken = default);
 
     Task UpdatePaymentSessionStatusAsync(

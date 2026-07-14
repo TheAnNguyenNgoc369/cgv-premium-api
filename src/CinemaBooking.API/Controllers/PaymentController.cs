@@ -35,6 +35,7 @@ public sealed class PaymentController : ControllerBase
             userId,
             isStaff,
             Request.Headers.Origin.ToString(),
+            $"{Request.Scheme}://{Request.Host}",
             cancellationToken: cancellationToken);
         return MapResult(result);
     }
