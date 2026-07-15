@@ -19,6 +19,40 @@ public interface ILoyaltyRepository
     Task<List<LoyaltyTier>> GetAllTiersAsync(
         CancellationToken cancellationToken = default);
 
+    Task<LoyaltyTier?> GetTierByIdAsync(
+        int tierId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> TierNameExistsAsync(
+        string tierName,
+        int? excludingTierId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> MinPointsExistsAsync(
+        int minPoints,
+        int? excludingTierId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<LoyaltyTier> AddTierAsync(
+        LoyaltyTier tier,
+        CancellationToken cancellationToken = default);
+
+    Task<LoyaltyTier?> UpdateTierAsync(
+        int tierId,
+        string tierName,
+        int minPoints,
+        decimal discountRate,
+        int maxRefundPerMonth,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> HasAssignedUsersAsync(
+        int tierId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> DeleteTierAsync(
+        int tierId,
+        CancellationToken cancellationToken = default);
+
     Task AddLoyaltyPointAsync(
         LoyaltyPoints loyaltyPoint,
         CancellationToken cancellationToken = default);

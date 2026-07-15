@@ -28,6 +28,12 @@ public sealed class ShowtimeTypeRepository(CinemaBookingDbContext db) : IShowtim
             && (!exceptId.HasValue || x.ShowtimeTypeID != exceptId), ct);
     public Task<Movie?> GetMovieAsync(int id, CancellationToken ct) => db.Movie.AsNoTracking().FirstOrDefaultAsync(x => x.MovieID == id, ct);
     public Task<Room?> GetRoomAsync(int id, CancellationToken ct) => db.Rooms.AsNoTracking().Include(x => x.Cinema).FirstOrDefaultAsync(x => x.RoomID == id, ct);
+    public Task<bool> HasValidSeatAsync(int roomId, CancellationToken ct) =>
+        db.Seats.AsNoTracking().AnyAsync(x => x.RoomID == roomId
+            && x.IsCurrentLayout
+            && !x.IsGap
+            && x.Status == "active"
+            && x.SeatTypeID.HasValue, ct);
     public Task<bool> HasConflictAsync(int roomId, DateTime start, DateTime end, CancellationToken ct) =>
         db.Showtimes.AnyAsync(x => x.RoomID == roomId && x.Status != "cancelled" && x.StartTime < end && x.EndTime > start, ct);
     public async Task AddAsync(ShowtimeType value, CancellationToken ct) { db.ShowtimeTypes.Add(value); await db.SaveChangesAsync(ct); }

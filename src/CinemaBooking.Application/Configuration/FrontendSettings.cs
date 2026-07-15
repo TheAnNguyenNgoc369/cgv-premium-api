@@ -8,4 +8,6 @@ public sealed class FrontendSettings
 
     [Required]
     public string BaseUrl { get; init; } = string.Empty;
+
+    public string[] AllowedOrigins { get; init; } = [];
 }

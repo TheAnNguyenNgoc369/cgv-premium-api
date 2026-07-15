@@ -1,4 +1,5 @@
 using System.Reflection;
+using CinemaBooking.Application.Vouchers.RuleEngine;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CinemaBooking.Application;
@@ -11,6 +12,7 @@ public static class DependencyInjection
 
         services.AddAutoMapper(_ => { }, assembly);
         services.AddScopedByConvention(assembly, "Service");
+        services.AddScoped<IVoucherRuleEngine, VoucherRuleEngine>();
 
         return services;
     }

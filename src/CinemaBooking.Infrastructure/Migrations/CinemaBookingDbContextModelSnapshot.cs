@@ -17,7 +17,7 @@ namespace CinemaBooking.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.6")
+                .HasAnnotation("ProductVersion", "9.0.17")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -606,13 +606,15 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("UQ_LoyaltyTiers_TierName");
 
+                    b.HasIndex("MinPoints")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_LoyaltyTiers_MinPoints");
+
                     b.ToTable("LoyaltyTiers", null, t =>
                         {
                             t.HasCheckConstraint("CK_LoyaltyTiers_DiscountRate", "[DiscountRate] >= 0 AND [DiscountRate] <= 1");
 
                             t.HasCheckConstraint("CK_LoyaltyTiers_MinPoints", "[MinPoints] >= 0");
-
-                            t.HasCheckConstraint("CK_LoyaltyTiers_TierName", "[TierName] IN ('silver', 'gold', 'platinum', 'megavip')");
                         });
 
                     b.HasData(
@@ -1006,7 +1008,7 @@ namespace CinemaBooking.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_Payment_Amount", "[Amount] >= 0");
 
-                            t.HasCheckConstraint("CK_Payment_Method", "[PaymentMethod] IN ('vnpay', 'payos', 'momo', 'credit_card', 'banking', 'cash', 'wallet')");
+                            t.HasCheckConstraint("CK_Payment_Method", "[PaymentMethod] IN ('payos', 'momo', 'credit_card', 'banking', 'cash', 'wallet')");
 
                             t.HasCheckConstraint("CK_Payment_Status", "[Status] IN ('pending', 'success', 'failed', 'refunded', 'cancelled', 'expired')");
                         });
@@ -1063,7 +1065,7 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.ToTable("PaymentSession", null, t =>
                         {
-                            t.HasCheckConstraint("CK_PaymentSession_GatewayName", "[GatewayName] IN ('vnpay', 'payos', 'momo')");
+                            t.HasCheckConstraint("CK_PaymentSession_GatewayName", "[GatewayName] IN ('payos', 'momo')");
 
                             t.HasCheckConstraint("CK_PaymentSession_Status", "[Status] IN ('waiting', 'processing', 'completed', 'expired', 'cancelled')");
                         });
@@ -1816,10 +1818,6 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("VoucherID"));
 
-                    b.Property<string>("Category")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
@@ -1866,9 +1864,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasColumnType("decimal(18,2)")
                         .HasDefaultValue(0m);
 
-                    b.Property<int?>("RemainingQuantity")
-                        .HasColumnType("int");
-
                     b.Property<int?>("RequiredPoints")
                         .HasColumnType("int");
 
@@ -1896,8 +1891,6 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.ToTable("Voucher", null, t =>
                         {
-                            t.HasCheckConstraint("CK_Voucher_Category", "[Category] IS NULL OR [Category] IN ('Discount', 'Combo', 'Cashback')");
-
                             t.HasCheckConstraint("CK_Voucher_DiscountType", "[DiscountType] IN ('percent', 'fixed')");
 
                             t.HasCheckConstraint("CK_Voucher_DiscountValue", "[DiscountValue] >= 0");
@@ -1908,14 +1901,45 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                             t.HasCheckConstraint("CK_Voucher_MinOrderValue", "[MinOrderValue] IS NULL OR [MinOrderValue] >= 0");
 
-                            t.HasCheckConstraint("CK_Voucher_RemainingQuantity", "[RemainingQuantity] IS NULL OR [RemainingQuantity] >= 0");
-
                             t.HasCheckConstraint("CK_Voucher_RequiredPoints", "[RequiredPoints] IS NULL OR [RequiredPoints] > 0");
 
                             t.HasCheckConstraint("CK_Voucher_UsedCount", "[UsedCount] >= 0");
 
                             t.HasCheckConstraint("CK_Voucher_ValidDate", "[ValidUntil] > [ValidFrom]");
                         });
+                });
+
+            modelBuilder.Entity("CinemaBooking.Domain.Entities.VoucherRule", b =>
+                {
+                    b.Property<int>("RuleID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RuleID"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RuleType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("RuleValue")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("VoucherID")
+                        .HasColumnType("int");
+
+                    b.HasKey("RuleID");
+
+                    b.HasIndex("VoucherID");
+
+                    b.HasIndex("VoucherID", "RuleType");
+
+                    b.ToTable("VoucherRules", (string)null);
                 });
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Wallet", b =>
@@ -2485,6 +2509,17 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Navigation("Voucher");
                 });
 
+            modelBuilder.Entity("CinemaBooking.Domain.Entities.VoucherRule", b =>
+                {
+                    b.HasOne("CinemaBooking.Domain.Entities.Voucher", "Voucher")
+                        .WithMany("VoucherRules")
+                        .HasForeignKey("VoucherID")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Voucher");
+                });
+
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Wallet", b =>
                 {
                     b.HasOne("CinemaBooking.Domain.Entities.User", "User")
@@ -2668,6 +2703,8 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Navigation("LoyaltyPointsTransactions");
 
                     b.Navigation("UserVouchers");
+
+                    b.Navigation("VoucherRules");
                 });
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Wallet", b =>

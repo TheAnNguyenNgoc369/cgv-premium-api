@@ -186,6 +186,8 @@ public sealed class RoomController : ControllerBase
     private IActionResult MapError(string? message) =>
         message == CinemaScopeMessages.AccessDenied
             ? CinemaScopeForbidden()
+            : message == "Room name must be unique within the cinema"
+                ? Conflict(new { success = false, message })
             : BadRequest(new { success = false, message });
 
     private ObjectResult CinemaScopeForbidden() => StatusCode(

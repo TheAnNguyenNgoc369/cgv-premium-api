@@ -64,9 +64,10 @@ public sealed class RoomRepository : IRoomRepository
         int? excludingRoomId = null,
         CancellationToken cancellationToken = default)
     {
+        var normalizedRoomName = roomName.ToUpper();
         var query = _dbContext.Rooms
             .AsNoTracking()
-            .Where(r => r.CinemaID == cinemaId && r.RoomName == roomName);
+            .Where(r => r.CinemaID == cinemaId && r.RoomName.ToUpper() == normalizedRoomName);
 
         if (excludingRoomId.HasValue)
         {

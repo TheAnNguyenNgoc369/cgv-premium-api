@@ -10,12 +10,12 @@ public sealed class VoucherServiceTests
     public async Task Create_PercentWithinRange_CreatesActiveVoucher()
     {
         var repository = new StubRepository();
-        var service = new VoucherService(repository, new StubUserVoucherRepository(), new StubUserRepository(), new StubStorage());
+        var service = new VoucherService(repository, new StubUserVoucherRepository(), new StubUserRepository(), new StubStorage(), new StubVoucherRuleRepository());
         var result = await service.CreateAsync(1,
-            new(" summer10 ", "Discount", "percent", 10, 100_000, 50,
+            new(" summer10 ", "percent", 10, 100_000, 50,
                 new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.FromHours(7)),
-                new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(7)), null, true),
-            null, null, null, 0, null, default);
+                new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(7)), null, true, null, null, null),
+            null, default);
 
         Assert.True(result.Succeeded);
         Assert.Equal("SUMMER10", result.Voucher!.VoucherCode);
@@ -25,15 +25,15 @@ public sealed class VoucherServiceTests
     [Fact]
     public async Task Create_PercentAboveOneHundred_ReturnsValidationError()
     {
-        var service = new VoucherService(new StubRepository(), new StubUserVoucherRepository(), new StubUserRepository(), new StubStorage());
+        var service = new VoucherService(new StubRepository(), new StubUserVoucherRepository(), new StubUserRepository(), new StubStorage(), new StubVoucherRuleRepository());
         var result = await service.CreateAsync(1,
-            new("TEST", "Discount", "percent", 101, null, null,
+            new("TEST", "percent", 101, null, null,
                 new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.FromHours(7)),
-                new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(7)), null, true),
-            null, null, null, 0, null, default);
+                new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(7)), null, true, null, null, null),
+            null, default);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("DiscountValue is invalid", result.Error);
+        Assert.Equal("discountValue must be between 1-100 for percent or >= 0 for fixed.", result.Error);
     }
 
     private sealed class StubRepository : IVoucherRepository
@@ -42,12 +42,12 @@ public sealed class VoucherServiceTests
         public Task<Voucher?> GetByIdAsync(int id, CancellationToken ct) => Task.FromResult<Voucher?>(null);
         public Task<bool> CodeExistsAsync(string code, int? excludingId, CancellationToken ct) => Task.FromResult(false);
         public Task<bool> HasTransactionsAsync(int id, CancellationToken ct) => Task.FromResult(false);
-        public Task<Voucher> AddAsync(Voucher voucher, AdminActionLog log, CancellationToken ct) { voucher.VoucherID = 1; return Task.FromResult(voucher); }
-        public Task<Voucher?> UpdateAsync(Voucher voucher, AdminActionLog log, CancellationToken ct) => Task.FromResult<Voucher?>(voucher);
+        public Task<Voucher> SaveWithRulesAsync(Voucher voucher, bool isNew, IReadOnlyList<VoucherRule> newRules, AdminActionLog log, CancellationToken ct) { voucher.VoucherID = 1; return Task.FromResult(voucher); }
         public Task<bool> DeactivateAsync(int id, AdminActionLog log, CancellationToken ct) => Task.FromResult(true);
         public Task<List<Voucher>> GetRedeemableVouchersAsync(CancellationToken ct) => Task.FromResult(new List<Voucher>());
         public Task<Voucher?> GetForRedemptionAsync(int voucherId, CancellationToken ct) => Task.FromResult<Voucher?>(null);
         public Task<int> GetUserRedemptionCountAsync(int userId, int voucherId, CancellationToken ct) => Task.FromResult(0);
+        public Task IncrementPublicVoucherUsageForBookingAsync(int bookingId, CancellationToken ct) => Task.CompletedTask;
     }
 
     private sealed class StubStorage : IImageStorageService
@@ -59,10 +59,21 @@ public sealed class VoucherServiceTests
     private sealed class StubUserVoucherRepository : IUserVoucherRepository
     {
         public Task<List<UserVoucher>> GetUserVouchersAsync(int userId, CancellationToken ct) => Task.FromResult(new List<UserVoucher>());
-        public Task<UserVoucher?> GetUserVoucherAsync(int userId, int voucherId, CancellationToken ct) => Task.FromResult<UserVoucher?>(null);
-        public Task AddUserVoucherAsync(UserVoucher userVoucher, CancellationToken ct) => Task.CompletedTask;
         public Task<UserVoucher?> GetByIdAsync(int id, CancellationToken ct) => throw new NotSupportedException();
-        public Task RedeemVoucherAsync(UserVoucher userVoucher, LoyaltyPoints loyaltyPoints, int pointsRedeemed, AdminActionLog actionLog, CancellationToken ct) => throw new NotSupportedException();
+        public Task<(bool Succeeded, string? Error)> RedeemVoucherAsync(UserVoucher userVoucher, LoyaltyPoints loyaltyPoints, int pointsRedeemed, int? maxUses, int? exchangeLimit, AdminActionLog actionLog, CancellationToken ct) => throw new NotSupportedException();
+        public Task<UserVoucher?> GetAvailableOwnedAsync(int userId, int voucherId, DateTime now, CancellationToken ct) => Task.FromResult<UserVoucher?>(null);
+        public Task<UserVoucher?> GetAvailableForUpdateAsync(int userId, int voucherId, CancellationToken ct) => Task.FromResult<UserVoucher?>(null);
+        public Task MarkReservedAsUsedByBookingAsync(int bookingId, DateTime usedAt, CancellationToken ct) => Task.CompletedTask;
+        public Task ReleaseReservedByBookingAsync(int bookingId, CancellationToken ct) => Task.CompletedTask;
+    }
+
+    private sealed class StubVoucherRuleRepository : IVoucherRuleRepository
+    {
+        public Task<List<VoucherRule>> GetByVoucherIdAsync(int voucherId, CancellationToken ct) => Task.FromResult(new List<VoucherRule>());
+        public Task<VoucherRule?> GetByIdAsync(int ruleId, CancellationToken ct) => Task.FromResult<VoucherRule?>(null);
+        public Task<VoucherRule> AddAsync(VoucherRule rule, CancellationToken ct) => Task.FromResult(rule);
+        public Task<bool> DeleteAsync(int ruleId, CancellationToken ct) => Task.FromResult(true);
+        public Task<List<VoucherRule>> GetByRuleTypeAsync(int voucherId, string ruleType, CancellationToken ct) => Task.FromResult(new List<VoucherRule>());
     }
 
     private sealed class StubUserRepository : IUserRepository

@@ -26,4 +26,7 @@ public sealed class UnitOfWork : IUnitOfWork
             return result;
         });
     }
+
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
+        _dbContext.SaveChangesAsync(cancellationToken);
 }

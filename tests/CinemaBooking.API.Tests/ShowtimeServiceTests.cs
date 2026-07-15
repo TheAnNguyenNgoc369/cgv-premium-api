@@ -335,6 +335,9 @@ public sealed class ShowtimeServiceTests
             int cinemaId, int roomTypeId, DateTime startTime,
             int? excludingShowtimeId = null, CancellationToken cancellationToken = default) =>
             Task.FromResult(HasRoomTypeStartConflict);
+        public Task<bool> HasValidSeatAsync(
+            int roomId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(ActiveSeats.Any(seat => !seat.IsGap && seat.Status == "active"));
         public Task<Showtime> AddAsync(Showtime showtime, CancellationToken cancellationToken = default)
         {
             AddCallCount++;

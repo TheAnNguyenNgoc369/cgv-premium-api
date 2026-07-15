@@ -1,3 +1,4 @@
+using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
 using CinemaBooking.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
@@ -76,15 +77,39 @@ public sealed class SeatHoldExpirationJob : BackgroundService
 
             foreach (var booking in bookings)
             {
+                // Concurrency guard: re-check booking status with a row lock before releasing
+                // the voucher reservation. A concurrent payment webhook may have flipped
+                // Pending -> Paid; in that case we must leave the UserVoucher marked Used.
+                // Voucher.UsedCount is not touched here: for public vouchers it is only
+                // incremented on payment success, for loyalty it is incremented at redeem —
+                // an expired booking never contributed to the counter.
+                var currentStatus = await dbContext.Bookings
+                    .FromSqlRaw("SELECT * FROM Booking WITH (UPDLOCK, ROWLOCK) WHERE BookingID = {0}",
+                        booking.BookingID)
+                    .Select(b => b.Status)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (currentStatus != BookingStatus.Pending
+                    && currentStatus != BookingStatus.PaymentFailed)
+                {
+                    // Payment completed concurrently — leave voucher accounting intact.
+                    continue;
+                }
+
                 booking.Status = BookingStatus.Expired;
                 booking.UpdatedAt = now;
 
                 if (booking.BookingVoucher is not null)
                 {
-                    var voucher = await dbContext.Vouchers.FindAsync(
-                        new object[] { booking.BookingVoucher.VoucherID }, cancellationToken);
-                    if (voucher is not null && voucher.UsedCount > 0)
-                        voucher.UsedCount--;
+                    // Loyalty voucher: release the personal reservation by clearing BookingID.
+                    // Filter on Status == Available so a concurrently-Used voucher stays Used.
+                    // (A "reserved" UserVoucher is one where BookingID is set and Status is still Available;
+                    //  the CHECK constraint on Status has no separate Reserved value.)
+                    await dbContext.Set<UserVoucher>()
+                        .Where(uv => uv.BookingID == booking.BookingID
+                            && uv.Status == UserVoucherStatus.Available)
+                        .ExecuteUpdateAsync(setters => setters
+                            .SetProperty(uv => uv.BookingID, (int?)null), cancellationToken);
                 }
 
                 if (booking.Payment is not null)

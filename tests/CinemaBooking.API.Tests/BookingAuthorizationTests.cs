@@ -3,6 +3,9 @@ using CinemaBooking.API.Contracts.Bookings;
 using CinemaBooking.API.Controllers;
 using CinemaBooking.Application.Bookings;
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Contracts.Payment;
+using CinemaBooking.Application.Payments;
+using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Http;
@@ -54,7 +57,7 @@ public sealed class BookingAuthorizationTests
             new Claim(ClaimTypes.Role, role)
         ], "Test");
 
-        return new BookingController(service, new StubBookingRepository())
+        return new BookingController(service, new StubBookingRepository(), new StubPaymentService())
         {
             ControllerContext = new ControllerContext
             {
@@ -165,5 +168,54 @@ public sealed class BookingAuthorizationTests
         public Task<bool> HasActiveBookingHoldsAsync(int bookingId, DateTime now, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task UpdateBookingStatusAsync(int bookingId, string status, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class StubPaymentService : IPaymentService
+    {
+        public Task<PaymentOperationResult> InitiatePaymentAsync(
+            InitiatePaymentRequest request,
+            int actorUserId,
+            bool isStaff,
+            string? frontendOrigin = null,
+            string? backendOrigin = null,
+            string ipAddress = "127.0.0.1",
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<PaymentOperationResult> ConfirmCashPaymentAsync(
+            ConfirmCashPaymentRequest request,
+            int staffUserId,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<PayOSWebhookResult> ProcessPayOSWebhookAsync(
+            PayOSWebhook webhook,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<PaymentOperationResult> SyncPayOSPaymentAsync(
+            int bookingId,
+            long orderCode,
+            int actorUserId,
+            bool isStaff,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<int> ReconcilePendingPayOSPaymentsAsync(
+            int batchSize = 50,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<PayOSRedirectResult> HandlePayOSRedirectAsync(
+            long orderCode,
+            bool isCancel,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<PaymentOperationResult> GetPaymentByIdAsync(
+            int paymentId,
+            int actorUserId,
+            bool isStaff,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<PaymentOperationResult> GetPaymentByBookingIdAsync(
+            int bookingId,
+            int actorUserId,
+            bool isStaff,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

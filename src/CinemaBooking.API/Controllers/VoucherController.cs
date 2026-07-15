@@ -59,24 +59,20 @@ public sealed class VoucherController : ControllerBase
         return Ok(new { success = true, vouchers = result.Vouchers.Select(MapUserVoucher).ToList() });
     }
 
-    [HttpPost, Authorize(Roles = Roles.Admin), Consumes("multipart/form-data")]
-    public async Task<IActionResult> Create([FromForm] VoucherRequest request, CancellationToken ct)
+    [HttpPost, Authorize(Roles = Roles.Admin), Consumes("application/json")]
+    public async Task<IActionResult> Create([FromBody] VoucherRequest request, CancellationToken ct)
     {
         if (!TryUserId(out var id)) return Unauthorized();
-        await using var stream = request.Image?.OpenReadStream();
-        var result = await _service.CreateAsync(id, Command(request), stream, request.Image?.FileName,
-            request.Image?.ContentType, request.Image?.Length ?? 0, Ip(), ct);
+        var result = await _service.CreateAsync(id, Command(request), Ip(), ct);
         if (!result.Succeeded) return Error(result);
         return Created($"/api/vouchers/{result.Voucher!.VoucherID}", Map(result.Voucher));
     }
 
-    [HttpPut("{id:int}"), Authorize(Roles = Roles.Admin), Consumes("multipart/form-data")]
-    public async Task<IActionResult> Update(int id, [FromForm] VoucherRequest request, CancellationToken ct)
+    [HttpPut("{id:int}"), Authorize(Roles = Roles.Admin), Consumes("application/json")]
+    public async Task<IActionResult> Update(int id, [FromBody] VoucherRequest request, CancellationToken ct)
     {
         if (!TryUserId(out var adminId)) return Unauthorized();
-        await using var stream = request.Image?.OpenReadStream();
-        var result = await _service.UpdateAsync(adminId, id, Command(request), stream, request.Image?.FileName,
-            request.Image?.ContentType, request.Image?.Length ?? 0, Ip(), ct);
+        var result = await _service.UpdateAsync(adminId, id, Command(request), Ip(), ct);
         return result.Succeeded ? Ok(Map(result.Voucher!)) : Error(result);
     }
 
@@ -92,14 +88,19 @@ public sealed class VoucherController : ControllerBase
     { "not_found" => NotFound(new { success = false, message = r.Error }), "conflict" => Conflict(new { success = false, message = r.Error }), _ => BadRequest(new { success = false, message = r.Error }) };
     private IActionResult ErrorRedeem(RedeemVoucherResult r) => r.ErrorType switch
     { "not_found" => NotFound(new { success = false, message = r.Error }), "forbidden" => StatusCode(403, new { success = false, message = r.Error }), _ => BadRequest(new { success = false, message = r.Error }) };
-    private static VoucherCommand Command(VoucherRequest r) => new(r.VoucherCode, r.Category, r.DiscountType,
-        r.DiscountValue, r.MinOrderValue, r.MaxUses, r.ValidFrom!.Value, r.ValidUntil!.Value, r.Description, r.IsActive);
+    private static VoucherCommand Command(VoucherRequest r) => new(r.VoucherCode, r.DiscountType,
+        r.DiscountValue, r.MinOrderValue, r.MaxUses, r.ValidFrom!.Value, r.ValidUntil!.Value, r.Description, r.IsActive,
+        r.ImageUrl, r.ImagePublicId,
+        r.Rules?.Select(rule => new VoucherRuleDto(rule.RuleType, rule.RuleValue)).ToList(),
+        r.IsRedeemable, r.RequiredPoints, r.ExchangeLimit);
     private static VoucherResponse Map(Voucher v) => Map(v, DateTime.UtcNow);
-    private static VoucherResponse Map(Voucher v, DateTime currentTime) => new(v.VoucherID, v.VoucherCode, v.Category, v.DiscountType,
+    private static VoucherResponse Map(Voucher v, DateTime currentTime) => new(v.VoucherID, v.VoucherCode, v.DiscountType,
         v.DiscountValue, v.MinOrderValue, v.MaxUses, v.UsedCount, VietnamTime.FromUtc(v.ValidFrom),
-        VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description, v.IsActive, Status(v, currentTime), v.CreatedAt);
-    private static RedeemableVoucherResponse MapRedeemable(Voucher v) => new(v.VoucherID, v.VoucherCode, v.Category,
-        v.DiscountType, v.DiscountValue, v.RequiredPoints!.Value, v.RemainingQuantity, v.ExchangeLimit,
+        VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description, v.IsActive, Status(v, currentTime), v.CreatedAt,
+        v.VoucherRules?.Select(r => new VoucherRuleResponse(r.RuleID, r.RuleType, r.RuleValue, r.CreatedAt)).ToList(),
+        v.IsRedeemable, v.RequiredPoints, v.ExchangeLimit);
+    private static RedeemableVoucherResponse MapRedeemable(Voucher v) => new(v.VoucherID, v.VoucherCode,
+        v.DiscountType, v.DiscountValue, v.RequiredPoints!.Value, v.ExchangeLimit,
         VietnamTime.FromUtc(v.ValidFrom), VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description);
     private static UserVoucherResponse MapUserVoucher(UserVoucher uv) => new(uv.UserVoucherID, uv.VoucherID,
         uv.Voucher.VoucherCode, uv.Voucher.DiscountType, uv.Voucher.DiscountValue, uv.Status,
@@ -115,4 +116,5 @@ public sealed class VoucherController : ControllerBase
     }
     private bool TryUserId(out int id) => int.TryParse(User.FindFirst("userId")?.Value, out id);
     private string? Ip() => HttpContext.Connection.RemoteIpAddress?.ToString();
+
 }

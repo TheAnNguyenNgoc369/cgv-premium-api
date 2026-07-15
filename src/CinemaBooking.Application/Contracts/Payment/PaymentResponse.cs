@@ -31,3 +31,30 @@ public sealed record CashPaymentResponse(
     string Status,
     string Message
 );
+
+public sealed record InitiatePaymentResponse(
+    bool Success,
+    object Payment,
+    PaymentBookingResponse Booking,
+    int PaymentId,
+    int BookingId,
+    string PaymentMethod,
+    decimal Amount,
+    string Status,
+    string? CheckoutUrl = null,
+    string? QrCode = null,
+    string? PaymentLinkId = null,
+    long? OrderCode = null,
+    int? SessionId = null,
+    DateTime? ExpiresAt = null
+);
+
+public sealed record PaymentBookingResponse(
+    int BookingId,
+    string BookingCode,
+    decimal SubTotal,
+    decimal DiscountAmount,
+    decimal FinalAmount,
+    string Status,
+    DateTime BookingDate
+);

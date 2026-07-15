@@ -4,7 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Vouchers.RuleEngine;
 using CinemaBooking.Domain.Entities;
+using CinemaBooking.Shared.Constants;
 
 namespace CinemaBooking.Application.Bookings;
 
@@ -15,15 +17,21 @@ public sealed class BookingService : IBookingService
     private readonly IBookingRepository _bookingRepository;
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IVoucherRuleEngine _voucherRuleEngine;
+    private readonly IUserVoucherRepository _userVoucherRepository;
 
     public BookingService(
         IBookingRepository bookingRepository,
         IUserRepository userRepository,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IVoucherRuleEngine voucherRuleEngine,
+        IUserVoucherRepository userVoucherRepository)
     {
         _bookingRepository = bookingRepository;
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
+        _voucherRuleEngine = voucherRuleEngine;
+        _userVoucherRepository = userVoucherRepository;
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, List<int>? HoldIds, DateTime? ExpiresAt, SeatValidationErrors? SeatErrors)> HoldSeatsAsync(
@@ -175,6 +183,7 @@ public sealed class BookingService : IBookingService
             .ToDictionary(f => f.ItemId, f => f.Quantity);
 
         BookingVoucher? bookingVoucher = null;
+        int? redeemableVoucherId = null;
         if (pricingResult.Result.VoucherDetails is not null)
         {
             var voucher = await _bookingRepository.GetVoucherByCodeAsync(
@@ -189,6 +198,9 @@ public sealed class BookingService : IBookingService
                 DiscountApplied = pricingResult.Result.VoucherDetails.DiscountApplied,
                 UsedAt = DateTime.UtcNow
             };
+
+            if (voucher.IsRedeemable)
+                redeemableVoucherId = voucher.VoucherID;
         }
 
         var booking = new Booking
@@ -239,9 +251,10 @@ public sealed class BookingService : IBookingService
                 }
             }
 
+            Voucher? lockedVoucher = null;
             if (bookingVoucher is not null)
             {
-                var lockedVoucher = await _bookingRepository.GetVoucherByCodeWithLockAsync(
+                lockedVoucher = await _bookingRepository.GetVoucherByCodeWithLockAsync(
                     voucherCode!.Trim(), cancellationToken);
 
                 if (lockedVoucher is null)
@@ -257,17 +270,48 @@ public sealed class BookingService : IBookingService
                 if (now > lockedVoucher.ValidUntil)
                     throw new InvalidOperationException("Voucher has expired.");
 
-                if (lockedVoucher.MaxUses.HasValue && lockedVoucher.UsedCount >= lockedVoucher.MaxUses.Value)
+                // Public voucher: MaxUses gates booking consumption (the "use" step).
+                // Loyalty voucher: MaxUses is enforced at redeem time; the UserVoucher itself
+                // is the proof of entitlement and booking neither reads nor writes UsedCount.
+                if (!lockedVoucher.IsRedeemable
+                    && lockedVoucher.MaxUses.HasValue
+                    && lockedVoucher.UsedCount >= lockedVoucher.MaxUses.Value)
                     throw new InvalidOperationException("Voucher usage limit has been reached.");
+            }
+
+            UserVoucher? reservedUserVoucher = null;
+            if (redeemableVoucherId.HasValue && customerId.HasValue)
+            {
+                reservedUserVoucher = await _userVoucherRepository.GetAvailableForUpdateAsync(
+                    customerId.Value, redeemableVoucherId.Value, cancellationToken);
+
+                if (reservedUserVoucher is null)
+                    throw new InvalidOperationException(
+                        "This voucher must be redeemed to your account and be available before use.");
+
+                if (reservedUserVoucher.ExpiredAt < DateTime.UtcNow)
+                    throw new InvalidOperationException("Your redeemed voucher has expired.");
             }
 
             await _bookingRepository.AddBookingAsync(booking, cancellationToken);
             await _bookingRepository.MarkHoldsAsConfirmedAsync(
                 lockedRequestedHolds, booking.BookingID, cancellationToken);
 
-            if (bookingVoucher is not null)
-                await _bookingRepository.IncrementVoucherUsageAsync(bookingVoucher.VoucherID, cancellationToken);
+            // Voucher.UsedCount is intentionally NOT modified here:
+            //   Public  -> bumped on payment success (see PaymentService.FinalizeSuccessfulBookingAsync)
+            //   Loyalty -> bumped at redeem (see UserVoucherRepository.RedeemVoucherAsync);
+            //              booking must never touch Voucher.UsedCount for loyalty vouchers.
 
+            if (reservedUserVoucher is not null)
+            {
+                // "Reserved for this booking" = Status stays Available + BookingID is set.
+                // The DB CHECK constraint only allows available/used/expired, so we don't
+                // introduce a fourth state; concurrent bookings are blocked by the UPDLOCK
+                // in GetAvailableForUpdateAsync plus the BookingID IS NULL read filter.
+                reservedUserVoucher.BookingID = booking.BookingID;
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
             return true;
         }, cancellationToken);
 
@@ -345,10 +389,11 @@ public sealed class BookingService : IBookingService
             .Select(group => new BookingFnBItemDto(group.Key, group.Sum(item => item.Quantity)))
             .ToList();
 
+        List<Product> products = new();
         if (normalizedFnbItems.Any())
         {
             var productIds = normalizedFnbItems.Select(f => f.ItemId).ToList();
-            var products = await _bookingRepository.GetProductsByIdsAsync(productIds, cancellationToken);
+            products = await _bookingRepository.GetProductsByIdsAsync(productIds, cancellationToken);
 
             if (products.Count != productIds.Count)
             {
@@ -416,16 +461,69 @@ public sealed class BookingService : IBookingService
             if (now > voucher.ValidUntil)
                 return (false, "Voucher has expired.", null);
 
-            if (voucher.MaxUses.HasValue && voucher.UsedCount >= voucher.MaxUses.Value)
+            // Public voucher only: MaxUses gates booking use. For loyalty vouchers, MaxUses is
+            // enforced at redeem; the presence of an owned UserVoucher is the entitlement check.
+            if (!voucher.IsRedeemable
+                && voucher.MaxUses.HasValue
+                && voucher.UsedCount >= voucher.MaxUses.Value)
                 return (false, "Voucher usage limit has been reached.", null);
 
             if (voucher.MinOrderValue.HasValue && totalBeforeDiscount < voucher.MinOrderValue.Value)
                 return (false, $"A minimum order value of {voucher.MinOrderValue.Value:N0} VND is required to use this voucher.", null);
 
+            if (voucher.IsRedeemable)
+            {
+                var ownedVoucher = await _userVoucherRepository.GetAvailableOwnedAsync(
+                    userId.Value, voucher.VoucherID, now, cancellationToken);
+                if (ownedVoucher is null)
+                    return (false, "This voucher must be redeemed to your account before use, and must be available and not expired.", null);
+            }
+
+            var validationContext = new Vouchers.RuleEngine.VoucherValidationContext
+            {
+                BookingId = 0,
+                CustomerId = userId,
+                CinemaId = showtime.Room.CinemaID,
+                MovieId = showtime.MovieID,
+                RoomId = showtime.RoomID,
+                ShowtimeDateTime = showtime.StartTime,
+                MembershipTier = user?.LoyaltyTier?.TierName,
+                Seats = seats.Select(s => new Vouchers.RuleEngine.SeatValidationData
+                {
+                    SeatID = s.SeatID,
+                    SeatType = s.SeatType!.TypeName,
+                    Price = showtime.BasePrice + showtime.RoomExtraPrice + s.SeatType.ExtraPrice
+                }).ToList(),
+                Products = normalizedFnbItems.Select(fnbItem =>
+                {
+                    var product = products.First(p => p.ItemID == fnbItem.ItemId);
+                    return new Vouchers.RuleEngine.ProductValidationData
+                    {
+                        ProductID = fnbItem.ItemId,
+                        Category = product.ItemType,
+                        Quantity = fnbItem.Quantity,
+                        Price = product.Price
+                    };
+                }).ToList(),
+                PaymentMethod = string.Empty,
+                BookingTotal = totalBeforeDiscount,
+                TicketTotal = seatsSubTotal,
+                FoodTotal = fnbSubTotal,
+                Voucher = voucher,
+                ValidationTime = now
+            };
+
+            var validationResult = await _voucherRuleEngine.ValidateAsync(validationContext, cancellationToken);
+
+            if (!validationResult.IsValid)
+                return (false, validationResult.ErrorMessage ?? "Voucher validation failed.", null);
+
+            var applicableAmount = validationResult.ApplicableAmount;
+
             voucherDiscount = voucher.DiscountType == "percent"
-                ? Math.Round(totalBeforeDiscount * voucher.DiscountValue / 100, 0)
+                ? Math.Round(applicableAmount * voucher.DiscountValue / 100, 0)
                 : voucher.DiscountValue;
-            voucherDiscount = Math.Min(voucherDiscount, totalBeforeDiscount);
+            voucherDiscount = Math.Min(voucherDiscount, applicableAmount);
 
             voucherDetails = new VoucherPricingDetail
             {

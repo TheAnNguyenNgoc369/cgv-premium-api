@@ -186,9 +186,8 @@ public sealed class ShowtimeService : IShowtimeService
             return (false, CinemaScopeMessages.AccessDenied, null);
         if (room.Status != "active" || room.Cinema.Status != "active")
             return (false, "Room and cinema must be active", null);
-        if (existing is null
-            && (await _showtimeRepository.GetSeatsByRoomAsync(roomId, cancellationToken)).Count == 0)
-            return (false, "Room has no seats. Please configure seats before creating a showtime.", null);
+        if (existing is null && !await _showtimeRepository.HasValidSeatAsync(roomId, cancellationToken))
+            return (false, "Room must have at least one valid seat before creating a showtime.", null);
 
         DateTime endTime;
         try
@@ -285,10 +284,14 @@ public sealed class ShowtimeService : IShowtimeService
         _showtimeRepository.GetManagedShowtimeByIdAsync(id, cancellationToken);
 
     public async Task<(SeatMapResult? SeatMap, string? ErrorMessage)> GetSeatMapAsync(
-        int showtimeId, CancellationToken cancellationToken = default)
+        int showtimeId,
+        int? viewerCinemaId = null,
+        CancellationToken cancellationToken = default)
     {
         var showtime = await _showtimeRepository.GetShowtimeByIdAsync(showtimeId, cancellationToken);
         if (showtime is null) return (null, "Showtime not found.");
+        if (viewerCinemaId.HasValue && showtime.Room.CinemaID != viewerCinemaId.Value)
+            return (null, CinemaScopeMessages.AccessDenied);
         if (showtime.Status != "scheduled")
             return (null, "This showtime is not scheduled and its seat map is unavailable.");
         if (showtime.Room.Status != "active")

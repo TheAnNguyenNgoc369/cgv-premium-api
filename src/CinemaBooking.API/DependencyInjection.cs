@@ -33,6 +33,8 @@ public static class DependencyInjection
             {
                 options.JsonSerializerOptions.Converters.Add(
                     new VietnamDateTimeJsonConverter());
+                options.JsonSerializerOptions.Converters.Add(
+                    new JsonStringEnumConverter(allowIntegerValues: false));
                 options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
             })
             .ConfigureApiBehaviorOptions(options =>
@@ -54,6 +56,15 @@ public static class DependencyInjection
                     {
                         var fieldName = GetFieldName(errorEntry.Key);
                         var errorText = errorEntry.Error ?? string.Empty;
+                        var isEnumError = errorText.Contains("could not be converted", StringComparison.OrdinalIgnoreCase);
+                        if (isEnumError)
+                        {
+                            return new BadRequestObjectResult(new
+                            {
+                                success = false,
+                                message = $"{fieldName} has an invalid enum value."
+                            });
+                        }
 
                         if (context.HttpContext?.Request.Path.StartsWithSegments("/api/showtime-types", StringComparison.OrdinalIgnoreCase) == true)
                         {
@@ -104,6 +115,7 @@ public static class DependencyInjection
         {
             options.SchemaFilter<AuthRequestSchemaFilter>();
             options.SchemaFilter<ShowtimeRequestSchemaFilter>();
+            options.SchemaFilter<VoucherRequestSchemaFilter>();
 
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
@@ -189,11 +201,21 @@ public static class DependencyInjection
             .Validate(settings => Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri)
                 && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp),
                 "Frontend:BaseUrl must be an absolute HTTP or HTTPS URL.")
+            .Validate(settings => settings.AllowedOrigins.All(origin =>
+                Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)),
+                "Frontend:AllowedOrigins entries must be absolute HTTP or HTTPS URLs.")
             .ValidateOnStart();
 
         services.AddOptions<PayOSSettings>()
             .Bind(configuration.GetRequiredSection(PayOSSettings.SectionName))
             .ValidateDataAnnotations()
+            .Validate(settings => IsOptionalHttpUrl(settings.ReturnUrl),
+                "PayOS:ReturnUrl must be empty or an absolute HTTP or HTTPS URL.")
+            .Validate(settings => IsOptionalHttpUrl(settings.CancelUrl),
+                "PayOS:CancelUrl must be empty or an absolute HTTP or HTTPS URL.")
+            .Validate(settings => !settings.ConfirmWebhookOnStartup || IsPublicHttpsUrl(settings.WebhookUrl),
+                "PayOS:WebhookUrl must be a public HTTPS URL when PayOS:ConfirmWebhookOnStartup is enabled.")
             .ValidateOnStart();
 
         var jwtSettings = configuration
@@ -283,5 +305,19 @@ public static class DependencyInjection
             QueueLimit = 0,
             Window = TimeSpan.FromMinutes(1)
         };
+    }
+
+    private static bool IsOptionalHttpUrl(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            || (Uri.TryCreate(value, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp));
+    }
+
+    private static bool IsPublicHttpsUrl(string? value)
+    {
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            && uri.Scheme == Uri.UriSchemeHttps
+            && !uri.IsLoopback;
     }
 }

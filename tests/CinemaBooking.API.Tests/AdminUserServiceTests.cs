@@ -194,6 +194,8 @@ public sealed class AdminUserServiceTests
         public Task<T> ExecuteInTransactionAsync<T>(
             Func<Task<T>> operation,
             CancellationToken cancellationToken = default) => operation();
+
+        public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class StubImageStorageService : IImageStorageService
