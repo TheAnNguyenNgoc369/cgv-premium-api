@@ -214,6 +214,8 @@ public static class DependencyInjection
                 "PayOS:ReturnUrl must be empty or an absolute HTTP or HTTPS URL.")
             .Validate(settings => IsOptionalHttpUrl(settings.CancelUrl),
                 "PayOS:CancelUrl must be empty or an absolute HTTP or HTTPS URL.")
+            .Validate(settings => !settings.ConfirmWebhookOnStartup || IsPublicHttpsUrl(settings.WebhookUrl),
+                "PayOS:WebhookUrl must be a public HTTPS URL when PayOS:ConfirmWebhookOnStartup is enabled.")
             .ValidateOnStart();
 
         var jwtSettings = configuration
@@ -310,5 +312,12 @@ public static class DependencyInjection
         return string.IsNullOrWhiteSpace(value)
             || (Uri.TryCreate(value, UriKind.Absolute, out var uri)
                 && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp));
+    }
+
+    private static bool IsPublicHttpsUrl(string? value)
+    {
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            && uri.Scheme == Uri.UriSchemeHttps
+            && !uri.IsLoopback;
     }
 }
