@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using CinemaBooking.API.Contracts.Persons;
 
 namespace CinemaBooking.API.Contracts.Movies;
 
@@ -18,8 +19,8 @@ public sealed record MovieDetailResponse(
     string Title,
     List<string> Genres,
     string AgeRating,
-    string? Director,
-    string? Cast,
+    [property: JsonPropertyName("directors")] List<PersonSummary> Directors,
+    [property: JsonPropertyName("actors")] List<PersonSummary> Actors,
     string? Synopsis,
     int DurationMinutes,
     DateOnly? ShowingFromDate,

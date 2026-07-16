@@ -5,8 +5,6 @@ public class Movie
     public int MovieID { get; set; }
     public string Title { get; set; } = null!;
     public string AgeRating { get; set; } = null!;
-    public string? Director { get; set; }
-    public string? Cast { get; set; }
     public string? Description { get; set; }
     public string? PosterURL { get; set; }
     public string? PosterPublicId { get; set; }
@@ -20,4 +18,5 @@ public class Movie
 
     public ICollection<MovieGenre> MovieGenres { get; set; } = [];
     public ICollection<Showtime> Showtimes { get; set; } = [];
+    public ICollection<MoviePerson> MoviePersons { get; set; } = [];
 }

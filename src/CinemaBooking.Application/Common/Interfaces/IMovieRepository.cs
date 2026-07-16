@@ -23,18 +23,20 @@ public interface IMovieRepository
         string keyword,
         CancellationToken cancellationToken = default);
 
-    Task<MovieEntity> AddMovieAsync(
+    Task<(MovieEntity? Movie, IReadOnlyList<int> MissingPersonIds)> AddMovieAsync(
         MovieEntity movie,
         IReadOnlyCollection<string> genreNames,
+        IReadOnlyList<int> directorIds,
+        IReadOnlyList<int> actorIds,
         CancellationToken cancellationToken = default);
 
-    Task<MovieEntity?> UpdateMovieAsync(
+    Task<(MovieEntity? Movie, IReadOnlyList<int> MissingPersonIds)> UpdateMovieAsync(
         int movieId,
         string title,
         IReadOnlyCollection<string>? genreNames,
         string ageRating,
-        string director,
-        string? cast,
+        IReadOnlyList<int> directorIds,
+        IReadOnlyList<int> actorIds,
         string? synopsis,
         int durationMinutes,
         DateOnly? showingFromDate,

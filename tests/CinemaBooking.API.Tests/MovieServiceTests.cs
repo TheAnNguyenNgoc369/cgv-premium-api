@@ -19,7 +19,7 @@ public sealed class MovieServiceTests
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var result = await service.CreateMovieAsync(
-            "Movie", null, "P", "Director", null, null, 120,
+            "Movie", null, "P", new[] { 1 }, Array.Empty<int>(), null, 120,
             today.AddDays(startOffsetDays), today.AddDays(endOffsetDays),
             null, null, null);
 
@@ -41,7 +41,7 @@ public sealed class MovieServiceTests
         var service = new MovieService(repository, new StubImageStorageService());
 
         var result = await service.UpdateMovieAsync(
-            1, "Movie", null, "P", "Director", null, null, 120,
+            1, "Movie", null, "P", new[] { 1 }, Array.Empty<int>(), null, 120,
             today, today.AddDays(1), null, null, null, null);
 
         Assert.True(result.Succeeded);
@@ -62,7 +62,7 @@ public sealed class MovieServiceTests
         var service = new MovieService(repository, new StubImageStorageService());
 
         var result = await service.UpdateMovieAsync(
-            1, "Movie", null, "P", "Director", null, null, 120,
+            1, "Movie", null, "P", new[] { 1 }, Array.Empty<int>(), null, 120,
             today, today.AddDays(1), null, null, null, "NOW_SHOWING");
 
         Assert.True(result.Succeeded);
@@ -135,17 +135,22 @@ public sealed class MovieServiceTests
             Task.FromResult<Movie?>(null);
         public Task<List<Movie>> SearchMoviesAsync(string keyword, CancellationToken cancellationToken = default) =>
             Task.FromResult(new List<Movie>());
-        public Task<Movie> AddMovieAsync(Movie movie, IReadOnlyCollection<string> genreNames,
-            CancellationToken cancellationToken = default) => Task.FromResult(movie);
-        public Task<Movie?> UpdateMovieAsync(int movieId, string title,
-            IReadOnlyCollection<string>? genreNames, string ageRating, string director, string? cast,
+        public Task<(Movie? Movie, IReadOnlyList<int> MissingPersonIds)> AddMovieAsync(
+            Movie movie, IReadOnlyCollection<string> genreNames,
+            IReadOnlyList<int> directorIds, IReadOnlyList<int> actorIds,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<(Movie? Movie, IReadOnlyList<int> MissingPersonIds)>((movie, Array.Empty<int>()));
+        public Task<(Movie? Movie, IReadOnlyList<int> MissingPersonIds)> UpdateMovieAsync(
+            int movieId, string title,
+            IReadOnlyCollection<string>? genreNames, string ageRating,
+            IReadOnlyList<int> directorIds, IReadOnlyList<int> actorIds,
             string? synopsis, int durationMinutes, DateOnly? showingFromDate, DateOnly? showingToDate,
             string? posterUrl, string? posterPublicId, string? trailerUrl, string status, DateTime updatedAt,
             CancellationToken cancellationToken = default)
         {
             UpdatedStatus = status;
             if (ExistingMovie is not null) ExistingMovie.Status = status;
-            return Task.FromResult(ExistingMovie);
+            return Task.FromResult<(Movie? Movie, IReadOnlyList<int> MissingPersonIds)>((ExistingMovie, Array.Empty<int>()));
         }
         public Task<Movie?> UpdatePosterAsync(int movieId, string posterUrl, string posterPublicId,
             DateTime updatedAt, CancellationToken cancellationToken = default) => Task.FromResult<Movie?>(null);
