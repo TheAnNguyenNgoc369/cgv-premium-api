@@ -22,7 +22,7 @@ internal static class BookingEmailTemplate
                 Hello <strong>{Encode(fullName)}</strong>,<br />
                 The order <strong>{Encode(bookingCode)}</strong> has been sucessfully paid.
             </p>
-            {DetailRow("Movie", $"{Encode(movieTitle)} ({durationMinutes} phút)")}
+            {DetailRow("Movie", $"{Encode(movieTitle)} ({durationMinutes} minutes)")}
             {DetailRow("Format", Encode(format))}
             {DetailRow("Showtime", Encode(showtime))}
             {DetailRow("Cinema", $"{Encode(cinemaName)} - {Encode(roomName)}")}

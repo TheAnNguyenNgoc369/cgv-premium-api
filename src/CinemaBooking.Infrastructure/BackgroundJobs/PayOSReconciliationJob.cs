@@ -3,6 +3,7 @@ using CinemaBooking.Application.Payments.PayOS;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace CinemaBooking.Infrastructure.BackgroundJobs;
 
@@ -13,13 +14,16 @@ public sealed class PayOSReconciliationJob : BackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<PayOSReconciliationJob> _logger;
+    private readonly PayOSSettings _payOSSettings;
 
     public PayOSReconciliationJob(
         IServiceScopeFactory scopeFactory,
-        ILogger<PayOSReconciliationJob> logger)
+        ILogger<PayOSReconciliationJob> logger,
+        IOptions<PayOSSettings> payOSSettings)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _payOSSettings = payOSSettings.Value;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -47,6 +51,13 @@ public sealed class PayOSReconciliationJob : BackgroundService
 
     private async Task ConfirmWebhookAsync(CancellationToken cancellationToken)
     {
+        if (!_payOSSettings.ConfirmWebhookOnStartup)
+        {
+            _logger.LogInformation(
+                "PayOS webhook startup confirmation is disabled. Reconciliation job will continue.");
+            return;
+        }
+
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
