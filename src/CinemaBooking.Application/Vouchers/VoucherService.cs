@@ -226,21 +226,11 @@ public sealed class VoucherService : IVoucherService
             CreatedAt = now
         };
 
-        var log = new AdminActionLog
-        {
-            AdminID = userId,
-            TargetTable = "UserVoucher",
-            ActionType = AdminActionTypes.RedeemVoucher,
-            Description = $"User redeemed voucher {voucher.VoucherCode}",
-            IPAddress = ip,
-            CreatedAt = now
-        };
-
         try
         {
             var (succeeded, error) = await _userVoucherRepository.RedeemVoucherAsync(
                 userVoucher, loyaltyPoint, voucher.RequiredPoints.Value,
-                voucher.MaxUses, voucher.ExchangeLimit, log, ct);
+                voucher.MaxUses, voucher.ExchangeLimit, ct);
             if (!succeeded)
                 return new(false, user.TotalPoints, string.Empty, error ?? "Failed to redeem voucher", "validation");
             return new(true, user.TotalPoints - voucher.RequiredPoints.Value, voucher.VoucherCode);

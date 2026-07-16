@@ -516,7 +516,7 @@ public sealed class AuthService : IAuthService
     private static string BuildResetPasswordEmailBody(string fullName, string token, string frontendBaseUrl)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var resetUrl = $"{frontendBaseUrl.TrimEnd('/')}/reset-password?token={Uri.EscapeDataString(token)}";
+        var resetUrl = $"{frontendBaseUrl.TrimEnd('/')}/resetPassword?token={Uri.EscapeDataString(token)}";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">

@@ -18,7 +18,6 @@ public interface IUserVoucherRepository
         int pointsToDeduct,
         int? maxUses,
         int? exchangeLimit,
-        AdminActionLog log,
         CancellationToken cancellationToken);
 
     /// <summary>
