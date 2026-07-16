@@ -41,6 +41,7 @@ public sealed class ShowtimeTypeService(IShowtimeTypeRepository repository) : IS
         var type = await repository.GetAsync(typeId, false, ct); if (type is null) return Fail("Showtime type not found.");
         var movie = await repository.GetMovieAsync(movieId, ct); if (movie is null) return Fail("Movie not found.");
         var room = await repository.GetRoomAsync(roomId, ct); if (room is null) return Fail("Room not found.");
+        if (!await repository.HasValidSeatAsync(roomId, ct)) return Fail("Room must have at least one valid seat before creating a showtime.");
         if (scope.HasValue && room.CinemaID != scope || type.CinemaID != room.CinemaID) return Fail("Access denied.");
         var items = new List<ShowtimeTypeItem>(); var accepted = new List<(DateTime Start, DateTime End)>();
         for (var date = start; date <= end; date = date.AddDays(1)) foreach (var slot in type.Slots.OrderBy(x => x.StartTime))
@@ -49,10 +50,10 @@ public sealed class ShowtimeTypeService(IShowtimeTypeRepository repository) : IS
             if (!type.IsActive) (code, reason) = ("TEMPLATE_INACTIVE", "Showtime type is inactive.");
             else if (room.Status != "active" || room.Cinema.Status != "active") (code, reason) = ("ROOM_INACTIVE", "Room and cinema must be active.");
             else if (movie.DurationMin <= 0 || movie.Status is not ("now_showing" or "coming_soon")) (code, reason) = ("MOVIE_INVALID", "Movie is not eligible for scheduling.");
-            else if (movie.ShowingFrom.HasValue && date < movie.ShowingFrom) (code, reason) = ("MOVIE_NOT_RELEASED", "Movie has not been released.");
-            else if (movie.ShowingTo.HasValue && date > movie.ShowingTo) (code, reason) = ("MOVIE_EXPIRED", "Movie release period has ended.");
             else if (accepted.Any(x => begin < x.End && finish > x.Start)) (code, reason) = ("SELF_OVERLAP", "Overlap within generated showtimes.");
             else if (await repository.HasConflictAsync(roomId, begin, finish, ct)) (code, reason) = ("ROOM_OVERLAP", "Overlap with existing showtime in the same room.");
+            else if (movie.ShowingFrom.HasValue && date < movie.ShowingFrom) (code, reason) = ("MOVIE_NOT_RELEASED", "Movie has not been released.");
+            else if (movie.ShowingTo.HasValue && date > movie.ShowingTo) (code, reason) = ("MOVIE_EXPIRED", "Movie release period has ended.");
             if (code is null) accepted.Add((begin, finish)); items.Add(new(date, begin, finish, code is not null, code, reason, code is null ? (save ? "generated" : "valid") : "skipped"));
         }
         if (save && accepted.Count > 0) await repository.AddShowtimesAsync(accepted.Select(x => new Showtime { MovieID = movieId, RoomID = roomId, ShowtimeTypeID = typeId, StartTime = x.Start, EndTime = x.End, BasePrice = price, Status = "scheduled", CreatedAt = DateTime.UtcNow }), ct);

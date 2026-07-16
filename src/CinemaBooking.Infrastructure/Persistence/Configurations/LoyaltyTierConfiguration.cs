@@ -17,6 +17,7 @@ public class LoyaltyTierConfiguration : IEntityTypeConfiguration<LoyaltyTier>
         builder.Property(t => t.MaxRefundPerMonth).IsRequired();
 
         builder.HasIndex(t => t.TierName).IsUnique().HasDatabaseName("UQ_LoyaltyTiers_TierName");
+        builder.HasIndex(t => t.MinPoints).IsUnique().HasDatabaseName("UQ_LoyaltyTiers_MinPoints");
 
         builder.ToTable(t =>
         {

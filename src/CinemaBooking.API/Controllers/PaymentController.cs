@@ -31,7 +31,12 @@ public sealed class PaymentController : ControllerBase
         var isStaff = User.IsInRole(Roles.Staff);
 
         var result = await _paymentService.InitiatePaymentAsync(
-            request, userId, isStaff, cancellationToken: cancellationToken);
+            request,
+            userId,
+            isStaff,
+            Request.Headers.Origin.ToString(),
+            $"{Request.Scheme}://{Request.Host}",
+            cancellationToken: cancellationToken);
         return MapResult(result);
     }
 
@@ -65,6 +70,47 @@ public sealed class PaymentController : ControllerBase
         return result.Success
             ? Ok(result)
             : BadRequest(new { success = false, message = result.Message });
+    }
+
+    [HttpPost("payos/sync")]
+    [Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
+    public async Task<IActionResult> SyncPayOSPayment(
+        [FromQuery] int bookingId,
+        [FromQuery] long orderCode,
+        CancellationToken cancellationToken)
+    {
+        var result = await _paymentService.SyncPayOSPaymentAsync(
+            bookingId, orderCode, GetCurrentUserId(), User.IsInRole(Roles.Staff), cancellationToken);
+
+        return MapResult(result);
+    }
+
+    [HttpGet("payos/return")]
+    [AllowAnonymous]
+    public async Task<IActionResult> PayOSReturn(
+        [FromQuery] long orderCode,
+        CancellationToken cancellationToken)
+    {
+        var result = await _paymentService.HandlePayOSRedirectAsync(
+            orderCode, isCancel: false, cancellationToken);
+
+        return result.Success && result.RedirectUrl is not null
+            ? Redirect(result.RedirectUrl)
+            : NotFound(new { success = false, message = result.Message });
+    }
+
+    [HttpGet("payos/cancel")]
+    [AllowAnonymous]
+    public async Task<IActionResult> PayOSCancel(
+        [FromQuery] long orderCode,
+        CancellationToken cancellationToken)
+    {
+        var result = await _paymentService.HandlePayOSRedirectAsync(
+            orderCode, isCancel: true, cancellationToken);
+
+        return result.Success && result.RedirectUrl is not null
+            ? Redirect(result.RedirectUrl)
+            : NotFound(new { success = false, message = result.Message });
     }
 
     [HttpGet("{id}")]

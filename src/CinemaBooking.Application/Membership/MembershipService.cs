@@ -96,10 +96,10 @@ public sealed class MembershipService : IMembershipService
         if (maxRefundPerMonth < 0)
             return new CreateTierResult(false, "MaxRefundPerMonth must be greater than or equal to 0.", null);
 
-        if (await _loyaltyRepository.TierNameExistsAsync(normalizedName, cancellationToken))
+        if (await _loyaltyRepository.TierNameExistsAsync(normalizedName, null, cancellationToken))
             return new CreateTierResult(false, "A tier with this name already exists.", null);
 
-        if (await _loyaltyRepository.MinPointsExistsAsync(minPoints, cancellationToken))
+        if (await _loyaltyRepository.MinPointsExistsAsync(minPoints, null, cancellationToken))
             return new CreateTierResult(false, "A tier with this MinPoints value already exists.", null);
 
         var tier = new LoyaltyTier

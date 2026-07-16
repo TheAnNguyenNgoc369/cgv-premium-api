@@ -15,6 +15,11 @@ public interface ICinemaRepository
 
     Task<Cinema?> GetByIdAsync(int cinemaId, CancellationToken cancellationToken = default);
 
+    Task<bool> NameExistsAsync(
+        string cinemaName,
+        int? excludingCinemaId = null,
+        CancellationToken cancellationToken = default);
+
     Task<Cinema> AddAsync(Cinema cinema, CancellationToken cancellationToken = default);
 
     Task<Cinema?> UpdateAsync(

@@ -2,6 +2,7 @@ using CinemaBooking.Application.Common.ImageFiles;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Shared.Time;
+using System.Text.RegularExpressions;
 using MovieEntity = CinemaBooking.Domain.Entities.Movie;
 
 namespace CinemaBooking.Application.Movie;
@@ -26,14 +27,18 @@ public sealed class MovieService : IMovieService
     public Task<List<MovieEntity>> GetMoviesAsync(
         string? status,
         IReadOnlyCollection<int> genreIds,
+        int? cinemaId,
         CancellationToken cancellationToken = default)
     {
         var normalizedStatus = NormalizeOptionalStatus(status);
 
         return normalizedStatus == InvalidStatus
             ? Task.FromResult(new List<MovieEntity>())
-            : _movieRepository.GetMoviesAsync(normalizedStatus, genreIds, cancellationToken);
+            : _movieRepository.GetMoviesAsync(normalizedStatus, genreIds, cinemaId, cancellationToken);
     }
+
+    public Task<bool> CinemaExistsAsync(int cinemaId, CancellationToken cancellationToken = default) =>
+        _movieRepository.CinemaExistsAsync(cinemaId, cancellationToken);
 
     public async Task<IReadOnlyDictionary<int, MovieSalesInfo>> GetMovieSalesAsync(
         CancellationToken cancellationToken = default)
@@ -112,10 +117,14 @@ public sealed class MovieService : IMovieService
         if (posterValidationError is not null)
             return (false, posterValidationError, null);
 
+        var normalizedTitle = NormalizeName(title);
+        if (await _movieRepository.TitleExistsAsync(normalizedTitle, cancellationToken: cancellationToken))
+            return (false, "Movie title already exists.", null);
+
         var now = DateTime.UtcNow;
         var movie = new MovieEntity
         {
-            Title = title.Trim(),
+            Title = normalizedTitle,
             AgeRating = ageRating!.Trim().ToUpperInvariant(),
             Description = NormalizeNullable(synopsis),
             DurationMin = durationMinutes,
@@ -196,6 +205,10 @@ public sealed class MovieService : IMovieService
             return (false, "Status must be coming_soon, now_showing, or ended", null);
         }
 
+        var normalizedTitle = NormalizeName(title);
+        if (await _movieRepository.TitleExistsAsync(normalizedTitle, movieId, cancellationToken))
+            return (false, "Movie title already exists.", null);
+
         var normalizedPosterUrl = NormalizeNullable(posterUrl);
         var normalizedPosterPublicId = NormalizeNullable(posterPublicId);
         var previousPosterPublicId = existingMovie.PosterPublicId;
@@ -217,7 +230,7 @@ public sealed class MovieService : IMovieService
 
         var (updatedMovie, missingPersonIds) = await _movieRepository.UpdateMovieAsync(
             movieId,
-            title.Trim(),
+            normalizedTitle,
             genres is null ? null : NormalizeGenres(genres),
             ageRating!.Trim().ToUpperInvariant(),
             normalizedDirectorIds,
@@ -444,6 +457,9 @@ public sealed class MovieService : IMovieService
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
+
+    private static string NormalizeName(string value) =>
+        Regex.Replace(value.Trim(), @"\s+", " ");
 
     private static string? ValidatePosterMetadata(string? posterUrl, string? posterPublicId)
     {

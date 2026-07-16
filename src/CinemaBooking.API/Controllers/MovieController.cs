@@ -28,11 +28,13 @@ public sealed class MovieController : ControllerBase
     }
 
     [HttpGet]
+    [HttpGet("~/api/movies")]
     [AllowAnonymous]
     public async Task<IActionResult> GetMovies(
         [FromQuery] string? status = null,
         [FromQuery] string? genreId = null,
         [FromQuery] string? genreName = null,
+        [FromQuery] int? cinemaId = null,
         [FromQuery] int pageIndex = 1,
         [FromQuery] int pageSize = 10,
         CancellationToken cancellationToken = default)
@@ -49,6 +51,15 @@ public sealed class MovieController : ControllerBase
         if (pageIndex <= 0 || pageSize <= 0)
         {
             return BadRequest(new { success = false, message = "pageIndex and pageSize must be positive integers." });
+        }
+
+        if (cinemaId.HasValue)
+        {
+            if (cinemaId.Value <= 0)
+                return BadRequest(new { success = false, message = "cinemaId must be greater than 0." });
+
+            if (!await _movieService.CinemaExistsAsync(cinemaId.Value, cancellationToken))
+                return NotFound(new { success = false, message = "Cinema not found." });
         }
 
         if (string.IsNullOrWhiteSpace(genreId) && !string.IsNullOrWhiteSpace(genreName))
@@ -77,7 +88,7 @@ public sealed class MovieController : ControllerBase
             }
         }
 
-        var movies = await _movieService.GetMoviesAsync(status, genreIds, cancellationToken);
+        var movies = await _movieService.GetMoviesAsync(status, genreIds, cinemaId, cancellationToken);
         var movieSales = await _movieService.GetMovieSalesAsync(cancellationToken);
 
         var totalCount = movies.Count;
@@ -200,6 +211,11 @@ public sealed class MovieController : ControllerBase
 
         if (!result.Succeeded)
         {
+            if (result.ErrorMessage == "Movie title already exists.")
+            {
+                return Conflict(new { success = false, message = result.ErrorMessage });
+            }
+
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
@@ -242,6 +258,10 @@ public sealed class MovieController : ControllerBase
             if (result.ErrorMessage == "Movie not found")
             {
                 return NotFound(new { success = false, message = result.ErrorMessage });
+            }
+            if (result.ErrorMessage == "Movie title already exists.")
+            {
+                return Conflict(new { success = false, message = result.ErrorMessage });
             }
 
             return BadRequest(new { success = false, message = result.ErrorMessage });

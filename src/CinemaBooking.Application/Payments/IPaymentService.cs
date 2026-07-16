@@ -9,6 +9,8 @@ public interface IPaymentService
         InitiatePaymentRequest request,
         int actorUserId,
         bool isStaff,
+        string? frontendOrigin = null,
+        string? backendOrigin = null,
         string ipAddress = "127.0.0.1",
         CancellationToken cancellationToken = default);
 
@@ -19,6 +21,22 @@ public interface IPaymentService
 
     Task<PayOSWebhookResult> ProcessPayOSWebhookAsync(
         PayOSWebhook webhook,
+        CancellationToken cancellationToken = default);
+
+    Task<PaymentOperationResult> SyncPayOSPaymentAsync(
+        int bookingId,
+        long orderCode,
+        int actorUserId,
+        bool isStaff,
+        CancellationToken cancellationToken = default);
+
+    Task<int> ReconcilePendingPayOSPaymentsAsync(
+        int batchSize = 50,
+        CancellationToken cancellationToken = default);
+
+    Task<PayOSRedirectResult> HandlePayOSRedirectAsync(
+        long orderCode,
+        bool isCancel,
         CancellationToken cancellationToken = default);
 
     Task<PaymentOperationResult> GetPaymentByIdAsync(

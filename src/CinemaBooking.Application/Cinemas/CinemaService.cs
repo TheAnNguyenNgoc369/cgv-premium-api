@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
+using System.Text.RegularExpressions;
 
 namespace CinemaBooking.Application.Cinemas;
 
@@ -57,10 +58,14 @@ public sealed class CinemaService : ICinemaService
             return (false, "Status must be active, inactive, or maintenance", null);
         }
 
+        var normalizedName = NormalizeName(cinemaName);
+        if (await _cinemaRepository.NameExistsAsync(normalizedName, cancellationToken: cancellationToken))
+            return (false, "Cinema name already exists.", null);
+
         var now = DateTime.UtcNow;
         var cinema = new Cinema
         {
-            CinemaName = cinemaName.Trim(),
+            CinemaName = normalizedName,
             Address = address.Trim(),
             Latitude = latitude.HasValue ? Convert.ToDecimal(latitude.Value) : null,
             Longitude = longitude.HasValue ? Convert.ToDecimal(longitude.Value) : null,
@@ -111,9 +116,13 @@ public sealed class CinemaService : ICinemaService
                 return (false, "Cinema has rooms", null);
         }
 
+        var normalizedName = NormalizeName(cinemaName);
+        if (await _cinemaRepository.NameExistsAsync(normalizedName, cinemaId, cancellationToken))
+            return (false, "Cinema name already exists.", null);
+
         var updatedCinema = await _cinemaRepository.UpdateAsync(
             cinemaId,
-            cinemaName.Trim(),
+            normalizedName,
             address.Trim(),
             latitude.HasValue ? Convert.ToDecimal(latitude.Value) : null,
             longitude.HasValue ? Convert.ToDecimal(longitude.Value) : null,
@@ -181,4 +190,7 @@ public sealed class CinemaService : ICinemaService
         return EnumValueMapper.Validate(
             status, "Status", DatabaseEnumMappings.CinemaStatuses).DatabaseValue;
     }
+
+    private static string NormalizeName(string value) =>
+        Regex.Replace(value.Trim(), @"\s+", " ");
 }

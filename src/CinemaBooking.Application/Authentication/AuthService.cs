@@ -470,7 +470,7 @@ public sealed class AuthService : IAuthService
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
         var encodedToken = WebUtility.HtmlEncode(token);
-        var verificationUrl = $"{frontendBaseUrl.TrimEnd('/')}/registerEmail";
+        var verificationUrl = $"{frontendBaseUrl.TrimEnd('/')}/verify-email";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">

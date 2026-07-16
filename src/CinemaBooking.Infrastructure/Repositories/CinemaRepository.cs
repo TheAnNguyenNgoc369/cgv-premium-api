@@ -48,6 +48,21 @@ public sealed class CinemaRepository : ICinemaRepository
             .FirstOrDefaultAsync(c => c.CinemaID == cinemaId, cancellationToken);
     }
 
+    public Task<bool> NameExistsAsync(
+        string cinemaName,
+        int? excludingCinemaId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedName = cinemaName.ToUpper();
+        var query = _db.Cinemas.AsNoTracking()
+            .Where(c => c.CinemaName.ToUpper() == normalizedName);
+
+        if (excludingCinemaId.HasValue)
+            query = query.Where(c => c.CinemaID != excludingCinemaId.Value);
+
+        return query.AnyAsync(cancellationToken);
+    }
+
     public async Task<Cinema> AddAsync(
         Cinema cinema,
         CancellationToken cancellationToken = default)

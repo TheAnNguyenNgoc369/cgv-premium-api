@@ -57,22 +57,36 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<bool> TierNameExistsAsync(
-        string tierName,
+    public Task<LoyaltyTier?> GetTierByIdAsync(
+        int tierId,
         CancellationToken cancellationToken = default)
     {
-        return await _db.LoyaltyTiers
-            .AsNoTracking()
-            .AnyAsync(t => t.TierName == tierName, cancellationToken);
+        return _db.LoyaltyTiers
+            .FirstOrDefaultAsync(t => t.TierID == tierId, cancellationToken);
     }
 
-    public async Task<bool> MinPointsExistsAsync(
-        int minPoints,
+    public Task<bool> TierNameExistsAsync(
+        string tierName,
+        int? excludingTierId = null,
         CancellationToken cancellationToken = default)
     {
-        return await _db.LoyaltyTiers
-            .AsNoTracking()
-            .AnyAsync(t => t.MinPoints == minPoints, cancellationToken);
+        var normalizedName = tierName.ToLower();
+
+        return _db.LoyaltyTiers.AnyAsync(
+            t => t.TierName.ToLower() == normalizedName
+                && (!excludingTierId.HasValue || t.TierID != excludingTierId.Value),
+            cancellationToken);
+    }
+
+    public Task<bool> MinPointsExistsAsync(
+        int minPoints,
+        int? excludingTierId = null,
+        CancellationToken cancellationToken = default)
+    {
+        return _db.LoyaltyTiers.AnyAsync(
+            t => t.MinPoints == minPoints
+                && (!excludingTierId.HasValue || t.TierID != excludingTierId.Value),
+            cancellationToken);
     }
 
     public async Task<LoyaltyTier> AddTierAsync(
@@ -82,6 +96,54 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
         await _db.LoyaltyTiers.AddAsync(tier, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         return tier;
+    }
+
+    public async Task<LoyaltyTier?> UpdateTierAsync(
+        int tierId,
+        string tierName,
+        int minPoints,
+        decimal discountRate,
+        int maxRefundPerMonth,
+        CancellationToken cancellationToken = default)
+    {
+        var tier = await _db.LoyaltyTiers
+            .FirstOrDefaultAsync(t => t.TierID == tierId, cancellationToken);
+
+        if (tier is null)
+        {
+            return null;
+        }
+
+        tier.TierName = tierName;
+        tier.MinPoints = minPoints;
+        tier.DiscountRate = discountRate;
+        tier.MaxRefundPerMonth = maxRefundPerMonth;
+        await _db.SaveChangesAsync(cancellationToken);
+        return tier;
+    }
+
+    public Task<bool> HasAssignedUsersAsync(
+        int tierId,
+        CancellationToken cancellationToken = default)
+    {
+        return _db.Users.AnyAsync(u => u.LoyaltyTierID == tierId, cancellationToken);
+    }
+
+    public async Task<bool> DeleteTierAsync(
+        int tierId,
+        CancellationToken cancellationToken = default)
+    {
+        var tier = await _db.LoyaltyTiers
+            .FirstOrDefaultAsync(t => t.TierID == tierId, cancellationToken);
+
+        if (tier is null)
+        {
+            return false;
+        }
+
+        _db.LoyaltyTiers.Remove(tier);
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task AddLoyaltyPointAsync(

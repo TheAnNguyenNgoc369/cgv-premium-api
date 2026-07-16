@@ -28,6 +28,7 @@ public sealed class MovieRepository : IMovieRepository
     public Task<List<Movie>> GetMoviesAsync(
         string? status,
         IReadOnlyCollection<int> genreIds,
+        int? cinemaId,
         CancellationToken cancellationToken = default)
     {
         var query = _dbContext.Movie
@@ -48,9 +49,36 @@ public sealed class MovieRepository : IMovieRepository
             query = query.Where(m => m.MovieGenres.Any(mg => genreIds.Contains(mg.GenreID)));
         }
 
+        if (cinemaId.HasValue)
+        {
+            query = query.Where(m => _dbContext.Showtimes.Any(s => s.MovieID == m.MovieID
+                && s.Room.CinemaID == cinemaId.Value));
+        }
+
         return query
             .OrderBy(m => m.Title)
             .ToListAsync(cancellationToken);
+    }
+
+    public Task<bool> CinemaExistsAsync(
+        int cinemaId,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.Cinemas.AsNoTracking()
+            .AnyAsync(c => c.CinemaID == cinemaId, cancellationToken);
+
+    public Task<bool> TitleExistsAsync(
+        string title,
+        int? excludingMovieId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedTitle = title.ToUpper();
+        var query = _dbContext.Movie.AsNoTracking()
+            .Where(m => m.Title.ToUpper() == normalizedTitle);
+
+        if (excludingMovieId.HasValue)
+            query = query.Where(m => m.MovieID != excludingMovieId.Value);
+
+        return query.AnyAsync(cancellationToken);
     }
 
     public Task<List<MovieTicketSales>> GetMovieTicketSalesAsync(

@@ -75,7 +75,7 @@ public sealed class MovieServiceTests
         var repository = new StubMovieRepository();
         var service = new MovieService(repository, new StubImageStorageService());
 
-        await service.GetMoviesAsync("now_showing", new[] { 1, 2 });
+        await service.GetMoviesAsync("now_showing", new[] { 1, 2 }, cinemaId: null);
 
         Assert.Equal("now_showing", repository.Status);
         Assert.Equal(new[] { 1, 2 }, repository.GenreIds);
@@ -118,13 +118,22 @@ public sealed class MovieServiceTests
         public List<MovieTicketSales> TicketSales { get; init; } = [];
 
         public Task<List<Movie>> GetMoviesAsync(
-            string? status, IReadOnlyCollection<int> genreIds,
+            string? status, IReadOnlyCollection<int> genreIds, int? cinemaId,
             CancellationToken cancellationToken = default)
         {
             Status = status;
             GenreIds = genreIds;
             return Task.FromResult(new List<Movie>());
         }
+
+        public Task<bool> CinemaExistsAsync(int cinemaId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(true);
+
+        public Task<bool> TitleExistsAsync(
+            string title,
+            int? excludingMovieId = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
 
         public Task<List<MovieTicketSales>> GetMovieTicketSalesAsync(
             CancellationToken cancellationToken = default) => Task.FromResult(TicketSales);

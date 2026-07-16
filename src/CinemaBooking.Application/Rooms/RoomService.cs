@@ -2,6 +2,7 @@ using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Application.Common.Security;
+using System.Text.RegularExpressions;
 
 namespace CinemaBooking.Application.Rooms;
 
@@ -57,10 +58,11 @@ public sealed class RoomService : IRoomService
             return (false, validation.ErrorMessage, null);
         }
 
+        var normalizedName = NormalizeName(name);
         var room = new Room
         {
             CinemaID = cinemaId,
-            RoomName = name.Trim(),
+            RoomName = normalizedName,
             RoomTypeID = roomTypeId,
             Capacity = 0,
             Status = validation.Status!,
@@ -115,7 +117,7 @@ public sealed class RoomService : IRoomService
         var updatedRoom = await _roomRepository.UpdateAsync(
             roomId,
             cinemaId,
-            name.Trim(),
+            NormalizeName(name),
             roomTypeId,
             validation.Status!,
             NormalizeNullable(description),
@@ -192,7 +194,7 @@ public sealed class RoomService : IRoomService
 
         if (await _roomRepository.NameExistsInCinemaAsync(
                 cinemaId,
-                name.Trim(),
+                NormalizeName(name),
                 excludingRoomId,
                 cancellationToken))
         {
@@ -213,4 +215,7 @@ public sealed class RoomService : IRoomService
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
+
+    private static string NormalizeName(string value) =>
+        Regex.Replace(value.Trim(), @"\s+", " ");
 }

@@ -19,7 +19,7 @@ public sealed class ProductController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Roles = Roles.Admin)]
+    [AllowAnonymous]
     public async Task<IActionResult> GetProducts(CancellationToken cancellationToken)
     {
         var products = await _productService.GetProductsAsync(cancellationToken);
@@ -37,6 +37,7 @@ public sealed class ProductController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetProductById(
         int id,
         CancellationToken cancellationToken)
