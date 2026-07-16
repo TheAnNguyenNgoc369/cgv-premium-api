@@ -35,6 +35,8 @@ public sealed class MovieRepository : IMovieRepository
             .AsNoTracking()
             .Include(m => m.MovieGenres)
             .ThenInclude(mg => mg.Genre)
+            .Include(m => m.MoviePersons)
+            .ThenInclude(mp => mp.Person)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status))
@@ -110,6 +112,8 @@ public sealed class MovieRepository : IMovieRepository
             .AsNoTracking()
             .Include(m => m.MovieGenres)
             .ThenInclude(mg => mg.Genre)
+            .Include(m => m.MoviePersons)
+            .ThenInclude(mp => mp.Person)
             .FirstOrDefaultAsync(m => m.MovieID == id, cancellationToken);
     }
 
@@ -121,30 +125,50 @@ public sealed class MovieRepository : IMovieRepository
             .AsNoTracking()
             .Include(m => m.MovieGenres)
             .ThenInclude(mg => mg.Genre)
+            .Include(m => m.MoviePersons)
+            .ThenInclude(mp => mp.Person)
             .Where(m => m.Title.Contains(keyword))
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<Movie> AddMovieAsync(
+    public async Task<(Movie? Movie, IReadOnlyList<int> MissingPersonIds)> AddMovieAsync(
         Movie movie,
         IReadOnlyCollection<string> genreNames,
+        IReadOnlyList<int> directorIds,
+        IReadOnlyList<int> actorIds,
         CancellationToken cancellationToken = default)
     {
-        movie.MovieGenres = await BuildMovieGenresAsync(genreNames, cancellationToken);
+        var missingPersonIds = await FindMissingPersonIdsAsync(directorIds, actorIds, cancellationToken);
+        if (missingPersonIds.Count > 0)
+        {
+            return (null, missingPersonIds);
+        }
 
-        _dbContext.Movie.Add(movie);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<(Movie? Movie, IReadOnlyList<int> MissingPersonIds)>(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        return await GetMovieByIdAsync(movie.MovieID, cancellationToken) ?? movie;
+            movie.MovieGenres = await BuildMovieGenresAsync(genreNames, cancellationToken);
+            movie.MoviePersons = BuildMoviePersonRows(directorIds, actorIds);
+
+            _dbContext.Movie.Add(movie);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            var reloaded = await GetMovieByIdAsync(movie.MovieID, cancellationToken) ?? movie;
+            return (reloaded, Array.Empty<int>());
+        });
     }
 
-    public async Task<Movie?> UpdateMovieAsync(
+    public async Task<(Movie? Movie, IReadOnlyList<int> MissingPersonIds)> UpdateMovieAsync(
         int movieId,
         string title,
         IReadOnlyCollection<string>? genreNames,
         string ageRating,
-        string director,
-        string? cast,
+        IReadOnlyList<int> directorIds,
+        IReadOnlyList<int> actorIds,
         string? synopsis,
         int durationMinutes,
         DateOnly? showingFromDate,
@@ -156,38 +180,55 @@ public sealed class MovieRepository : IMovieRepository
         DateTime updatedAt,
         CancellationToken cancellationToken = default)
     {
-        var movie = await _dbContext.Movie
-            .Include(m => m.MovieGenres)
-            .FirstOrDefaultAsync(m => m.MovieID == movieId, cancellationToken);
-
-        if (movie is null)
+        var missingPersonIds = await FindMissingPersonIdsAsync(directorIds, actorIds, cancellationToken);
+        if (missingPersonIds.Count > 0)
         {
-            return null;
+            return (null, missingPersonIds);
         }
 
-        movie.Title = title;
-        movie.AgeRating = ageRating;
-        movie.Director = director;
-        movie.Cast = cast;
-        movie.Description = synopsis;
-        movie.DurationMin = durationMinutes;
-        movie.ShowingFrom = showingFromDate;
-        movie.ShowingTo = showingToDate;
-        movie.PosterURL = posterUrl;
-        movie.PosterPublicId = posterPublicId;
-        movie.TrailerURL = trailerUrl;
-        movie.Status = status;
-        movie.UpdatedAt = updatedAt;
-
-        if (genreNames is not null)
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<(Movie? Movie, IReadOnlyList<int> MissingPersonIds)>(async () =>
         {
-            _dbContext.MovieGenres.RemoveRange(movie.MovieGenres);
-            movie.MovieGenres = await BuildMovieGenresAsync(genreNames, cancellationToken);
-        }
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            var movie = await _dbContext.Movie
+                .Include(m => m.MovieGenres)
+                .Include(m => m.MoviePersons)
+                .FirstOrDefaultAsync(m => m.MovieID == movieId, cancellationToken);
 
-        return await GetMovieByIdAsync(movieId, cancellationToken);
+            if (movie is null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return (null, Array.Empty<int>());
+            }
+
+            movie.Title = title;
+            movie.AgeRating = ageRating;
+            movie.Description = synopsis;
+            movie.DurationMin = durationMinutes;
+            movie.ShowingFrom = showingFromDate;
+            movie.ShowingTo = showingToDate;
+            movie.PosterURL = posterUrl;
+            movie.PosterPublicId = posterPublicId;
+            movie.TrailerURL = trailerUrl;
+            movie.Status = status;
+            movie.UpdatedAt = updatedAt;
+
+            if (genreNames is not null)
+            {
+                _dbContext.MovieGenres.RemoveRange(movie.MovieGenres);
+                movie.MovieGenres = await BuildMovieGenresAsync(genreNames, cancellationToken);
+            }
+
+            _dbContext.MoviePersons.RemoveRange(movie.MoviePersons);
+            movie.MoviePersons = BuildMoviePersonRows(directorIds, actorIds);
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            var reloaded = await GetMovieByIdAsync(movieId, cancellationToken);
+            return (reloaded, Array.Empty<int>());
+        });
     }
 
     public async Task<Movie?> UpdatePosterAsync(
@@ -224,21 +265,30 @@ public sealed class MovieRepository : IMovieRepository
         int movieId,
         CancellationToken cancellationToken = default)
     {
-        var movie = await _dbContext.Movie
-            .Include(m => m.MovieGenres)
-            .FirstOrDefaultAsync(m => m.MovieID == movieId, cancellationToken);
-
-        if (movie is null)
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            return false;
-        }
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        _dbContext.MovieGenres.RemoveRange(movie.MovieGenres);
-        _dbContext.Movie.Remove(movie);
+            var movie = await _dbContext.Movie
+                .Include(m => m.MovieGenres)
+                .Include(m => m.MoviePersons)
+                .FirstOrDefaultAsync(m => m.MovieID == movieId, cancellationToken);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            if (movie is null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return false;
+            }
 
-        return true;
+            _dbContext.MovieGenres.RemoveRange(movie.MovieGenres);
+            _dbContext.MoviePersons.RemoveRange(movie.MoviePersons);
+            _dbContext.Movie.Remove(movie);
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        });
     }
 
     private async Task<List<MovieGenre>> BuildMovieGenresAsync(
@@ -272,5 +322,72 @@ public sealed class MovieRepository : IMovieRepository
             .Concat(missingGenres)
             .Select(genre => new MovieGenre { Genre = genre })
             .ToList();
+    }
+
+    private async Task<IReadOnlyList<int>> FindMissingPersonIdsAsync(
+        IReadOnlyList<int> directorIds,
+        IReadOnlyList<int> actorIds,
+        CancellationToken cancellationToken)
+    {
+        var allIds = directorIds
+            .Concat(actorIds)
+            .Distinct()
+            .ToList();
+
+        if (allIds.Count == 0)
+        {
+            return Array.Empty<int>();
+        }
+
+        var existingIds = await _dbContext.Persons
+            .Where(p => allIds.Contains(p.PersonId))
+            .Select(p => p.PersonId)
+            .ToListAsync(cancellationToken);
+
+        var existingSet = new HashSet<int>(existingIds);
+        var missing = allIds.Where(id => !existingSet.Contains(id)).ToList();
+        return missing;
+    }
+
+    private static List<MoviePerson> BuildMoviePersonRows(
+        IReadOnlyList<int> directorIds,
+        IReadOnlyList<int> actorIds)
+    {
+        var rows = new List<MoviePerson>(directorIds.Count + actorIds.Count);
+        var seen = new HashSet<(int PersonId, string Role)>();
+
+        for (var index = 0; index < directorIds.Count; index++)
+        {
+            var personId = directorIds[index];
+            if (!seen.Add((personId, MoviePersonRoles.Director)))
+            {
+                continue;
+            }
+
+            rows.Add(new MoviePerson
+            {
+                PersonId = personId,
+                Role = MoviePersonRoles.Director,
+                DisplayOrder = index
+            });
+        }
+
+        for (var index = 0; index < actorIds.Count; index++)
+        {
+            var personId = actorIds[index];
+            if (!seen.Add((personId, MoviePersonRoles.Actor)))
+            {
+                continue;
+            }
+
+            rows.Add(new MoviePerson
+            {
+                PersonId = personId,
+                Role = MoviePersonRoles.Actor,
+                DisplayOrder = index
+            });
+        }
+
+        return rows;
     }
 }

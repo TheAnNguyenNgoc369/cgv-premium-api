@@ -86,8 +86,8 @@ public sealed class MovieService : IMovieService
         string title,
         List<string>? genres,
         string? ageRating,
-        string director,
-        string? cast,
+        IReadOnlyList<int> directorIds,
+        IReadOnlyList<int> actorIds,
         string? synopsis,
         int durationMinutes,
         DateOnly? showingFromDate,
@@ -97,10 +97,13 @@ public sealed class MovieService : IMovieService
         string? trailerUrl,
         CancellationToken cancellationToken = default)
     {
+        var normalizedDirectorIds = NormalizePersonIds(directorIds);
+        var normalizedActorIds = NormalizePersonIds(actorIds);
+
         var validation = ValidateMovie(
             title,
             ageRating,
-            director,
+            normalizedDirectorIds,
             durationMinutes,
             showingFromDate,
             showingToDate);
@@ -123,8 +126,6 @@ public sealed class MovieService : IMovieService
         {
             Title = normalizedTitle,
             AgeRating = ageRating!.Trim().ToUpperInvariant(),
-            Director = director.Trim(),
-            Cast = NormalizeNullable(cast),
             Description = NormalizeNullable(synopsis),
             DurationMin = durationMinutes,
             ShowingFrom = showingFromDate,
@@ -140,10 +141,18 @@ public sealed class MovieService : IMovieService
             UpdatedAt = now
         };
 
-        var createdMovie = await _movieRepository.AddMovieAsync(
+        var (createdMovie, missingPersonIds) = await _movieRepository.AddMovieAsync(
             movie,
             NormalizeGenres(genres),
+            normalizedDirectorIds,
+            normalizedActorIds,
             cancellationToken);
+
+        if (missingPersonIds.Count > 0)
+        {
+            return (false, FormatMissingPersonError(missingPersonIds), null);
+        }
+
         return (true, null, createdMovie);
     }
 
@@ -152,8 +161,8 @@ public sealed class MovieService : IMovieService
         string title,
         List<string>? genres,
         string? ageRating,
-        string director,
-        string? cast,
+        IReadOnlyList<int> directorIds,
+        IReadOnlyList<int> actorIds,
         string? synopsis,
         int durationMinutes,
         DateOnly? showingFromDate,
@@ -170,10 +179,13 @@ public sealed class MovieService : IMovieService
             return (false, "Movie not found", null);
         }
 
+        var normalizedDirectorIds = NormalizePersonIds(directorIds);
+        var normalizedActorIds = NormalizePersonIds(actorIds);
+
         var validation = ValidateMovie(
             title,
             ageRating,
-            director,
+            normalizedDirectorIds,
             durationMinutes,
             showingFromDate,
             showingToDate);
@@ -216,13 +228,13 @@ public sealed class MovieService : IMovieService
             }
         }
 
-        var updatedMovie = await _movieRepository.UpdateMovieAsync(
+        var (updatedMovie, missingPersonIds) = await _movieRepository.UpdateMovieAsync(
             movieId,
             normalizedTitle,
             genres is null ? null : NormalizeGenres(genres),
             ageRating!.Trim().ToUpperInvariant(),
-            director.Trim(),
-            NormalizeNullable(cast),
+            normalizedDirectorIds,
+            normalizedActorIds,
             NormalizeNullable(synopsis),
             durationMinutes,
             showingFromDate,
@@ -233,6 +245,11 @@ public sealed class MovieService : IMovieService
             normalizedStatus ?? existingMovie.Status,
             DateTime.UtcNow,
             cancellationToken);
+
+        if (missingPersonIds.Count > 0)
+        {
+            return (false, FormatMissingPersonError(missingPersonIds), null);
+        }
 
         if (updatedMovie is null)
         {
@@ -363,7 +380,7 @@ public sealed class MovieService : IMovieService
     private static (bool Succeeded, string? ErrorMessage) ValidateMovie(
         string title,
         string? ageRating,
-        string director,
+        IReadOnlyList<int> directorIds,
         int durationMinutes,
         DateOnly? showingFromDate,
         DateOnly? showingToDate)
@@ -373,9 +390,9 @@ public sealed class MovieService : IMovieService
             return (false, "Title is required");
         }
 
-        if (string.IsNullOrWhiteSpace(director))
+        if (directorIds.Count == 0)
         {
-            return (false, "Director is required");
+            return (false, "At least one director is required");
         }
 
         if (durationMinutes <= 0)
@@ -460,5 +477,36 @@ public sealed class MovieService : IMovieService
             .Select(genre => genre.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList() ?? [];
+    }
+
+    private static IReadOnlyList<int> NormalizePersonIds(IReadOnlyList<int>? personIds)
+    {
+        if (personIds is null || personIds.Count == 0)
+        {
+            return [];
+        }
+
+        var seen = new HashSet<int>();
+        var result = new List<int>(personIds.Count);
+        foreach (var id in personIds)
+        {
+            if (id <= 0)
+            {
+                continue;
+            }
+
+            if (seen.Add(id))
+            {
+                result.Add(id);
+            }
+        }
+
+        return result;
+    }
+
+    private static string FormatMissingPersonError(IReadOnlyList<int> missingIds)
+    {
+        var joined = string.Join(", ", missingIds);
+        return $"Person(s) not found: {joined}";
     }
 }

@@ -25,6 +25,8 @@ public class CinemaBookingDbContext : DbContext
     public DbSet<Genre> Genres => Set<Genre>();
     public DbSet<Movie> Movie => Set<Movie>();
     public DbSet<MovieGenre> MovieGenres => Set<MovieGenre>();
+    public DbSet<Person> Persons => Set<Person>();
+    public DbSet<MoviePerson> MoviePersons => Set<MoviePerson>();
     public DbSet<Room> Rooms => Set<Room>();
     public DbSet<RoomType> RoomTypes => Set<RoomType>();
     public DbSet<SeatType> SeatTypes => Set<SeatType>();

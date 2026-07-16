@@ -14,7 +14,6 @@ public class MovieConfiguration : IEntityTypeConfiguration<Movie>
 
         builder.Property(m => m.Title).HasMaxLength(200).IsRequired();
         builder.Property(m => m.AgeRating).HasMaxLength(10).IsRequired();
-        builder.Property(m => m.Director).HasMaxLength(100);
         builder.Property(m => m.PosterURL).HasMaxLength(500);
         builder.Property(m => m.PosterPublicId).HasMaxLength(255);
         builder.Property(m => m.TrailerURL).HasMaxLength(500);
