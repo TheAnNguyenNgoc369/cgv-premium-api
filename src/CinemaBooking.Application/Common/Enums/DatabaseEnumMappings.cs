@@ -35,8 +35,6 @@ public static class DatabaseEnumMappings
         EnumValueMapper.CreateMappings("top_up", "payment", "refund");
     public static readonly IReadOnlyDictionary<string, string> LoyaltyTransactionTypes =
         EnumValueMapper.CreateMappings("earn", "redeem", "expire", "adjust");
-    public static readonly IReadOnlyDictionary<string, string> LoyaltyTierNames =
-        EnumValueMapper.CreateMappings("silver", "gold", "platinum", "megavip");
     public static readonly IReadOnlyDictionary<string, string> UserRoles =
         EnumValueMapper.CreateMappings("customer", "staff", "admin", "manager");
     public static readonly IReadOnlyDictionary<string, string> UserStatuses =

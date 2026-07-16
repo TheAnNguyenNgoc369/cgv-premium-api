@@ -11,6 +11,13 @@ public interface IMembershipService
     Task<List<LoyaltyTier>> GetTiersAsync(
         CancellationToken cancellationToken = default);
 
+    Task<CreateTierResult> CreateTierAsync(
+        string tierName,
+        int minPoints,
+        decimal discountRate,
+        int maxRefundPerMonth,
+        CancellationToken cancellationToken = default);
+
     Task<List<LoyaltyPointHistory>> GetPointHistoryAsync(
         int userId,
         CancellationToken cancellationToken = default);
@@ -42,4 +49,10 @@ public sealed record LoyaltyPointHistory(
     string TransactionType,
     string? Description,
     DateTime CreatedAt
+);
+
+public sealed record CreateTierResult(
+    bool Succeeded,
+    string? ErrorMessage,
+    LoyaltyTier? Tier
 );

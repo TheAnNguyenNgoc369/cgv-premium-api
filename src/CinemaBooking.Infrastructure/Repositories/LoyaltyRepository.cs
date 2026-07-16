@@ -57,6 +57,33 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<bool> TierNameExistsAsync(
+        string tierName,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.LoyaltyTiers
+            .AsNoTracking()
+            .AnyAsync(t => t.TierName == tierName, cancellationToken);
+    }
+
+    public async Task<bool> MinPointsExistsAsync(
+        int minPoints,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.LoyaltyTiers
+            .AsNoTracking()
+            .AnyAsync(t => t.MinPoints == minPoints, cancellationToken);
+    }
+
+    public async Task<LoyaltyTier> AddTierAsync(
+        LoyaltyTier tier,
+        CancellationToken cancellationToken = default)
+    {
+        await _db.LoyaltyTiers.AddAsync(tier, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+        return tier;
+    }
+
     public async Task AddLoyaltyPointAsync(
         LoyaltyPoints loyaltyPoint,
         CancellationToken cancellationToken = default)

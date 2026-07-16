@@ -19,6 +19,18 @@ public interface ILoyaltyRepository
     Task<List<LoyaltyTier>> GetAllTiersAsync(
         CancellationToken cancellationToken = default);
 
+    Task<bool> TierNameExistsAsync(
+        string tierName,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> MinPointsExistsAsync(
+        int minPoints,
+        CancellationToken cancellationToken = default);
+
+    Task<LoyaltyTier> AddTierAsync(
+        LoyaltyTier tier,
+        CancellationToken cancellationToken = default);
+
     Task AddLoyaltyPointAsync(
         LoyaltyPoints loyaltyPoint,
         CancellationToken cancellationToken = default);

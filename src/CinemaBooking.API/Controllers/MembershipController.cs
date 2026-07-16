@@ -1,5 +1,6 @@
 using CinemaBooking.API.Contracts.Membership;
 using CinemaBooking.Application.Membership;
+using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -52,6 +53,37 @@ public sealed class MembershipController : ControllerBase
         )).ToList();
 
         return Ok(response);
+    }
+
+    [HttpPost("tiers")]
+    [Authorize(Roles = Roles.Admin)]
+    public async Task<IActionResult> CreateTier(
+        [FromBody] CreateTierRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new { message = "Request body is required." });
+
+        var result = await _membershipService.CreateTierAsync(
+            request.TierName,
+            request.MinPoints,
+            request.DiscountRate,
+            request.MaxRefundPerMonth,
+            cancellationToken);
+
+        if (!result.Succeeded)
+            return BadRequest(new { message = result.ErrorMessage });
+
+        var tier = result.Tier!;
+        var response = new TierResponse(
+            TierID: tier.TierID,
+            TierName: tier.TierName,
+            MinPoints: tier.MinPoints,
+            DiscountRate: tier.DiscountRate,
+            TotalRefunds: tier.MaxRefundPerMonth
+        );
+
+        return CreatedAtAction(nameof(GetTiers), null, response);
     }
 
     [HttpGet("points-history")]

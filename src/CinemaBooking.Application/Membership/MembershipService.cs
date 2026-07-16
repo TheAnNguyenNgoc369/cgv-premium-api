@@ -72,6 +72,48 @@ public sealed class MembershipService : IMembershipService
         return await _loyaltyRepository.GetAllTiersAsync(cancellationToken);
     }
 
+    public async Task<CreateTierResult> CreateTierAsync(
+        string tierName,
+        int minPoints,
+        decimal discountRate,
+        int maxRefundPerMonth,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedName = tierName?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(normalizedName))
+            return new CreateTierResult(false, "Tier name is required.", null);
+
+        if (normalizedName.Length > 20)
+            return new CreateTierResult(false, "Tier name must not exceed 20 characters.", null);
+
+        if (minPoints < 0)
+            return new CreateTierResult(false, "MinPoints must be greater than or equal to 0.", null);
+
+        if (discountRate < 0m || discountRate > 1m)
+            return new CreateTierResult(false, "DiscountRate must be between 0 and 1.", null);
+
+        if (maxRefundPerMonth < 0)
+            return new CreateTierResult(false, "MaxRefundPerMonth must be greater than or equal to 0.", null);
+
+        if (await _loyaltyRepository.TierNameExistsAsync(normalizedName, cancellationToken))
+            return new CreateTierResult(false, "A tier with this name already exists.", null);
+
+        if (await _loyaltyRepository.MinPointsExistsAsync(minPoints, cancellationToken))
+            return new CreateTierResult(false, "A tier with this MinPoints value already exists.", null);
+
+        var tier = new LoyaltyTier
+        {
+            TierName = normalizedName,
+            MinPoints = minPoints,
+            DiscountRate = discountRate,
+            MaxRefundPerMonth = maxRefundPerMonth
+        };
+
+        var created = await _loyaltyRepository.AddTierAsync(tier, cancellationToken);
+        return new CreateTierResult(true, null, created);
+    }
+
     public async Task<List<LoyaltyPointHistory>> GetPointHistoryAsync(
         int userId,
         CancellationToken cancellationToken = default)

@@ -55,7 +55,6 @@ CREATE TABLE LoyaltyTiers (
     DiscountRate DECIMAL(4,2) NOT NULL,
     CONSTRAINT PK_LoyaltyTiers PRIMARY KEY (TierID),
     CONSTRAINT UQ_LoyaltyTiers_TierName UNIQUE (TierName),
-    CONSTRAINT CK_LoyaltyTiers_TierName CHECK (TierName IN ('silver', 'gold', 'platinum', 'megavip')),
     CONSTRAINT CK_LoyaltyTiers_MinPoints CHECK (MinPoints >= 0),
     CONSTRAINT CK_LoyaltyTiers_DiscountRate CHECK (DiscountRate >= 0 AND DiscountRate <= 1)
 );

@@ -20,7 +20,6 @@ public class LoyaltyTierConfiguration : IEntityTypeConfiguration<LoyaltyTier>
 
         builder.ToTable(t =>
         {
-            t.HasCheckConstraint("CK_LoyaltyTiers_TierName", "[TierName] IN ('silver', 'gold', 'platinum', 'megavip')");
             t.HasCheckConstraint("CK_LoyaltyTiers_MinPoints", "[MinPoints] >= 0");
             t.HasCheckConstraint("CK_LoyaltyTiers_DiscountRate", "[DiscountRate] >= 0 AND [DiscountRate] <= 1");
         });

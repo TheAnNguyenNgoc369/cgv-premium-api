@@ -4,6 +4,7 @@ using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CinemaBooking.Infrastructure.Migrations
 {
     [DbContext(typeof(CinemaBookingDbContext))]
-    partial class CinemaBookingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260717000000_MakeLoyaltyTiersDynamic")]
+    partial class MakeLoyaltyTiersDynamic
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2798,3 +2801,4 @@ namespace CinemaBooking.Infrastructure.Migrations
         }
     }
 }
+
