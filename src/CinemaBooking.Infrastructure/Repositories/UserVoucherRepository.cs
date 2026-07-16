@@ -66,7 +66,6 @@ public sealed class UserVoucherRepository : IUserVoucherRepository
         int pointsToDeduct,
         int? maxUses,
         int? exchangeLimit,
-        AdminActionLog log,
         CancellationToken ct)
     {
         var strategy = _db.Database.CreateExecutionStrategy();
@@ -119,7 +118,6 @@ public sealed class UserVoucherRepository : IUserVoucherRepository
 
             await _db.Set<UserVoucher>().AddAsync(userVoucher, ct);
             await _db.LoyaltyPoints.AddAsync(loyaltyPoint, ct);
-            _db.AdminActionLogs.Add(log);
 
             await _db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);

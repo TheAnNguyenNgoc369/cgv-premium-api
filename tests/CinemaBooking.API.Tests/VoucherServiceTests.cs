@@ -60,7 +60,7 @@ public sealed class VoucherServiceTests
     {
         public Task<List<UserVoucher>> GetUserVouchersAsync(int userId, CancellationToken ct) => Task.FromResult(new List<UserVoucher>());
         public Task<UserVoucher?> GetByIdAsync(int id, CancellationToken ct) => throw new NotSupportedException();
-        public Task<(bool Succeeded, string? Error)> RedeemVoucherAsync(UserVoucher userVoucher, LoyaltyPoints loyaltyPoints, int pointsRedeemed, int? maxUses, int? exchangeLimit, AdminActionLog actionLog, CancellationToken ct) => throw new NotSupportedException();
+        public Task<(bool Succeeded, string? Error)> RedeemVoucherAsync(UserVoucher userVoucher, LoyaltyPoints loyaltyPoints, int pointsRedeemed, int? maxUses, int? exchangeLimit, CancellationToken ct) => throw new NotSupportedException();
         public Task<UserVoucher?> GetAvailableOwnedAsync(int userId, int voucherId, DateTime now, CancellationToken ct) => Task.FromResult<UserVoucher?>(null);
         public Task<UserVoucher?> GetAvailableForUpdateAsync(int userId, int voucherId, CancellationToken ct) => Task.FromResult<UserVoucher?>(null);
         public Task MarkReservedAsUsedByBookingAsync(int bookingId, DateTime usedAt, CancellationToken ct) => Task.CompletedTask;
