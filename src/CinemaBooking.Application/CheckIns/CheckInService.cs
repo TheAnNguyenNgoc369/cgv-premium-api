@@ -148,10 +148,13 @@ public sealed class CheckInService : ICheckInService
 
         var now = DateTime.UtcNow;
         var showtimeStart = booking.Showtime.StartTime;
-        var earliestCheckIn = showtimeStart.AddMinutes(-30);
+        var earliestCheckIn = showtimeStart.AddMinutes(-15);
         var latestCheckIn = booking.Showtime.EndTime;
 
-        if (now < earliestCheckIn || now > latestCheckIn)
+        if (now < earliestCheckIn)
+            return (false, "Check-in is not available yet. Customers can check in 15 minutes before the show starts.", null, null);
+
+        if (now > latestCheckIn)
             return (false, "Check-in time has expired.", null, null);
 
         var success = await _ticketRepository.PerformTicketCheckInAsync(

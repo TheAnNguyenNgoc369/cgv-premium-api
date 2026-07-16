@@ -1,5 +1,6 @@
 using System.Reflection;
 using CinemaBooking.Application.Vouchers.RuleEngine;
+using CinemaBooking.Application.Vouchers.RuleEngine.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CinemaBooking.Application;
@@ -13,6 +14,9 @@ public static class DependencyInjection
         services.AddAutoMapper(_ => { }, assembly);
         services.AddScopedByConvention(assembly, "Service");
         services.AddScoped<IVoucherRuleEngine, VoucherRuleEngine>();
+
+        // Registry data is static — safe to share a single instance process-wide.
+        services.AddSingleton<IVoucherRuleMetadataProvider, VoucherRuleMetadataProvider>();
 
         return services;
     }
