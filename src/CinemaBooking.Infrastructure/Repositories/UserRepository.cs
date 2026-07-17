@@ -66,6 +66,11 @@ public sealed class UserRepository : IUserRepository
             cancellationToken);
     }
 
+    public Task<bool> BarCodeExistsAsync(string barcode, CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Users.AnyAsync(u => u.BarCode == barcode, cancellationToken);
+    }
+
     public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         return _dbContext.Users

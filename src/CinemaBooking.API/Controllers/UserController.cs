@@ -254,7 +254,6 @@ public sealed class UserController : ControllerBase
         int totalRefunds,
         int usedRefunds)
     {
-        long? barcode = long.TryParse(user.BarCode, out var parsed) ? parsed : null;
         return new
         {
             user.UserID,
@@ -268,7 +267,7 @@ public sealed class UserController : ControllerBase
             total_refunds = totalRefunds,
             used_refunds = usedRefunds,
             user.CreatedAt,
-            barcode
+            barcode = user.BarCode
         };
     }
 
@@ -277,7 +276,6 @@ public sealed class UserController : ControllerBase
         int totalRefunds,
         int usedRefunds)
     {
-        long? barcode = long.TryParse(user.BarCode, out var parsed) ? parsed : null;
         return new
         {
             user.UserID,
@@ -291,7 +289,7 @@ public sealed class UserController : ControllerBase
             total_refunds = totalRefunds,
             used_refunds = usedRefunds,
             user.CreatedAt,
-            barcode,
+            barcode = user.BarCode,
             cinema = user.Role is Roles.Manager or Roles.Staff && user.Cinema is not null
                 ? new CinemaSummaryResponse(
                     user.Cinema.CinemaID,

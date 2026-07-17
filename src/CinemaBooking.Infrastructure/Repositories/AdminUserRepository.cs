@@ -76,6 +76,9 @@ public sealed class AdminUserRepository : IAdminUserRepository
         int cinemaId, CancellationToken cancellationToken = default) =>
         _dbContext.Cinemas.AnyAsync(cinema => cinema.CinemaID == cinemaId, cancellationToken);
 
+    public Task<bool> BarCodeExistsAsync(string barcode, CancellationToken cancellationToken = default) =>
+        _dbContext.Users.AnyAsync(user => user.BarCode == barcode, cancellationToken);
+
     public async Task<bool> HasDeletionBlockingDataAsync(
         int userId,
         CancellationToken cancellationToken = default)
@@ -263,4 +266,7 @@ public sealed class AdminUserRepository : IAdminUserRepository
             return user;
         });
     }
+
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
+        _dbContext.SaveChangesAsync(cancellationToken);
 }
