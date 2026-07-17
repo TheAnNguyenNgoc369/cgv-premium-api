@@ -639,5 +639,8 @@ public sealed class VoucherControllerTests
 
         public Task<UserVouchersResult> GetUserVouchersAsync(int userId, CancellationToken ct) =>
             throw new NotSupportedException();
+
+        public Task<UserRedeemableVouchersResult> GetUserRedeemableVouchersAsync(int userId, CancellationToken ct) =>
+            throw new NotSupportedException();
     }
 }

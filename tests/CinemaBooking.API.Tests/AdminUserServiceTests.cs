@@ -245,8 +245,7 @@ public sealed class AdminUserServiceTests
             CancellationToken cancellationToken = default) => Task.FromResult(PhoneExists);
 
         public Task<bool> BarCodeExistsAsync(
-            string barCode, int? excludingUserId = null,
-            CancellationToken cancellationToken = default) => Task.FromResult(false);
+            string barcode, CancellationToken cancellationToken = default) => Task.FromResult(false);
 
         public Task<bool> CinemaExistsAsync(
             int cinemaId, CancellationToken cancellationToken = default) => Task.FromResult(true);

@@ -42,4 +42,6 @@ public interface IUserService
         string newPassword,
         string confirmPassword,
         CancellationToken cancellationToken = default);
+
+    Task<List<UserVoucher>> GetUserRedeemableVouchersAsync(int userId, CancellationToken ct);
 }

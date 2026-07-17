@@ -13,15 +13,18 @@ public sealed class UserService : IUserService
     private const string AvatarDeleteFailedMessage = "Avatar could not be deleted. Please try again later.";
 
     private readonly IUserRepository _userRepository;
+    private readonly IUserVoucherRepository _userVoucherRepository;
     private readonly IImageStorageService _imageStorageService;
     private readonly ILogger<UserService> _logger;
 
     public UserService(
         IUserRepository userRepository,
+        IUserVoucherRepository userVoucherRepository,
         IImageStorageService imageStorageService,
         ILogger<UserService> logger)
     {
         _userRepository = userRepository;
+        _userVoucherRepository = userVoucherRepository;
         _imageStorageService = imageStorageService;
         _logger = logger;
     }
@@ -318,5 +321,10 @@ public sealed class UserService : IUserService
     private static string CreateCorrelationId()
     {
         return System.Diagnostics.Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
+    }
+
+    public async Task<List<UserVoucher>> GetUserRedeemableVouchersAsync(int userId, CancellationToken ct)
+    {
+        return await _userVoucherRepository.GetUserVouchersAsync(userId, ct);
     }
 }
