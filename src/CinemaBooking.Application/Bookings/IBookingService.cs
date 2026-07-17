@@ -41,6 +41,30 @@ public interface IBookingService
     Task<List<Booking>> GetMyBookingsAsync(
         int userId,
         CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage, LookupBookingFnbResult? Result)> LookupBookingFnbAsync(
+        string bookingCode,
+        int staffId,
+        CancellationToken cancellationToken = default);
 }
 
 public record BookingFnBItemDto(int ItemId, int Quantity);
+
+public sealed class LookupBookingFnbResult
+{
+    public int BookingId { get; set; }
+    public string BookingCode { get; set; } = string.Empty;
+    public string CustomerName { get; set; } = string.Empty;
+    public string CustomerPhone { get; set; } = string.Empty;
+    public string PaymentStatus { get; set; } = string.Empty;
+    public decimal TotalAmount { get; set; }
+    public List<LookupBookingFnbItem> FnbItems { get; set; } = [];
+
+    public sealed class LookupBookingFnbItem
+    {
+        public int ItemId { get; set; }
+        public string ItemName { get; set; } = string.Empty;
+        public int Quantity { get; set; }
+        public bool PickedUp { get; set; }
+    }
+}

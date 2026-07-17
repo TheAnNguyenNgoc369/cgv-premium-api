@@ -1,0 +1,1060 @@
+﻿CREATE TABLE [Cinema] (
+    [CinemaID] int NOT NULL IDENTITY,
+    [CinemaName] nvarchar(150) NOT NULL,
+    [Address] nvarchar(255) NOT NULL,
+    [Latitude] decimal(9,6) NULL,
+    [Longitude] decimal(10,6) NULL,
+    [Status] nvarchar(20) NOT NULL DEFAULT N'active',
+    [CreatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    [UpdatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_Cinema] PRIMARY KEY ([CinemaID]),
+    CONSTRAINT [CK_Cinema_Status] CHECK ([Status] IN ('active', 'inactive', 'maintenance'))
+);
+GO
+
+
+CREATE TABLE [Genre] (
+    [GenreID] int NOT NULL IDENTITY,
+    [GenreName] nvarchar(100) NOT NULL,
+    CONSTRAINT [PK_Genre] PRIMARY KEY ([GenreID])
+);
+GO
+
+
+CREATE TABLE [LoyaltyTiers] (
+    [TierID] int NOT NULL IDENTITY,
+    [TierName] nvarchar(20) NOT NULL,
+    [MinPoints] int NOT NULL,
+    [DiscountRate] decimal(4,2) NOT NULL,
+    [MaxRefundPerMonth] int NOT NULL,
+    CONSTRAINT [PK_LoyaltyTiers] PRIMARY KEY ([TierID]),
+    CONSTRAINT [CK_LoyaltyTiers_DiscountRate] CHECK ([DiscountRate] >= 0 AND [DiscountRate] <= 1),
+    CONSTRAINT [CK_LoyaltyTiers_MinPoints] CHECK ([MinPoints] >= 0)
+);
+GO
+
+
+CREATE TABLE [Movie] (
+    [MovieID] int NOT NULL IDENTITY,
+    [Title] nvarchar(200) NOT NULL,
+    [AgeRating] nvarchar(10) NOT NULL,
+    [Description] nvarchar(max) NULL,
+    [PosterURL] nvarchar(500) NULL,
+    [PosterPublicId] nvarchar(255) NULL,
+    [TrailerURL] nvarchar(500) NULL,
+    [DurationMin] int NOT NULL,
+    [ShowingFrom] date NULL,
+    [ShowingTo] date NULL,
+    [Status] nvarchar(30) NOT NULL DEFAULT N'coming_soon',
+    [CreatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    [UpdatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_Movie] PRIMARY KEY ([MovieID]),
+    CONSTRAINT [CK_Movie_AgeRating] CHECK ([AgeRating] IN ('P', 'C13', 'C16', 'C18')),
+    CONSTRAINT [CK_Movie_DurationMin] CHECK ([DurationMin] > 0),
+    CONSTRAINT [CK_Movie_ShowingDate] CHECK ([ShowingFrom] IS NULL OR [ShowingTo] IS NULL OR [ShowingFrom] <= [ShowingTo]),
+    CONSTRAINT [CK_Movie_Status] CHECK ([Status] IN ('coming_soon', 'now_showing', 'ended'))
+);
+GO
+
+
+CREATE TABLE [NotificationOutbox] (
+    [NotificationOutboxID] bigint NOT NULL IDENTITY,
+    [EventId] nvarchar(100) NOT NULL,
+    [EventType] nvarchar(50) NOT NULL,
+    [ReferenceId] int NOT NULL,
+    [Amount] decimal(18,2) NULL,
+    [OccurredAt] datetime2 NULL,
+    [Status] nvarchar(20) NOT NULL DEFAULT N'pending',
+    [AttemptCount] int NOT NULL,
+    [NextAttemptAt] datetime2 NULL,
+    [LastError] nvarchar(2000) NULL,
+    [CreatedAt] datetime2 NOT NULL DEFAULT (SYSUTCDATETIME()),
+    [ProcessedAt] datetime2 NULL,
+    CONSTRAINT [PK_NotificationOutbox] PRIMARY KEY ([NotificationOutboxID])
+);
+GO
+
+
+CREATE TABLE [Person] (
+    [PersonId] int NOT NULL IDENTITY,
+    [Name] nvarchar(200) NOT NULL,
+    [CreatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    [UpdatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_Person] PRIMARY KEY ([PersonId])
+);
+GO
+
+
+CREATE TABLE [Product] (
+    [ItemID] int NOT NULL IDENTITY,
+    [ItemName] nvarchar(150) NOT NULL,
+    [ItemType] nvarchar(30) NOT NULL,
+    [Description] nvarchar(500) NULL,
+    [Price] decimal(18,2) NOT NULL,
+    [ImageURL] nvarchar(500) NULL,
+    [ImagePublicId] nvarchar(255) NULL,
+    [IsLoyaltyEligible] bit NOT NULL DEFAULT CAST(0 AS bit),
+    [Status] nvarchar(20) NOT NULL DEFAULT N'active',
+    [UpdatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_Product] PRIMARY KEY ([ItemID]),
+    CONSTRAINT [CK_Product_ItemType] CHECK ([ItemType] IN ('combo', 'snack', 'beverage', 'dessert')),
+    CONSTRAINT [CK_Product_Price] CHECK ([Price] >= 0),
+    CONSTRAINT [CK_Product_Status] CHECK ([Status] IN ('active', 'inactive'))
+);
+GO
+
+
+CREATE TABLE [RoomType] (
+    [RoomTypeID] int NOT NULL IDENTITY,
+    [TypeName] nvarchar(50) NOT NULL,
+    [ExtraPrice] decimal(18,2) NOT NULL,
+    [Description] nvarchar(500) NULL,
+    [CreatedAt] datetime2 NOT NULL,
+    [UpdatedAt] datetime2 NOT NULL,
+    CONSTRAINT [PK_RoomType] PRIMARY KEY ([RoomTypeID]),
+    CONSTRAINT [CK_RoomType_ExtraPrice] CHECK ([ExtraPrice] >= 0)
+);
+GO
+
+
+CREATE TABLE [SeatType] (
+    [SeatTypeID] int NOT NULL IDENTITY,
+    [TypeName] nvarchar(20) NOT NULL,
+    [Capacity] int NOT NULL DEFAULT 1,
+    [ExtraPrice] decimal(18,2) NOT NULL DEFAULT 0.0,
+    CONSTRAINT [PK_SeatType] PRIMARY KEY ([SeatTypeID]),
+    CONSTRAINT [CK_SeatType_Capacity] CHECK ([Capacity] > 0),
+    CONSTRAINT [CK_SeatType_ExtraPrice] CHECK ([ExtraPrice] >= 0)
+);
+GO
+
+
+CREATE TABLE [Voucher] (
+    [VoucherID] int NOT NULL IDENTITY,
+    [VoucherCode] nvarchar(50) NOT NULL,
+    [DiscountType] nvarchar(20) NOT NULL,
+    [DiscountValue] decimal(18,2) NOT NULL,
+    [MinOrderValue] decimal(18,2) NULL DEFAULT 0.0,
+    [MaxUses] int NULL,
+    [UsedCount] int NOT NULL DEFAULT 0,
+    [ValidFrom] datetime2 NOT NULL,
+    [ValidUntil] datetime2 NOT NULL,
+    [ImageURL] nvarchar(500) NULL,
+    [ImagePublicId] nvarchar(255) NULL,
+    [Description] nvarchar(500) NULL,
+    [IsActive] bit NOT NULL DEFAULT CAST(1 AS bit),
+    [RequiredPoints] int NULL,
+    [ExchangeLimit] int NULL,
+    [IsRedeemable] bit NOT NULL DEFAULT CAST(0 AS bit),
+    [CreatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_Voucher] PRIMARY KEY ([VoucherID]),
+    CONSTRAINT [CK_Voucher_DiscountType] CHECK ([DiscountType] IN ('percent', 'fixed')),
+    CONSTRAINT [CK_Voucher_DiscountValue] CHECK ([DiscountValue] >= 0),
+    CONSTRAINT [CK_Voucher_ExchangeLimit] CHECK ([ExchangeLimit] IS NULL OR [ExchangeLimit] > 0),
+    CONSTRAINT [CK_Voucher_MaxUses] CHECK ([MaxUses] IS NULL OR [MaxUses] > 0),
+    CONSTRAINT [CK_Voucher_MinOrderValue] CHECK ([MinOrderValue] IS NULL OR [MinOrderValue] >= 0),
+    CONSTRAINT [CK_Voucher_RequiredPoints] CHECK ([RequiredPoints] IS NULL OR [RequiredPoints] > 0),
+    CONSTRAINT [CK_Voucher_UsedCount] CHECK ([UsedCount] >= 0),
+    CONSTRAINT [CK_Voucher_ValidDate] CHECK ([ValidUntil] > [ValidFrom])
+);
+GO
+
+
+CREATE TABLE [ShowtimeType] (
+    [ShowtimeTypeID] int NOT NULL IDENTITY,
+    [CinemaID] int NOT NULL,
+    [Name] nvarchar(100) NOT NULL,
+    [IsActive] bit NOT NULL DEFAULT CAST(1 AS bit),
+    [CreatedAt] datetime2 NOT NULL DEFAULT (SYSUTCDATETIME()),
+    [UpdatedAt] datetime2 NOT NULL DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT [PK_ShowtimeType] PRIMARY KEY ([ShowtimeTypeID]),
+    CONSTRAINT [FK_ShowtimeType_Cinema_CinemaID] FOREIGN KEY ([CinemaID]) REFERENCES [Cinema] ([CinemaID])
+);
+GO
+
+
+CREATE TABLE [Users] (
+    [UserID] int NOT NULL IDENTITY,
+    [FullName] nvarchar(100) NOT NULL,
+    [Email] nvarchar(150) NOT NULL,
+    [EmailVerifiedAt] datetime2 NULL,
+    [Phone] nvarchar(15) NULL,
+    [PasswordHash] nvarchar(255) NOT NULL,
+    [AvatarURL] nvarchar(500) NULL,
+    [AvatarPublicId] nvarchar(255) NULL,
+    [Role] nvarchar(20) NOT NULL,
+    [CinemaID] int NULL,
+    [Status] nvarchar(20) NOT NULL DEFAULT N'unverified',
+    [TokenVersion] int NOT NULL DEFAULT 0,
+    [LoyaltyTierID] int NULL,
+    [TotalPoints] int NOT NULL DEFAULT 0,
+    [CreatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    [UpdatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    [BarCode] nvarchar(50) NULL,
+    CONSTRAINT [PK_Users] PRIMARY KEY ([UserID]),
+    CONSTRAINT [CK_Users_Role] CHECK ([Role] IN ('customer', 'staff', 'admin', 'manager')),
+    CONSTRAINT [CK_Users_Status] CHECK ([Status] IN ('unverified', 'active', 'locked', 'inactive')),
+    CONSTRAINT [CK_Users_TotalPoints] CHECK ([TotalPoints] >= 0),
+    CONSTRAINT [FK_Users_Cinema] FOREIGN KEY ([CinemaID]) REFERENCES [Cinema] ([CinemaID]),
+    CONSTRAINT [FK_Users_LoyaltyTiers] FOREIGN KEY ([LoyaltyTierID]) REFERENCES [LoyaltyTiers] ([TierID])
+);
+GO
+
+
+CREATE TABLE [MovieGenre] (
+    [MovieGenreID] int NOT NULL IDENTITY,
+    [MovieID] int NOT NULL,
+    [GenreID] int NOT NULL,
+    CONSTRAINT [PK_MovieGenre] PRIMARY KEY ([MovieGenreID]),
+    CONSTRAINT [FK_MovieGenre_Genre] FOREIGN KEY ([GenreID]) REFERENCES [Genre] ([GenreID]),
+    CONSTRAINT [FK_MovieGenre_Movie] FOREIGN KEY ([MovieID]) REFERENCES [Movie] ([MovieID])
+);
+GO
+
+
+CREATE TABLE [MoviePerson] (
+    [MovieId] int NOT NULL,
+    [PersonId] int NOT NULL,
+    [Role] nvarchar(50) NOT NULL,
+    [DisplayOrder] int NOT NULL DEFAULT 0,
+    CONSTRAINT [PK_MoviePerson] PRIMARY KEY ([MovieId], [PersonId], [Role]),
+    CONSTRAINT [CK_MoviePerson_Role] CHECK ([Role] IN ('Director', 'Actor')),
+    CONSTRAINT [FK_MoviePerson_Movie] FOREIGN KEY ([MovieId]) REFERENCES [Movie] ([MovieID]),
+    CONSTRAINT [FK_MoviePerson_Person] FOREIGN KEY ([PersonId]) REFERENCES [Person] ([PersonId])
+);
+GO
+
+
+CREATE TABLE [Room] (
+    [RoomID] int NOT NULL IDENTITY,
+    [CinemaID] int NOT NULL,
+    [RoomName] nvarchar(50) NOT NULL,
+    [RoomTypeID] int NOT NULL,
+    [Capacity] int NOT NULL DEFAULT 0,
+    [Description] nvarchar(500) NULL,
+    [Status] nvarchar(20) NOT NULL DEFAULT N'active',
+    [CreatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_Room] PRIMARY KEY ([RoomID]),
+    CONSTRAINT [CK_Room_Capacity] CHECK ([Capacity] >= 0),
+    CONSTRAINT [CK_Room_Status] CHECK ([Status] IN ('active', 'maintenance', 'inactive')),
+    CONSTRAINT [FK_Room_Cinema] FOREIGN KEY ([CinemaID]) REFERENCES [Cinema] ([CinemaID]),
+    CONSTRAINT [FK_Room_RoomType] FOREIGN KEY ([RoomTypeID]) REFERENCES [RoomType] ([RoomTypeID])
+);
+GO
+
+
+CREATE TABLE [VoucherRules] (
+    [RuleID] int NOT NULL IDENTITY,
+    [VoucherID] int NOT NULL,
+    [RuleType] nvarchar(50) NOT NULL,
+    [RuleValue] nvarchar(100) NOT NULL,
+    [CreatedAt] datetime2 NOT NULL,
+    CONSTRAINT [PK_VoucherRules] PRIMARY KEY ([RuleID]),
+    CONSTRAINT [FK_VoucherRules_Voucher_VoucherID] FOREIGN KEY ([VoucherID]) REFERENCES [Voucher] ([VoucherID])
+);
+GO
+
+
+CREATE TABLE [ShowtimeTypeSlot] (
+    [SlotID] int NOT NULL IDENTITY,
+    [ShowtimeTypeID] int NOT NULL,
+    [StartTime] time NOT NULL,
+    CONSTRAINT [PK_ShowtimeTypeSlot] PRIMARY KEY ([SlotID]),
+    CONSTRAINT [FK_ShowtimeTypeSlot_ShowtimeType_ShowtimeTypeID] FOREIGN KEY ([ShowtimeTypeID]) REFERENCES [ShowtimeType] ([ShowtimeTypeID])
+);
+GO
+
+
+CREATE TABLE [AdminActionLog] (
+    [LogID] int NOT NULL IDENTITY,
+    [AdminID] int NOT NULL,
+    [TargetUserID] int NULL,
+    [TargetTable] nvarchar(50) NULL,
+    [TargetID] int NULL,
+    [ActionType] nvarchar(50) NOT NULL,
+    [Description] nvarchar(1000) NOT NULL,
+    [IPAddress] nvarchar(45) NOT NULL,
+    [CreatedAt] datetime2 NOT NULL DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT [PK_AdminActionLog] PRIMARY KEY ([LogID]),
+    CONSTRAINT [CK_AdminActionLog_ActionType] CHECK ([ActionType] IN ('create_showtime_type','update_showtime_type','delete_showtime_type','generate_showtime_by_type','create_user','update_user','lock_user','unlock_user','change_role','delete_user','create_voucher','update_voucher','delete_voucher','create_showtime','update_showtime','delete_showtime','update_ticket_price','generate_seat','update_seat','delete_seat','create_cinema','update_cinema','delete_cinema','create_genre','update_genre','delete_genre','create_movie','update_movie','delete_movie','create_room_type','update_room_type','delete_room_type','export_report','refund','check_in')),
+    CONSTRAINT [FK_AdminActionLog_Admin] FOREIGN KEY ([AdminID]) REFERENCES [Users] ([UserID]),
+    CONSTRAINT [FK_AdminActionLog_TargetUser] FOREIGN KEY ([TargetUserID]) REFERENCES [Users] ([UserID])
+);
+GO
+
+
+CREATE TABLE [EmailLog] (
+    [EmailLogID] int NOT NULL IDENTITY,
+    [UserID] int NULL,
+    [ToEmail] nvarchar(150) NOT NULL,
+    [EventId] nvarchar(100) NOT NULL,
+    [Subject] nvarchar(250) NOT NULL,
+    [HtmlBody] nvarchar(max) NOT NULL,
+    [InlineImagesJson] nvarchar(max) NULL,
+    [EventType] nvarchar(50) NOT NULL,
+    [DeliveryStatus] nvarchar(20) NOT NULL DEFAULT N'pending',
+    [RetryCount] int NOT NULL DEFAULT 0,
+    [SentAt] datetime2 NULL,
+    [LastError] nvarchar(2000) NULL,
+    [NextAttemptAt] datetime2 NULL,
+    [CreatedAt] datetime2 NOT NULL DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT [PK_EmailLog] PRIMARY KEY ([EmailLogID]),
+    CONSTRAINT [CK_EmailLog_DeliveryStatus] CHECK ([DeliveryStatus] IN ('pending', 'processing', 'sent', 'failed', 'retrying')),
+    CONSTRAINT [CK_EmailLog_EventType] CHECK ([EventType] IN ('register','booking_confirmed','booking_cancelled','forgot_password','refund_processed','points_earned','reward_redeemed')),
+    CONSTRAINT [CK_EmailLog_RetryCount] CHECK ([RetryCount] BETWEEN 0 AND 3),
+    CONSTRAINT [FK_EmailLog_Users] FOREIGN KEY ([UserID]) REFERENCES [Users] ([UserID])
+);
+GO
+
+
+CREATE TABLE [EmailVerificationToken] (
+    [TokenID] int NOT NULL IDENTITY,
+    [UserID] int NOT NULL,
+    [Token] nvarchar(255) NOT NULL,
+    [ExpiresAt] datetime2 NOT NULL,
+    [VerifiedAt] datetime2 NULL,
+    [CreatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_EmailVerificationToken] PRIMARY KEY ([TokenID]),
+    CONSTRAINT [FK_EmailVerificationToken_Users] FOREIGN KEY ([UserID]) REFERENCES [Users] ([UserID])
+);
+GO
+
+
+CREATE TABLE [Notification] (
+    [NotificationID] int NOT NULL IDENTITY,
+    [UserID] int NOT NULL,
+    [Title] nvarchar(150) NOT NULL,
+    [Message] nvarchar(500) NOT NULL,
+    [Type] nvarchar(50) NOT NULL,
+    [EventId] nvarchar(100) NOT NULL,
+    [EventType] nvarchar(50) NOT NULL,
+    [ReferenceType] nvarchar(50) NULL,
+    [ReferenceId] int NULL,
+    [ActionUrl] nvarchar(500) NULL,
+    [IsRead] bit NOT NULL DEFAULT CAST(0 AS bit),
+    [ReadAt] datetime2 NULL,
+    [DeletedAt] datetime2 NULL,
+    [CreatedAt] datetime2 NOT NULL DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT [PK_Notification] PRIMARY KEY ([NotificationID]),
+    CONSTRAINT [CK_Notification_Type] CHECK ([Type] IN ('booking', 'payment', 'refund', 'promotion', 'system', 'account')),
+    CONSTRAINT [FK_Notification_Users] FOREIGN KEY ([UserID]) REFERENCES [Users] ([UserID])
+);
+GO
+
+
+CREATE TABLE [PasswordResetToken] (
+    [TokenID] int NOT NULL IDENTITY,
+    [UserID] int NOT NULL,
+    [Token] nvarchar(255) NOT NULL,
+    [ExpiresAt] datetime2 NOT NULL,
+    [UsedAt] datetime2 NULL,
+    [CreatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_PasswordResetToken] PRIMARY KEY ([TokenID]),
+    CONSTRAINT [FK_PasswordResetToken_Users] FOREIGN KEY ([UserID]) REFERENCES [Users] ([UserID])
+);
+GO
+
+
+CREATE TABLE [Wallet] (
+    [WalletID] int NOT NULL IDENTITY,
+    [UserID] int NOT NULL,
+    [Balance] decimal(18,2) NOT NULL DEFAULT 0.0,
+    CONSTRAINT [PK_Wallet] PRIMARY KEY ([WalletID]),
+    CONSTRAINT [CK_Wallet_Balance] CHECK ([Balance] >= 0),
+    CONSTRAINT [FK_Wallet_Users] FOREIGN KEY ([UserID]) REFERENCES [Users] ([UserID])
+);
+GO
+
+
+CREATE TABLE [Seat] (
+    [SeatID] int NOT NULL IDENTITY,
+    [RoomID] int NOT NULL,
+    [SeatRow] nvarchar(5) NOT NULL,
+    [SeatCol] int NOT NULL,
+    [SeatTypeID] int NULL,
+    [Status] nvarchar(20) NOT NULL DEFAULT N'active',
+    [IsGap] bit NOT NULL DEFAULT CAST(0 AS bit),
+    [IsCurrentLayout] bit NOT NULL DEFAULT CAST(1 AS bit),
+    CONSTRAINT [PK_Seat] PRIMARY KEY ([SeatID]),
+    CONSTRAINT [CK_Seat_SeatCol] CHECK ([SeatCol] > 0),
+    CONSTRAINT [CK_Seat_Status] CHECK ([Status] IN ('active', 'inactive')),
+    CONSTRAINT [FK_Seat_Room] FOREIGN KEY ([RoomID]) REFERENCES [Room] ([RoomID]),
+    CONSTRAINT [FK_Seat_SeatType] FOREIGN KEY ([SeatTypeID]) REFERENCES [SeatType] ([SeatTypeID])
+);
+GO
+
+
+CREATE TABLE [Showtime] (
+    [ShowtimeID] int NOT NULL IDENTITY,
+    [MovieID] int NOT NULL,
+    [RoomID] int NOT NULL,
+    [ShowtimeTypeID] int NULL,
+    [StartTime] datetime2 NOT NULL,
+    [EndTime] datetime2 NOT NULL,
+    [BasePrice] decimal(18,2) NOT NULL,
+    [RoomExtraPrice] decimal(18,2) NOT NULL,
+    [Status] nvarchar(30) NOT NULL DEFAULT N'scheduled',
+    [CreatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_Showtime] PRIMARY KEY ([ShowtimeID]),
+    CONSTRAINT [CK_Showtime_BasePrice] CHECK ([BasePrice] >= 0),
+    CONSTRAINT [CK_Showtime_Status] CHECK ([Status] IN ('scheduled', 'completed', 'cancelled')),
+    CONSTRAINT [CK_Showtime_Time] CHECK ([EndTime] > [StartTime]),
+    CONSTRAINT [FK_Showtime_Movie] FOREIGN KEY ([MovieID]) REFERENCES [Movie] ([MovieID]),
+    CONSTRAINT [FK_Showtime_Room] FOREIGN KEY ([RoomID]) REFERENCES [Room] ([RoomID]),
+    CONSTRAINT [FK_Showtime_ShowtimeType] FOREIGN KEY ([ShowtimeTypeID]) REFERENCES [ShowtimeType] ([ShowtimeTypeID])
+);
+GO
+
+
+CREATE TABLE [Booking] (
+    [BookingID] int NOT NULL IDENTITY,
+    [BookingCode] nvarchar(50) NOT NULL,
+    [UserID] int NULL,
+    [ShowtimeID] int NULL,
+    [CreatedByStaffID] int NULL,
+    [SubTotal] decimal(18,2) NOT NULL,
+    [DiscountAmount] decimal(18,2) NOT NULL DEFAULT 0.0,
+    [FinalAmount] decimal(18,2) NOT NULL,
+    [PointsEarned] int NULL DEFAULT 0,
+    [PointsRedeemed] int NULL DEFAULT 0,
+    [Status] nvarchar(30) NOT NULL DEFAULT N'pending',
+    [QRCode] nvarchar(100) NULL,
+    [BookingDate] datetime2 NOT NULL DEFAULT (GETDATE()),
+    [UpdatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_Booking] PRIMARY KEY ([BookingID]),
+    CONSTRAINT [CK_Booking_Amounts] CHECK ([SubTotal] >= 0 AND [DiscountAmount] >= 0 AND [FinalAmount] >= 0),
+    CONSTRAINT [CK_Booking_Points] CHECK (ISNULL([PointsEarned],0) >= 0 AND ISNULL([PointsRedeemed],0) >= 0),
+    CONSTRAINT [CK_Booking_Status] CHECK ([Status] IN ('pending', 'paid', 'cancelled', 'refunded', 'used', 'expired', 'payment_failed', 'partially_refunded')),
+    CONSTRAINT [FK_Booking_CreatedByStaff] FOREIGN KEY ([CreatedByStaffID]) REFERENCES [Users] ([UserID]),
+    CONSTRAINT [FK_Booking_Showtime] FOREIGN KEY ([ShowtimeID]) REFERENCES [Showtime] ([ShowtimeID]),
+    CONSTRAINT [FK_Booking_Users] FOREIGN KEY ([UserID]) REFERENCES [Users] ([UserID])
+);
+GO
+
+
+CREATE TABLE [BookingFnB] (
+    [BookingFnBID] int NOT NULL IDENTITY,
+    [BookingID] int NOT NULL,
+    [ItemID] int NOT NULL,
+    [Quantity] int NOT NULL DEFAULT 1,
+    [UnitPrice] decimal(18,2) NOT NULL,
+    [SubTotal] decimal(18,2) NOT NULL,
+    [PickedUp] bit NOT NULL DEFAULT CAST(0 AS bit),
+    [PickedUpAt] datetime2 NULL,
+    [PickedUpByStaffId] int NULL,
+    CONSTRAINT [PK_BookingFnB] PRIMARY KEY ([BookingFnBID]),
+    CONSTRAINT [CK_BookingFnB_Price] CHECK ([UnitPrice] >= 0 AND [SubTotal] >= 0),
+    CONSTRAINT [CK_BookingFnB_Quantity] CHECK ([Quantity] > 0),
+    CONSTRAINT [FK_BookingFnB_Booking] FOREIGN KEY ([BookingID]) REFERENCES [Booking] ([BookingID]),
+    CONSTRAINT [FK_BookingFnB_PickedUpByStaff] FOREIGN KEY ([PickedUpByStaffId]) REFERENCES [Users] ([UserID]),
+    CONSTRAINT [FK_BookingFnB_Product] FOREIGN KEY ([ItemID]) REFERENCES [Product] ([ItemID])
+);
+GO
+
+
+CREATE TABLE [BookingSeat] (
+    [BookingSeatID] int NOT NULL IDENTITY,
+    [BookingID] int NOT NULL,
+    [SeatID] int NOT NULL,
+    [TicketPrice] decimal(18,2) NOT NULL,
+    CONSTRAINT [PK_BookingSeat] PRIMARY KEY ([BookingSeatID]),
+    CONSTRAINT [CK_BookingSeat_TicketPrice] CHECK ([TicketPrice] >= 0),
+    CONSTRAINT [FK_BookingSeat_Booking] FOREIGN KEY ([BookingID]) REFERENCES [Booking] ([BookingID]),
+    CONSTRAINT [FK_BookingSeat_Seat] FOREIGN KEY ([SeatID]) REFERENCES [Seat] ([SeatID])
+);
+GO
+
+
+CREATE TABLE [BookingVoucher] (
+    [BookingVoucherID] int NOT NULL IDENTITY,
+    [BookingID] int NOT NULL,
+    [VoucherID] int NOT NULL,
+    [DiscountApplied] decimal(18,2) NOT NULL,
+    [UsedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_BookingVoucher] PRIMARY KEY ([BookingVoucherID]),
+    CONSTRAINT [CK_BookingVoucher_DiscountApplied] CHECK ([DiscountApplied] >= 0),
+    CONSTRAINT [FK_BookingVoucher_Booking] FOREIGN KEY ([BookingID]) REFERENCES [Booking] ([BookingID]),
+    CONSTRAINT [FK_BookingVoucher_Voucher] FOREIGN KEY ([VoucherID]) REFERENCES [Voucher] ([VoucherID])
+);
+GO
+
+
+CREATE TABLE [Invoice] (
+    [InvoiceID] int NOT NULL IDENTITY,
+    [BookingID] int NOT NULL,
+    [InvoiceCode] nvarchar(50) NOT NULL,
+    [TotalAmount] decimal(18,2) NOT NULL,
+    [TaxAmount] decimal(18,2) NOT NULL DEFAULT 0.0,
+    [IssuedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_Invoice] PRIMARY KEY ([InvoiceID]),
+    CONSTRAINT [CK_Invoice_Amount] CHECK ([TotalAmount] >= 0 AND [TaxAmount] >= 0),
+    CONSTRAINT [FK_Invoice_Booking] FOREIGN KEY ([BookingID]) REFERENCES [Booking] ([BookingID])
+);
+GO
+
+
+CREATE TABLE [LoyaltyPoints] (
+    [PointID] int NOT NULL IDENTITY,
+    [UserID] int NOT NULL,
+    [BookingID] int NULL,
+    [VoucherID] int NULL,
+    [PointsDelta] int NOT NULL,
+    [TransactionType] nvarchar(20) NOT NULL,
+    [Description] nvarchar(255) NULL,
+    [CreatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_LoyaltyPoints] PRIMARY KEY ([PointID]),
+    CONSTRAINT [CK_LoyaltyPoints_TransactionType] CHECK ([TransactionType] IN ('earn', 'redeem', 'expire', 'adjust', 'exchange')),
+    CONSTRAINT [FK_LoyaltyPoints_Booking] FOREIGN KEY ([BookingID]) REFERENCES [Booking] ([BookingID]),
+    CONSTRAINT [FK_LoyaltyPoints_Users] FOREIGN KEY ([UserID]) REFERENCES [Users] ([UserID]),
+    CONSTRAINT [FK_LoyaltyPoints_Voucher] FOREIGN KEY ([VoucherID]) REFERENCES [Voucher] ([VoucherID])
+);
+GO
+
+
+CREATE TABLE [Payment] (
+    [PaymentID] int NOT NULL IDENTITY,
+    [BookingID] int NOT NULL,
+    [PaymentMethod] nvarchar(50) NOT NULL,
+    [Amount] decimal(18,2) NOT NULL,
+    [TransactionCode] nvarchar(200) NULL,
+    [Status] nvarchar(30) NOT NULL DEFAULT N'pending',
+    [PaidAt] datetime2 NULL,
+    [CreatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    [RefundReason] nvarchar(max) NULL,
+    [RefundAmount] decimal(18,2) NULL,
+    [RefundedAt] datetime2 NULL,
+    [RefundedBy] int NULL,
+    CONSTRAINT [PK_Payment] PRIMARY KEY ([PaymentID]),
+    CONSTRAINT [CK_Payment_Amount] CHECK ([Amount] >= 0),
+    CONSTRAINT [CK_Payment_Method] CHECK ([PaymentMethod] IN ('payos', 'momo', 'credit_card', 'banking', 'cash', 'wallet')),
+    CONSTRAINT [CK_Payment_Status] CHECK ([Status] IN ('pending', 'success', 'failed', 'refunded', 'cancelled', 'expired')),
+    CONSTRAINT [FK_Payment_Booking] FOREIGN KEY ([BookingID]) REFERENCES [Booking] ([BookingID]),
+    CONSTRAINT [FK_Payment_RefundedBy] FOREIGN KEY ([RefundedBy]) REFERENCES [Users] ([UserID])
+);
+GO
+
+
+CREATE TABLE [SeatHold] (
+    [HoldID] int NOT NULL IDENTITY,
+    [SeatID] int NOT NULL,
+    [ShowtimeID] int NOT NULL,
+    [UserID] int NOT NULL,
+    [BookingID] int NULL,
+    [HeldAt] datetime2 NOT NULL DEFAULT (SYSUTCDATETIME()),
+    [ExpiresAt] datetime2 NOT NULL,
+    [Status] nvarchar(20) NOT NULL DEFAULT N'holding',
+    CONSTRAINT [PK_SeatHold] PRIMARY KEY ([HoldID]),
+    CONSTRAINT [CK_SeatHold_ExpiresAt] CHECK ([ExpiresAt] > [HeldAt]),
+    CONSTRAINT [CK_SeatHold_Status] CHECK ([Status] IN ('holding', 'confirmed', 'released', 'expired')),
+    CONSTRAINT [FK_SeatHold_Booking] FOREIGN KEY ([BookingID]) REFERENCES [Booking] ([BookingID]),
+    CONSTRAINT [FK_SeatHold_Seat] FOREIGN KEY ([SeatID]) REFERENCES [Seat] ([SeatID]),
+    CONSTRAINT [FK_SeatHold_Showtime] FOREIGN KEY ([ShowtimeID]) REFERENCES [Showtime] ([ShowtimeID]),
+    CONSTRAINT [FK_SeatHold_Users] FOREIGN KEY ([UserID]) REFERENCES [Users] ([UserID])
+);
+GO
+
+
+CREATE TABLE [UserVoucher] (
+    [UserVoucherID] int NOT NULL IDENTITY,
+    [UserID] int NOT NULL,
+    [VoucherID] int NOT NULL,
+    [RedeemedAt] datetime2 NOT NULL,
+    [ExpiredAt] datetime2 NOT NULL,
+    [Status] nvarchar(20) NOT NULL,
+    [UsedAt] datetime2 NULL,
+    [BookingID] int NULL,
+    CONSTRAINT [PK_UserVoucher] PRIMARY KEY ([UserVoucherID]),
+    CONSTRAINT [CK_UserVoucher_Dates] CHECK ([ExpiredAt] >= [RedeemedAt]),
+    CONSTRAINT [CK_UserVoucher_Status] CHECK ([Status] IN ('available', 'used', 'expired')),
+    CONSTRAINT [FK_UserVoucher_Booking] FOREIGN KEY ([BookingID]) REFERENCES [Booking] ([BookingID]),
+    CONSTRAINT [FK_UserVoucher_Users] FOREIGN KEY ([UserID]) REFERENCES [Users] ([UserID]),
+    CONSTRAINT [FK_UserVoucher_Voucher] FOREIGN KEY ([VoucherID]) REFERENCES [Voucher] ([VoucherID])
+);
+GO
+
+
+CREATE TABLE [Ticket] (
+    [TicketID] int NOT NULL IDENTITY,
+    [BookingSeatID] int NOT NULL,
+    [QRCode] nvarchar(500) NOT NULL,
+    [Status] nvarchar(20) NOT NULL DEFAULT N'valid',
+    [CheckedInAt] datetime2 NULL,
+    [CheckedInByID] int NULL,
+    CONSTRAINT [PK_Ticket] PRIMARY KEY ([TicketID]),
+    CONSTRAINT [CK_Ticket_Status] CHECK ([Status] IN ('valid', 'used', 'cancelled')),
+    CONSTRAINT [FK_Ticket_BookingSeat] FOREIGN KEY ([BookingSeatID]) REFERENCES [BookingSeat] ([BookingSeatID]),
+    CONSTRAINT [FK_Ticket_CheckedInBy] FOREIGN KEY ([CheckedInByID]) REFERENCES [Users] ([UserID])
+);
+GO
+
+
+CREATE TABLE [PaymentSession] (
+    [SessionID] int NOT NULL IDENTITY,
+    [PaymentID] int NOT NULL,
+    [GatewayName] nvarchar(50) NOT NULL,
+    [GatewayOrderNo] nvarchar(200) NULL,
+    [QRCodeURL] nvarchar(500) NULL,
+    [ExpiresAt] datetime2 NOT NULL,
+    [Status] nvarchar(30) NOT NULL DEFAULT N'waiting',
+    [CreatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_PaymentSession] PRIMARY KEY ([SessionID]),
+    CONSTRAINT [CK_PaymentSession_GatewayName] CHECK ([GatewayName] IN ('payos', 'momo')),
+    CONSTRAINT [CK_PaymentSession_Status] CHECK ([Status] IN ('waiting', 'processing', 'completed', 'expired', 'cancelled')),
+    CONSTRAINT [FK_PaymentSession_Payment] FOREIGN KEY ([PaymentID]) REFERENCES [Payment] ([PaymentID])
+);
+GO
+
+
+CREATE TABLE [Refund] (
+    [RefundID] int NOT NULL IDENTITY,
+    [BookingID] int NOT NULL,
+    [PaymentID] int NULL,
+    [WalletID] int NULL,
+    [Amount] decimal(18,2) NOT NULL,
+    [Reason] nvarchar(255) NULL,
+    [Status] nvarchar(30) NOT NULL DEFAULT N'pending',
+    [ProcessedBy] int NULL,
+    [RequestedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    [CompletedAt] datetime2 NULL,
+    CONSTRAINT [PK_Refund] PRIMARY KEY ([RefundID]),
+    CONSTRAINT [CK_Refund_Amount] CHECK ([Amount] >= 0),
+    CONSTRAINT [CK_Refund_Status] CHECK ([Status] IN ('pending', 'approved', 'rejected', 'processing', 'completed', 'failed')),
+    CONSTRAINT [FK_Refund_Booking] FOREIGN KEY ([BookingID]) REFERENCES [Booking] ([BookingID]),
+    CONSTRAINT [FK_Refund_Payment] FOREIGN KEY ([PaymentID]) REFERENCES [Payment] ([PaymentID]),
+    CONSTRAINT [FK_Refund_ProcessedBy] FOREIGN KEY ([ProcessedBy]) REFERENCES [Users] ([UserID]),
+    CONSTRAINT [FK_Refund_Wallet] FOREIGN KEY ([WalletID]) REFERENCES [Wallet] ([WalletID])
+);
+GO
+
+
+CREATE TABLE [WalletTransaction] (
+    [TransactionID] int NOT NULL IDENTITY,
+    [WalletID] int NOT NULL,
+    [Amount] decimal(18,2) NOT NULL,
+    [BalanceAfter] decimal(18,2) NOT NULL,
+    [TransactionType] nvarchar(30) NOT NULL,
+    [BookingID] int NULL,
+    [RefundID] int NULL,
+    [Description] nvarchar(255) NULL,
+    [CreatedAt] datetime2 NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_WalletTransaction] PRIMARY KEY ([TransactionID]),
+    CONSTRAINT [CK_WalletTransaction_BalanceAfter] CHECK ([BalanceAfter] >= 0),
+    CONSTRAINT [CK_WalletTransaction_Type] CHECK ([TransactionType] IN ('top_up', 'payment', 'refund')),
+    CONSTRAINT [FK_WalletTransaction_Booking] FOREIGN KEY ([BookingID]) REFERENCES [Booking] ([BookingID]),
+    CONSTRAINT [FK_WalletTransaction_Refund] FOREIGN KEY ([RefundID]) REFERENCES [Refund] ([RefundID]),
+    CONSTRAINT [FK_WalletTransaction_Wallet] FOREIGN KEY ([WalletID]) REFERENCES [Wallet] ([WalletID])
+);
+GO
+
+
+IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [name] IN (N'TierID', N'DiscountRate', N'MaxRefundPerMonth', N'MinPoints', N'TierName') AND [object_id] = OBJECT_ID(N'[LoyaltyTiers]'))
+    SET IDENTITY_INSERT [LoyaltyTiers] ON;
+INSERT INTO [LoyaltyTiers] ([TierID], [DiscountRate], [MaxRefundPerMonth], [MinPoints], [TierName])
+VALUES (1, 0.0, 1, 0, N'silver'),
+(2, 0.05, 3, 1000, N'gold'),
+(3, 0.1, 5, 5000, N'platinum'),
+(4, 0.15, 7, 10000, N'megavip');
+IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [name] IN (N'TierID', N'DiscountRate', N'MaxRefundPerMonth', N'MinPoints', N'TierName') AND [object_id] = OBJECT_ID(N'[LoyaltyTiers]'))
+    SET IDENTITY_INSERT [LoyaltyTiers] OFF;
+GO
+
+
+IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [name] IN (N'SeatTypeID', N'Capacity', N'TypeName') AND [object_id] = OBJECT_ID(N'[SeatType]'))
+    SET IDENTITY_INSERT [SeatType] ON;
+INSERT INTO [SeatType] ([SeatTypeID], [Capacity], [TypeName])
+VALUES (1, 1, N'standard');
+IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [name] IN (N'SeatTypeID', N'Capacity', N'TypeName') AND [object_id] = OBJECT_ID(N'[SeatType]'))
+    SET IDENTITY_INSERT [SeatType] OFF;
+GO
+
+
+IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [name] IN (N'SeatTypeID', N'Capacity', N'ExtraPrice', N'TypeName') AND [object_id] = OBJECT_ID(N'[SeatType]'))
+    SET IDENTITY_INSERT [SeatType] ON;
+INSERT INTO [SeatType] ([SeatTypeID], [Capacity], [ExtraPrice], [TypeName])
+VALUES (2, 1, 20000.0, N'vip'),
+(3, 2, 50000.0, N'couple');
+IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [name] IN (N'SeatTypeID', N'Capacity', N'ExtraPrice', N'TypeName') AND [object_id] = OBJECT_ID(N'[SeatType]'))
+    SET IDENTITY_INSERT [SeatType] OFF;
+GO
+
+
+CREATE INDEX [IX_AdminActionLog_ActionType] ON [AdminActionLog] ([ActionType]);
+GO
+
+
+CREATE INDEX [IX_AdminActionLog_AdminID] ON [AdminActionLog] ([AdminID]);
+GO
+
+
+CREATE INDEX [IX_AdminActionLog_CreatedAt] ON [AdminActionLog] ([CreatedAt]);
+GO
+
+
+CREATE INDEX [IX_AdminActionLog_TargetTable_TargetID] ON [AdminActionLog] ([TargetTable], [TargetID]);
+GO
+
+
+CREATE INDEX [IX_AdminActionLog_TargetUserID] ON [AdminActionLog] ([TargetUserID]);
+GO
+
+
+CREATE INDEX [IX_Booking_CreatedByStaffID] ON [Booking] ([CreatedByStaffID]);
+GO
+
+
+CREATE INDEX [IX_Booking_ShowtimeID] ON [Booking] ([ShowtimeID]);
+GO
+
+
+CREATE INDEX [IX_Booking_Status] ON [Booking] ([Status]);
+GO
+
+
+CREATE INDEX [IX_Booking_UserID] ON [Booking] ([UserID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Booking_BookingCode] ON [Booking] ([BookingCode]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Booking_QRCode] ON [Booking] ([QRCode]) WHERE [QRCode] IS NOT NULL;
+GO
+
+
+CREATE INDEX [IX_BookingFnB_BookingId] ON [BookingFnB] ([BookingID]);
+GO
+
+
+CREATE INDEX [IX_BookingFnB_ItemID] ON [BookingFnB] ([ItemID]);
+GO
+
+
+CREATE INDEX [IX_BookingFnB_PickedUpByStaffId] ON [BookingFnB] ([PickedUpByStaffId]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_BookingFnB_BookingID_ItemID] ON [BookingFnB] ([BookingID], [ItemID]);
+GO
+
+
+CREATE INDEX [IX_BookingSeat_SeatID] ON [BookingSeat] ([SeatID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_BookingSeat_BookingID_SeatID] ON [BookingSeat] ([BookingID], [SeatID]);
+GO
+
+
+CREATE INDEX [IX_BookingVoucher_VoucherID] ON [BookingVoucher] ([VoucherID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_BookingVoucher_BookingID] ON [BookingVoucher] ([BookingID]);
+GO
+
+
+CREATE INDEX [IX_EmailLog_DeliveryStatus_NextAttemptAt] ON [EmailLog] ([DeliveryStatus], [NextAttemptAt]);
+GO
+
+
+CREATE UNIQUE INDEX [IX_EmailLog_EventId] ON [EmailLog] ([EventId]);
+GO
+
+
+CREATE INDEX [IX_EmailLog_UserID] ON [EmailLog] ([UserID]);
+GO
+
+
+CREATE INDEX [IX_EmailVerificationToken_UserID] ON [EmailVerificationToken] ([UserID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_EmailVerificationToken_Token] ON [EmailVerificationToken] ([Token]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Genre_GenreName] ON [Genre] ([GenreName]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Invoice_BookingID] ON [Invoice] ([BookingID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Invoice_InvoiceCode] ON [Invoice] ([InvoiceCode]);
+GO
+
+
+CREATE INDEX [IX_LoyaltyPoints_UserID] ON [LoyaltyPoints] ([UserID]);
+GO
+
+
+CREATE INDEX [IX_LoyaltyPoints_VoucherID] ON [LoyaltyPoints] ([VoucherID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_LoyaltyPoints_BookingID_Earned] ON [LoyaltyPoints] ([BookingID]) WHERE [TransactionType] = 'earn' AND [BookingID] IS NOT NULL;
+GO
+
+
+CREATE UNIQUE INDEX [UQ_LoyaltyTiers_MinPoints] ON [LoyaltyTiers] ([MinPoints]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_LoyaltyTiers_TierName] ON [LoyaltyTiers] ([TierName]);
+GO
+
+
+CREATE INDEX [IX_MovieGenre_GenreID] ON [MovieGenre] ([GenreID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_MovieGenre_MovieID_GenreID] ON [MovieGenre] ([MovieID], [GenreID]);
+GO
+
+
+CREATE INDEX [IX_MoviePerson_MovieId_Role_DisplayOrder] ON [MoviePerson] ([MovieId], [Role], [DisplayOrder]);
+GO
+
+
+CREATE INDEX [IX_MoviePerson_PersonId] ON [MoviePerson] ([PersonId]);
+GO
+
+
+CREATE UNIQUE INDEX [IX_Notification_EventId_UserID] ON [Notification] ([EventId], [UserID]);
+GO
+
+
+CREATE INDEX [IX_Notification_UserID_CreatedAt] ON [Notification] ([UserID], [CreatedAt]);
+GO
+
+
+CREATE INDEX [IX_Notification_UserID_IsRead] ON [Notification] ([UserID], [IsRead]);
+GO
+
+
+CREATE UNIQUE INDEX [IX_NotificationOutbox_EventId] ON [NotificationOutbox] ([EventId]);
+GO
+
+
+CREATE INDEX [IX_NotificationOutbox_Status_NextAttemptAt] ON [NotificationOutbox] ([Status], [NextAttemptAt]);
+GO
+
+
+CREATE INDEX [IX_PasswordResetToken_UserID] ON [PasswordResetToken] ([UserID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_PasswordResetToken_Token] ON [PasswordResetToken] ([Token]);
+GO
+
+
+CREATE INDEX [IX_Payment_RefundedBy] ON [Payment] ([RefundedBy]);
+GO
+
+
+CREATE INDEX [IX_Payment_Status] ON [Payment] ([Status]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Payment_BookingID] ON [Payment] ([BookingID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Payment_TransactionCode] ON [Payment] ([TransactionCode]) WHERE [TransactionCode] IS NOT NULL;
+GO
+
+
+CREATE INDEX [IX_PaymentSession_PaymentID] ON [PaymentSession] ([PaymentID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_PaymentSession_GatewayOrderNo] ON [PaymentSession] ([GatewayOrderNo]) WHERE [GatewayOrderNo] IS NOT NULL;
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Person_Name] ON [Person] ([Name]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Product_ItemName] ON [Product] ([ItemName]);
+GO
+
+
+CREATE INDEX [IX_Refund_BookingID] ON [Refund] ([BookingID]);
+GO
+
+
+CREATE INDEX [IX_Refund_PaymentID] ON [Refund] ([PaymentID]);
+GO
+
+
+CREATE INDEX [IX_Refund_ProcessedBy] ON [Refund] ([ProcessedBy]);
+GO
+
+
+CREATE INDEX [IX_Refund_WalletID] ON [Refund] ([WalletID]);
+GO
+
+
+CREATE INDEX [IX_Room_CinemaID] ON [Room] ([CinemaID]);
+GO
+
+
+CREATE INDEX [IX_Room_RoomTypeID] ON [Room] ([RoomTypeID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Room_CinemaID_RoomName] ON [Room] ([CinemaID], [RoomName]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_RoomType_TypeName] ON [RoomType] ([TypeName]);
+GO
+
+
+CREATE INDEX [IX_Seat_RoomID] ON [Seat] ([RoomID]);
+GO
+
+
+CREATE INDEX [IX_Seat_SeatTypeID] ON [Seat] ([SeatTypeID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Seat_RoomID_SeatRow_SeatCol] ON [Seat] ([RoomID], [SeatRow], [SeatCol]) WHERE [IsCurrentLayout] = 1;
+GO
+
+
+CREATE INDEX [IX_SeatHold_BookingID] ON [SeatHold] ([BookingID]);
+GO
+
+
+CREATE INDEX [IX_SeatHold_ShowtimeID] ON [SeatHold] ([ShowtimeID]);
+GO
+
+
+CREATE INDEX [IX_SeatHold_Status_Lookup] ON [SeatHold] ([SeatID], [ShowtimeID], [Status]);
+GO
+
+
+CREATE INDEX [IX_SeatHold_UserID] ON [SeatHold] ([UserID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_SeatHold_ActiveHolding] ON [SeatHold] ([SeatID], [ShowtimeID]) WHERE [Status] = 'holding';
+GO
+
+
+CREATE UNIQUE INDEX [UQ_SeatType_TypeName] ON [SeatType] ([TypeName]);
+GO
+
+
+CREATE INDEX [IX_Showtime_Conflict_Check] ON [Showtime] ([RoomID], [StartTime], [EndTime]);
+GO
+
+
+CREATE INDEX [IX_Showtime_MovieID] ON [Showtime] ([MovieID]);
+GO
+
+
+CREATE INDEX [IX_Showtime_RoomID_StartTime] ON [Showtime] ([RoomID], [StartTime]);
+GO
+
+
+CREATE INDEX [IX_Showtime_ShowtimeTypeID] ON [Showtime] ([ShowtimeTypeID]);
+GO
+
+
+CREATE INDEX [IX_ShowtimeType_CinemaID] ON [ShowtimeType] ([CinemaID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_ShowtimeType_CinemaID_Name] ON [ShowtimeType] ([CinemaID], [Name]);
+GO
+
+
+CREATE UNIQUE INDEX [UX_ShowtimeTypeSlot_ShowtimeTypeID_StartTime] ON [ShowtimeTypeSlot] ([ShowtimeTypeID], [StartTime]);
+GO
+
+
+CREATE INDEX [IX_Ticket_CheckedInByID] ON [Ticket] ([CheckedInByID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Ticket_BookingSeatID] ON [Ticket] ([BookingSeatID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Ticket_QRCode] ON [Ticket] ([QRCode]);
+GO
+
+
+CREATE INDEX [IX_Users_CinemaID] ON [Users] ([CinemaID]);
+GO
+
+
+CREATE INDEX [IX_Users_LoyaltyTierID] ON [Users] ([LoyaltyTierID]);
+GO
+
+
+CREATE INDEX [IX_Users_Role_Status] ON [Users] ([Role], [Status]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Users_BarCode] ON [Users] ([BarCode]) WHERE [BarCode] IS NOT NULL;
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Users_Email] ON [Users] ([Email]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Users_Phone] ON [Users] ([Phone]) WHERE [Phone] IS NOT NULL;
+GO
+
+
+CREATE INDEX [IX_UserVoucher_BookingID] ON [UserVoucher] ([BookingID]);
+GO
+
+
+CREATE INDEX [IX_UserVoucher_Status] ON [UserVoucher] ([Status]);
+GO
+
+
+CREATE INDEX [IX_UserVoucher_UserID] ON [UserVoucher] ([UserID]);
+GO
+
+
+CREATE INDEX [IX_UserVoucher_VoucherID] ON [UserVoucher] ([VoucherID]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Voucher_VoucherCode] ON [Voucher] ([VoucherCode]);
+GO
+
+
+CREATE INDEX [IX_VoucherRules_VoucherID] ON [VoucherRules] ([VoucherID]);
+GO
+
+
+CREATE INDEX [IX_VoucherRules_VoucherID_RuleType] ON [VoucherRules] ([VoucherID], [RuleType]);
+GO
+
+
+CREATE UNIQUE INDEX [UQ_Wallet_UserID] ON [Wallet] ([UserID]);
+GO
+
+
+CREATE INDEX [IX_WalletTransaction_BookingID] ON [WalletTransaction] ([BookingID]);
+GO
+
+
+CREATE INDEX [IX_WalletTransaction_RefundID] ON [WalletTransaction] ([RefundID]);
+GO
+
+
+CREATE INDEX [IX_WalletTransaction_WalletID] ON [WalletTransaction] ([WalletID]);
+GO
+
+

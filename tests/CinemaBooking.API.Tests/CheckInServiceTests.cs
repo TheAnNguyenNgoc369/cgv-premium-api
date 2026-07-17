@@ -725,6 +725,8 @@ public sealed class CheckInServiceTests
             throw new NotSupportedException();
         public Task<Booking?> GetBookingByQRCodeAsync(string qrCode, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+        public Task<Booking?> GetBookingByCodeAsync(string bookingCode, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
         public Task<Booking?> GetBookingWithFullDetailsForCheckInAsync(int bookingId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
         public Task UpdateBookingQRCodeAsync(int bookingId, string qrCode, CancellationToken cancellationToken = default) =>
@@ -748,6 +750,8 @@ public sealed class CheckInServiceTests
         public Task UpdateBookingStatusAsync(int bookingId, string status, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
         public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+        public Task<bool> UpdateBookingFnBPickupAsync(string bookingCode, int staffId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
 

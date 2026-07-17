@@ -21,6 +21,8 @@ public interface IUserRepository
         int? excludingUserId = null,
         CancellationToken cancellationToken = default);
 
+    Task<bool> BarCodeExistsAsync(string barcode, CancellationToken cancellationToken = default);
+
     Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
 
     Task<User?> GetByIdAsync(int userId, CancellationToken cancellationToken = default);

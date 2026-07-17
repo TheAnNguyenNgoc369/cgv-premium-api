@@ -14,6 +14,7 @@ public interface IAdminUserRepository
     Task<bool> PhoneExistsAsync(string phone, int? excludingUserId = null,
         CancellationToken cancellationToken = default);
     Task<bool> CinemaExistsAsync(int cinemaId, CancellationToken cancellationToken = default);
+    Task<bool> BarCodeExistsAsync(string barcode, CancellationToken cancellationToken = default);
     Task<bool> HasDeletionBlockingDataAsync(
         int userId,
         CancellationToken cancellationToken = default);
@@ -32,4 +33,6 @@ public interface IAdminUserRepository
         AdminActionLog actionLog, CancellationToken cancellationToken = default);
     Task<bool> TryDeleteAsync(int userId, AdminActionLog actionLog,
         CancellationToken cancellationToken = default);
+
+    Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

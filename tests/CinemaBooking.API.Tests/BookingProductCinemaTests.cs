@@ -189,6 +189,10 @@ public sealed class BookingProductAvailabilityTests
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IDbContextTransaction> BeginTransactionAsync(
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Booking?> GetBookingByCodeAsync(string bookingCode,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> UpdateBookingFnBPickupAsync(string bookingCode, int staffId,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class StubUnitOfWork : IUnitOfWork

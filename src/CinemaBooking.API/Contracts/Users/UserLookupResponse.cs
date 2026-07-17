@@ -1,3 +1,5 @@
+using CinemaBooking.API.Contracts.Vouchers;
+
 namespace CinemaBooking.API.Contracts.Users;
 
 public sealed record UserLookupResponse(
@@ -15,7 +17,8 @@ public sealed record UserLookupResponse(
         string? AvatarURL,
         UserMembershipInfo Membership,
         UserWalletInfo? Wallet,
-        object? Cinema);
+        object? Cinema,
+        List<RedeemableVoucherResponse>? Vouchers);
 
     public sealed record UserMembershipInfo(
         string CurrentTier,

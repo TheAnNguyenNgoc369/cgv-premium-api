@@ -103,6 +103,11 @@ public sealed class AuthService : IAuthService
             verificationToken,
             cancellationToken);
 
+        // Generate barcode for the new user
+        var barcode = await GenerateUniqueBarcodeAsync(user.UserID, cancellationToken);
+        user.BarCode = barcode;
+        await _userRepository.SaveChangesAsync(cancellationToken);
+
         await _authEmailService.QueueVerificationAsync(
             user.UserID,
             user.Email,
@@ -552,5 +557,20 @@ public sealed class AuthService : IAuthService
 
             </div>
             """;
+    }
+
+    private async Task<string> GenerateUniqueBarcodeAsync(int userId, CancellationToken cancellationToken)
+    {
+        const string prefix = "CV";
+        var barcode = $"{prefix}{userId:D6}";
+        
+        // Check if barcode already exists (unlikely but for safety)
+        while (await _userRepository.BarCodeExistsAsync(barcode, cancellationToken))
+        {
+            userId++;
+            barcode = $"{prefix}{userId:D6}";
+        }
+        
+        return barcode;
     }
 }

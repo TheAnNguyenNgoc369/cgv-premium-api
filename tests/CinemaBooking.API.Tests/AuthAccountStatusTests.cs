@@ -182,6 +182,7 @@ public sealed class AuthAccountStatusTests
             SaveChangesCalled = true;
             return Task.CompletedTask;
         }
+        public Task<bool> BarCodeExistsAsync(string barcode, CancellationToken cancellationToken = default) => Task.FromResult(false);
 
         private static Task Unsupported() => throw new NotSupportedException();
         private static Task<T> Unsupported<T>() => throw new NotSupportedException();

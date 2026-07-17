@@ -482,6 +482,7 @@ public sealed class CheckInsControllerTests
         public int LookupCallCount { get; private set; }
         public int CheckInCallCount { get; private set; }
         public int HistoryCallCount { get; private set; }
+        public int PickupCallCount { get; private set; }
 
         public (bool Succeeded, string? ErrorMessage, CheckInLookupResult? Data) LookupResult { get; set; }
         public (bool Succeeded, string? ErrorMessage, string? BookingCode, DateTime? CheckedInAt) CheckInResult { get; set; }
@@ -490,6 +491,7 @@ public sealed class CheckInsControllerTests
             Records = new List<CheckInHistoryResult.CheckInRecord>(),
             TotalCount = 0
         };
+        public (bool Succeeded, string? ErrorMessage) PickupResult { get; set; }
 
         public int? CapturedStaffId { get; private set; }
         public int? CapturedHistoryStaffId { get; private set; }
@@ -499,6 +501,7 @@ public sealed class CheckInsControllerTests
         public bool CapturedHistoryIsManager { get; private set; }
         public bool CapturedHistoryIsStaff { get; private set; }
         public string? CapturedIpAddress { get; private set; }
+        public string? CapturedBookingCode { get; private set; }
 
         public Task<(bool Succeeded, string? ErrorMessage, CheckInLookupResult? Data)> LookupAsync(
             string qrCode,
@@ -543,6 +546,17 @@ public sealed class CheckInsControllerTests
             CapturedHistoryIsManager = isManager;
             CapturedHistoryIsStaff = isStaff;
             return Task.FromResult(HistoryResult);
+        }
+
+        public Task<(bool Succeeded, string? ErrorMessage)> ConfirmFnBPickupAsync(
+            string bookingCode,
+            int staffId,
+            CancellationToken cancellationToken = default)
+        {
+            PickupCallCount++;
+            CapturedBookingCode = bookingCode;
+            CapturedStaffId = staffId;
+            return Task.FromResult(PickupResult);
         }
     }
 
