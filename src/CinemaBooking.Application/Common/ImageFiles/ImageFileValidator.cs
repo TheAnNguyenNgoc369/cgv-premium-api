@@ -22,8 +22,11 @@ public static class ImageFileValidator
     public static string? Validate(
         string fileName,
         string? contentType,
-        long fileSize)
+        long fileSize,
+        long? maxFileSizeBytes = null)
     {
+        var effectiveMaxSize = maxFileSizeBytes ?? MaxFileSizeBytes;
+
         if (string.IsNullOrWhiteSpace(fileName))
         {
             return "Image file is required";
@@ -34,9 +37,10 @@ public static class ImageFileValidator
             return "Image file is empty";
         }
 
-        if (fileSize > MaxFileSizeBytes)
+        if (fileSize > effectiveMaxSize)
         {
-            return "Image file must not exceed 5 MB";
+            var maxMb = effectiveMaxSize / (1024 * 1024);
+            return $"Image file must not exceed {maxMb} MB";
         }
 
         var extension = Path.GetExtension(fileName);

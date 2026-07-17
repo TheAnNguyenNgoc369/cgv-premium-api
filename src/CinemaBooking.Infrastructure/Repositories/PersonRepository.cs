@@ -14,21 +14,29 @@ public sealed class PersonRepository : IPersonRepository
         _dbContext = dbContext;
     }
 
-    public Task<List<Person>> GetPersonsAsync(
+    public async Task<PersonPageResult> GetPersonsPageAsync(
         string? searchTerm,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default)
     {
         var query = _dbContext.Persons.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
-            var trimmed = searchTerm.Trim();
-            query = query.Where(p => EF.Functions.Like(p.Name, $"%{trimmed}%"));
+            var pattern = $"%{searchTerm.Trim()}%";
+            query = query.Where(p => EF.Functions.Like(p.Name, pattern));
         }
 
-        return query
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
             .OrderBy(p => p.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync(cancellationToken);
+
+        return new PersonPageResult(items, total);
     }
 
     public Task<Person?> GetByIdAsync(
@@ -38,23 +46,6 @@ public sealed class PersonRepository : IPersonRepository
         return _dbContext.Persons
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.PersonId == personId, cancellationToken);
-    }
-
-    public Task<bool> NameExistsAsync(
-        string name,
-        int? excludingPersonId = null,
-        CancellationToken cancellationToken = default)
-    {
-        var query = _dbContext.Persons
-            .AsNoTracking()
-            .Where(p => p.Name == name);
-
-        if (excludingPersonId.HasValue)
-        {
-            query = query.Where(p => p.PersonId != excludingPersonId.Value);
-        }
-
-        return query.AnyAsync(cancellationToken);
     }
 
     public async Task<Person> AddAsync(
@@ -69,8 +60,7 @@ public sealed class PersonRepository : IPersonRepository
 
     public async Task<Person?> UpdateAsync(
         int personId,
-        string name,
-        DateTime updatedAt,
+        PersonUpdateData data,
         CancellationToken cancellationToken = default)
     {
         var person = await _dbContext.Persons
@@ -81,8 +71,14 @@ public sealed class PersonRepository : IPersonRepository
             return null;
         }
 
-        person.Name = name;
-        person.UpdatedAt = updatedAt;
+        person.Name = data.Name;
+        person.Biography = data.Biography;
+        person.DateOfBirth = data.DateOfBirth;
+        person.Nationality = data.Nationality;
+        person.Gender = data.Gender;
+        person.PhotoUrl = data.PhotoUrl;
+        person.PhotoPublicId = data.PhotoPublicId;
+        person.UpdatedAt = data.UpdatedAt;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -95,6 +91,19 @@ public sealed class PersonRepository : IPersonRepository
     {
         return _dbContext.MoviePersons
             .AnyAsync(mp => mp.PersonId == personId, cancellationToken);
+    }
+
+    public Task<List<string>> GetAssignedMovieTitlesAsync(
+        int personId,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.MoviePersons
+            .AsNoTracking()
+            .Where(mp => mp.PersonId == personId)
+            .Select(mp => mp.Movie.Title)
+            .Distinct()
+            .OrderBy(title => title)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<bool> DeleteAsync(
