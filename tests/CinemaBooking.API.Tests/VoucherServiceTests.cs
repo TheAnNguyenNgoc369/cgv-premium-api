@@ -103,5 +103,6 @@ public sealed class VoucherServiceTests
         public Task<bool> TryIncrementTokenVersionAsync(int userId, int expectedVersion, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> TryUpdatePasswordHashAsync(int userId, string oldPasswordHash, string newPasswordHash, CancellationToken ct) => throw new NotSupportedException();
         public Task SaveChangesAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<bool> BarCodeExistsAsync(string barcode, CancellationToken cancellationToken = default) => Task.FromResult(false);
     }
 }

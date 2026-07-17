@@ -1,5 +1,7 @@
 using CinemaBooking.API.Contracts.Bookings;
+using CinemaBooking.API.Contracts.CheckIns;
 using CinemaBooking.Application.Bookings;
+using CinemaBooking.Application.CheckIns;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Payments;
 using CinemaBooking.Domain.Entities;
@@ -146,6 +148,59 @@ public sealed class BookingController : ControllerBase
         }
 
         return Ok(MapToResponse(result.Booking!));
+    }
+
+    [HttpPost("bookings/lookup")]
+    [Authorize(Roles = Roles.Staff)]
+    public async Task<IActionResult> LookupBookingFnb(
+        [FromBody] LookupBookingFnbRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(new { success = false, message = "Invalid request." });
+
+        var staffId = GetCurrentUserId();
+        var result = await _bookingService.LookupBookingFnbAsync(
+            request.BookingCode, staffId, cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            if (result.ErrorMessage == "Booking not found.")
+                return NotFound(new { success = false, message = result.ErrorMessage });
+
+            if (result.ErrorMessage == "Booking has been cancelled.")
+                return BadRequest(new { success = false, message = result.ErrorMessage });
+
+            if (result.ErrorMessage == "Booking has not been paid.")
+                return BadRequest(new { success = false, message = result.ErrorMessage });
+
+            if (result.ErrorMessage == "This booking does not contain F&B items.")
+                return BadRequest(new { success = false, message = result.ErrorMessage });
+
+            if (result.ErrorMessage == "You are not authorized to access this booking.")
+                return StatusCode(403, new { success = false, message = result.ErrorMessage });
+
+            return BadRequest(new { success = false, message = result.ErrorMessage });
+        }
+
+        var response = new LookupBookingFnbResponse
+        {
+            BookingId = result.Result!.BookingId,
+            BookingCode = result.Result.BookingCode,
+            CustomerName = result.Result.CustomerName,
+            CustomerPhone = result.Result.CustomerPhone,
+            PaymentStatus = result.Result.PaymentStatus,
+            TotalAmount = result.Result.TotalAmount,
+            FnbItems = result.Result.FnbItems.Select(f => new LookupBookingFnbResponse.FnbItemInfo
+            {
+                ItemId = f.ItemId,
+                ItemName = f.ItemName,
+                Quantity = f.Quantity,
+                PickedUp = f.PickedUp
+            }).ToList()
+        };
+
+        return Ok(new { success = true, message = "Booking found.", data = response });
     }
 
     [HttpGet("bookings/{id}")]

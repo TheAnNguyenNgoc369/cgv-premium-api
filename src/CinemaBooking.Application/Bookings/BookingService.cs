@@ -584,6 +584,64 @@ public sealed class BookingService : IBookingService
         return (true, null, result);
     }
 
+    public async Task<(bool Succeeded, string? ErrorMessage, LookupBookingFnbResult? Result)> LookupBookingFnbAsync(
+        string bookingCode,
+        int staffId,
+        CancellationToken cancellationToken = default)
+    {
+        var booking = await _bookingRepository.GetBookingByCodeAsync(bookingCode, cancellationToken);
+
+        if (booking is null)
+            return (false, "Booking not found.", null);
+
+        var staffCinemaId = await _bookingRepository.GetStaffCinemaIdAsync(staffId, cancellationToken);
+
+        if (staffCinemaId is null)
+            return (false, "You are not authorized to access this booking.", null);
+
+        int? bookingCinemaId = null;
+
+        if (booking.Showtime is not null)
+        {
+            bookingCinemaId = booking.Showtime.Room?.CinemaID;
+        }
+        else if (booking.CreatedByStaffID.HasValue)
+        {
+            bookingCinemaId = booking.CreatedByStaff?.CinemaID;
+        }
+
+        if (!bookingCinemaId.HasValue || bookingCinemaId.Value != staffCinemaId.Value)
+            return (false, "You are not authorized to access this booking.", null);
+
+        if (booking.Status == BookingStatus.Cancelled)
+            return (false, "Booking has been cancelled.", null);
+
+        if (booking.Payment?.Status != PaymentStatus.Completed)
+            return (false, "Booking has not been paid.", null);
+
+        if (!booking.BookingFnBs.Any())
+            return (false, "This booking does not contain F&B items.", null);
+
+        var result = new LookupBookingFnbResult
+        {
+            BookingId = booking.BookingID,
+            BookingCode = booking.BookingCode,
+            CustomerName = booking.User?.FullName ?? string.Empty,
+            CustomerPhone = booking.User?.Phone ?? string.Empty,
+            PaymentStatus = booking.Payment?.Status ?? "pending",
+            TotalAmount = booking.FinalAmount,
+            FnbItems = booking.BookingFnBs.Select(fnb => new LookupBookingFnbResult.LookupBookingFnbItem
+            {
+                ItemId = fnb.ItemID,
+                ItemName = fnb.Product.ItemName,
+                Quantity = fnb.Quantity,
+                PickedUp = fnb.PickedUp
+            }).ToList()
+        };
+
+        return (true, null, result);
+    }
+
     private static string GenerateBookingCode()
     {
         return $"BK{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
