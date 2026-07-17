@@ -15,10 +15,16 @@ public class BookingFnBConfiguration : IEntityTypeConfiguration<BookingFnB>
         builder.Property(b => b.Quantity).HasDefaultValue(1);
         builder.Property(b => b.UnitPrice).HasColumnType("decimal(18,2)");
         builder.Property(b => b.SubTotal).HasColumnType("decimal(18,2)");
+        builder.Property(b => b.PickedUp).HasDefaultValue(false);
+        builder.Property(b => b.PickedUpAt);
+        builder.Property(b => b.PickedUpByStaffId);
 
         builder.HasIndex(b => new { b.BookingID, b.ItemID })
             .IsUnique()
             .HasDatabaseName("UQ_BookingFnB_BookingID_ItemID");
+
+        builder.HasIndex(b => b.BookingID)
+            .HasDatabaseName("IX_BookingFnB_BookingId");
 
         builder.HasOne(b => b.Booking)
             .WithMany(bk => bk.BookingFnBs)
@@ -29,6 +35,11 @@ public class BookingFnBConfiguration : IEntityTypeConfiguration<BookingFnB>
             .WithMany(p => p.BookingFnBs)
             .HasForeignKey(b => b.ItemID)
             .HasConstraintName("FK_BookingFnB_Product");
+
+        builder.HasOne(b => b.PickedUpByStaff)
+            .WithMany()
+            .HasForeignKey(b => b.PickedUpByStaffId)
+            .HasConstraintName("FK_BookingFnB_PickedUpByStaff");
 
         builder.ToTable(t =>
         {

@@ -13,6 +13,11 @@ public interface ICheckInService
         string? ipAddress,
         CancellationToken cancellationToken = default);
 
+    Task<(bool Succeeded, string? ErrorMessage)> ConfirmFnBPickupAsync(
+        string bookingCode,
+        int staffId,
+        CancellationToken cancellationToken = default);
+
     Task<CheckInHistoryResult> GetHistoryAsync(
         int? staffId,
         int? cinemaId,

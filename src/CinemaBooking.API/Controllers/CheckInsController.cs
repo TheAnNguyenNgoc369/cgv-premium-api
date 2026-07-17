@@ -142,6 +142,36 @@ public sealed class CheckInsController : ControllerBase
         });
     }
 
+    [HttpPost("fnb-pickup")]
+    [Authorize(Roles = Roles.Staff)]
+    public async Task<IActionResult> ConfirmFnBPickup(
+        [FromBody] FnBPickupRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(Roles.Staff))
+            return Forbid();
+
+        if (!ModelState.IsValid)
+            return BadRequest(new { success = false, message = "Invalid request." });
+
+        var staffId = GetCurrentUserId();
+
+        var result = await _checkInService.ConfirmFnBPickupAsync(
+            request.BookingCode,
+            staffId,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            if (result.ErrorMessage?.Contains("not found") == true)
+                return NotFound(new { success = false, message = result.ErrorMessage });
+
+            return BadRequest(new { success = false, message = result.ErrorMessage });
+        }
+
+        return Ok(new { success = true, message = result.ErrorMessage });
+    }
+
     private int GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

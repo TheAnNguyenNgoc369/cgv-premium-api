@@ -5,7 +5,7 @@ public class Booking
     public int BookingID { get; set; }
     public string BookingCode { get; set; } = null!;
     public int? UserID { get; set; }
-    public int ShowtimeID { get; set; }
+    public int? ShowtimeID { get; set; }
     public int? CreatedByStaffID { get; set; }
     public decimal SubTotal { get; set; }
     public decimal DiscountAmount { get; set; }
@@ -18,7 +18,7 @@ public class Booking
     public DateTime UpdatedAt { get; set; }
 
     public User? User { get; set; }
-    public Showtime Showtime { get; set; } = null!;
+    public Showtime? Showtime { get; set; }
     public User? CreatedByStaff { get; set; }
     public ICollection<BookingSeat> BookingSeats { get; set; } = [];
     public ICollection<SeatHold> SeatHolds { get; set; } = [];

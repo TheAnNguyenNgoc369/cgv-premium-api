@@ -4,6 +4,7 @@ using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CinemaBooking.Infrastructure.Migrations
 {
     [DbContext(typeof(CinemaBookingDbContext))]
-    partial class CinemaBookingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260717085928_AddBookingFnBPickupFields")]
+    partial class AddBookingFnBPickupFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -126,7 +129,7 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<int?>("ShowtimeID")
+                    b.Property<int>("ShowtimeID")
                         .HasColumnType("int");
 
                     b.Property<string>("Status")
@@ -2081,6 +2084,7 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .WithMany("Bookings")
                         .HasForeignKey("ShowtimeID")
                         .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
                         .HasConstraintName("FK_Booking_Showtime");
 
                     b.HasOne("CinemaBooking.Domain.Entities.User", "User")

@@ -20,7 +20,7 @@ public interface IBookingService
         int actorUserId,
         int? customerId,
         bool isStaff,
-        int showtimeId,
+        int? showtimeId,
         List<int> seatIds,
         List<BookingFnBItemDto> fnbItems,
         string? voucherCode,
@@ -28,7 +28,7 @@ public interface IBookingService
 
     Task<(bool Succeeded, string? ErrorMessage, PricingCalculationResult? Result)> CalculatePricingAsync(
         int? userId,
-        int showtimeId,
+        int? showtimeId,
         List<int> seatIds,
         List<BookingFnBItemDto> fnbItems,
         string? voucherCode,

@@ -80,7 +80,7 @@ public sealed class VoucherServiceTests
     {
         public Task<User?> GetByIdAsync(int id, CancellationToken ct) => Task.FromResult<User?>(null);
         public Task<User?> GetProfileByIdAsync(int id, CancellationToken ct) => throw new NotSupportedException();
-        public Task<User?> LookupCustomerAsync(string? email, string? phone, CancellationToken ct) => throw new NotSupportedException();
+        public Task<User?> LookupCustomerAsync(string? email, string? phone, string? barcode, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> EmailExistsAsync(string email, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> PhoneExistsAsync(string phone, int? excludingUserId, CancellationToken ct) => throw new NotSupportedException();
         public Task<User?> GetByEmailAsync(string email, CancellationToken ct) => throw new NotSupportedException();

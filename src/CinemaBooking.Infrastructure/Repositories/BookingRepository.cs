@@ -167,6 +167,17 @@ public sealed class BookingRepository : IBookingRepository
             .FirstOrDefaultAsync(b => b.QRCode == qrCode, cancellationToken);
     }
 
+    public async Task<Booking?> GetBookingByCodeAsync(
+        string bookingCode,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Bookings
+            .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
+            .Include(b => b.Payment)
+            .Include(b => b.User)
+            .FirstOrDefaultAsync(b => b.BookingCode == bookingCode, cancellationToken);
+    }
+
     public async Task<Booking?> GetBookingWithFullDetailsForCheckInAsync(
         int bookingId,
         CancellationToken cancellationToken = default)
@@ -354,6 +365,39 @@ public sealed class BookingRepository : IBookingRepository
         return await _db.Vouchers
             .FromSqlRaw("SELECT * FROM Voucher WITH (UPDLOCK, ROWLOCK) WHERE VoucherCode = {0}", voucherCode)
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<bool> UpdateBookingFnBPickupAsync(
+        string bookingCode,
+        int staffId,
+        CancellationToken cancellationToken = default)
+    {
+        var booking = await GetBookingByCodeAsync(bookingCode, cancellationToken);
+        if (booking is null)
+            return false;
+
+        if (booking.Payment?.Status != PaymentStatus.Completed)
+            return false;
+
+        if (booking.Status == BookingStatus.Cancelled)
+            return false;
+
+        if (!booking.BookingFnBs.Any())
+            return false;
+
+        if (booking.BookingFnBs.All(fnb => fnb.PickedUp))
+            return false;
+
+        var now = DateTime.UtcNow;
+        foreach (var fnb in booking.BookingFnBs.Where(f => !f.PickedUp))
+        {
+            fnb.PickedUp = true;
+            fnb.PickedUpAt = now;
+            fnb.PickedUpByStaffId = staffId;
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(
