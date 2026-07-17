@@ -143,7 +143,7 @@ public sealed class AuthAccountStatusTests
         public Task<bool> TryUpdatePasswordHashAsync(int userId, string expectedPasswordHash,
             string newPasswordHash, CancellationToken cancellationToken = default) => Task.FromResult(true);
         public Task<User?> GetProfileByIdAsync(int userId, CancellationToken cancellationToken = default) => Unsupported<User?>();
-        public Task<User?> LookupCustomerAsync(string? email, string? phone,
+        public Task<User?> LookupCustomerAsync(string? email, string? phone, string? barcode,
             CancellationToken cancellationToken = default) => Unsupported<User?>();
         public Task<User?> GetByIdAsync(int userId, CancellationToken cancellationToken = default) => Unsupported<User?>();
         public Task<User?> UpdateProfileAsync(int userId, string fullName, string? phone,

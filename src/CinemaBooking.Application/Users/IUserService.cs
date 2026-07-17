@@ -9,6 +9,7 @@ public interface IUserService
     Task<User?> LookupCustomerAsync(
         string? email,
         string? phone,
+        string? barcode,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, User? User)> UpdateProfileAsync(

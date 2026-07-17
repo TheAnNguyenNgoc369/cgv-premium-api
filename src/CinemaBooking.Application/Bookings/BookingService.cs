@@ -121,38 +121,48 @@ public sealed class BookingService : IBookingService
         int actorUserId,
         int? customerId,
         bool isStaff,
-        int showtimeId,
+        int? showtimeId,
         List<int> seatIds,
         List<BookingFnBItemDto> fnbItems,
         string? voucherCode,
         CancellationToken cancellationToken = default)
     {
-        if (seatIds.Count == 0)
+        var isFnbOnly = !showtimeId.HasValue && seatIds.Count == 0;
+
+        if (!isFnbOnly && seatIds.Count == 0)
             return (false, "Please select at least one seat.", null, null);
 
-        var showtime = await _bookingRepository.GetShowtimeAsync(showtimeId, cancellationToken);
-        if (showtime is null)
-            return (false, "Showtime not found.", null, null);
+        Showtime? showtime = null;
+        if (!isFnbOnly)
+        {
+            showtime = await _bookingRepository.GetShowtimeAsync(showtimeId!.Value, cancellationToken);
+            if (showtime is null)
+                return (false, "Showtime not found.", null, null);
 
-        if (showtime.Status != "scheduled")
-            return (false, "This showtime is not scheduled and is unavailable for booking.", null, null);
+            if (showtime.Status != "scheduled")
+                return (false, "This showtime is not scheduled and is unavailable for booking.", null, null);
 
-        if (showtime.StartTime <= DateTime.UtcNow)
-            return (false, "This showtime has already started.", null, null);
+            if (showtime.StartTime <= DateTime.UtcNow)
+                return (false, "This showtime has already started.", null, null);
 
-        if (showtime.Room.Status != "active")
-            return (false, "The showtime room is inactive.", null, null);
+            if (showtime.Room.Status != "active")
+                return (false, "The showtime room is inactive.", null, null);
 
-        if (showtime.Room.Cinema.Status != "active")
-            return (false, "The showtime cinema is inactive.", null, null);
+            if (showtime.Room.Cinema.Status != "active")
+                return (false, "The showtime cinema is inactive.", null, null);
+        }
 
         seatIds = seatIds.Distinct().ToList();
 
-        var myHolds = await _bookingRepository.GetMyActiveHoldsAsync(
-            actorUserId, showtimeId, seatIds, cancellationToken);
+        List<SeatHold> myHolds = new();
+        if (!isFnbOnly)
+        {
+            myHolds = await _bookingRepository.GetMyActiveHoldsAsync(
+                actorUserId, showtimeId!.Value, seatIds, cancellationToken);
 
-        if (myHolds.Count != seatIds.Count)
-            return (false, "Some seats are not held or the holds have expired. Please select them again.", null, null);
+            if (myHolds.Count != seatIds.Count)
+                return (false, "Some seats are not held or the holds have expired. Please select them again.", null, null);
+        }
 
         var pricingResult = await CalculatePricingAsync(
             customerId, showtimeId, seatIds, fnbItems, voucherCode, cancellationToken);
@@ -163,12 +173,16 @@ public sealed class BookingService : IBookingService
         if (!isStaff && customerId != actorUserId)
             return (false, "Customers can only create bookings for their own account.", null, null);
 
-        var bookingSeats = pricingResult.Result!.SeatDetails
-            .Select(s => new BookingSeat
-            {
-                SeatID = s.SeatId,
-                TicketPrice = s.Price
-            }).ToList();
+        var bookingSeats = new List<BookingSeat>();
+        if (!isFnbOnly)
+        {
+            bookingSeats = pricingResult.Result!.SeatDetails
+                .Select(s => new BookingSeat
+                {
+                    SeatID = s.SeatId,
+                    TicketPrice = s.Price
+                }).ToList();
+        }
 
         var bookingFnBs = pricingResult.Result.FnBDetails
             .Select(f => new BookingFnB
@@ -226,14 +240,17 @@ public sealed class BookingService : IBookingService
 
         var bookingCreated = await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
-            var lockedHolds = await _bookingRepository.GetMyActiveHoldsForUpdateAsync(
-                actorUserId, showtimeId, DateTime.UtcNow, cancellationToken);
-            var lockedRequestedHolds = lockedHolds
-                .Where(hold => seatIds.Contains(hold.SeatID))
-                .ToList();
+            if (!isFnbOnly)
+            {
+                var lockedHolds = await _bookingRepository.GetMyActiveHoldsForUpdateAsync(
+                    actorUserId, showtimeId!.Value, DateTime.UtcNow, cancellationToken);
+                var lockedRequestedHolds = lockedHolds
+                    .Where(hold => seatIds.Contains(hold.SeatID))
+                    .ToList();
 
-            if (lockedRequestedHolds.Count != seatIds.Count)
-                return false;
+                if (lockedRequestedHolds.Count != seatIds.Count)
+                    return false;
+            }
 
             if (productQuantities.Count > 0)
             {
@@ -270,9 +287,6 @@ public sealed class BookingService : IBookingService
                 if (now > lockedVoucher.ValidUntil)
                     throw new InvalidOperationException("Voucher has expired.");
 
-                // Public voucher: MaxUses gates booking consumption (the "use" step).
-                // Loyalty voucher: MaxUses is enforced at redeem time; the UserVoucher itself
-                // is the proof of entitlement and booking neither reads nor writes UsedCount.
                 if (!lockedVoucher.IsRedeemable
                     && lockedVoucher.MaxUses.HasValue
                     && lockedVoucher.UsedCount >= lockedVoucher.MaxUses.Value)
@@ -294,20 +308,21 @@ public sealed class BookingService : IBookingService
             }
 
             await _bookingRepository.AddBookingAsync(booking, cancellationToken);
-            await _bookingRepository.MarkHoldsAsConfirmedAsync(
-                lockedRequestedHolds, booking.BookingID, cancellationToken);
 
-            // Voucher.UsedCount is intentionally NOT modified here:
-            //   Public  -> bumped on payment success (see PaymentService.FinalizeSuccessfulBookingAsync)
-            //   Loyalty -> bumped at redeem (see UserVoucherRepository.RedeemVoucherAsync);
-            //              booking must never touch Voucher.UsedCount for loyalty vouchers.
+            if (!isFnbOnly)
+            {
+                var lockedHolds = await _bookingRepository.GetMyActiveHoldsForUpdateAsync(
+                    actorUserId, showtimeId!.Value, DateTime.UtcNow, cancellationToken);
+                var lockedRequestedHolds = lockedHolds
+                    .Where(hold => seatIds.Contains(hold.SeatID))
+                    .ToList();
+
+                await _bookingRepository.MarkHoldsAsConfirmedAsync(
+                    lockedRequestedHolds, booking.BookingID, cancellationToken);
+            }
 
             if (reservedUserVoucher is not null)
             {
-                // "Reserved for this booking" = Status stays Available + BookingID is set.
-                // The DB CHECK constraint only allows available/used/expired, so we don't
-                // introduce a fourth state; concurrent bookings are blocked by the UPDLOCK
-                // in GetAvailableForUpdateAsync plus the BookingID IS NULL read filter.
                 reservedUserVoucher.BookingID = booking.BookingID;
             }
 
@@ -339,47 +354,59 @@ public sealed class BookingService : IBookingService
 
     public async Task<(bool Succeeded, string? ErrorMessage, PricingCalculationResult? Result)> CalculatePricingAsync(
         int? userId,
-        int showtimeId,
+        int? showtimeId,
         List<int> seatIds,
         List<BookingFnBItemDto> fnbItems,
         string? voucherCode,
         CancellationToken cancellationToken = default)
     {
-        if (seatIds.Count == 0)
+        var isFnbOnly = !showtimeId.HasValue && seatIds.Count == 0;
+
+        if (!isFnbOnly && seatIds.Count == 0)
             return (false, "Please select at least one seat.", null);
 
-        var showtime = await _bookingRepository.GetShowtimeAsync(showtimeId, cancellationToken);
-        if (showtime is null)
-            return (false, "Showtime not found.", null);
+        Showtime? showtime = null;
+        if (!isFnbOnly)
+        {
+            showtime = await _bookingRepository.GetShowtimeAsync(showtimeId!.Value, cancellationToken);
+            if (showtime is null)
+                return (false, "Showtime not found.", null);
 
-        if (showtime.Status != "scheduled")
-            return (false, "Cannot calculate pricing for showtimes that are not scheduled.", null);
+            if (showtime.Status != "scheduled")
+                return (false, "Cannot calculate pricing for showtimes that are not scheduled.", null);
 
-        if (showtime.StartTime <= DateTime.UtcNow)
-            return (false, "Cannot calculate pricing for showtimes that have already started.", null);
+            if (showtime.StartTime <= DateTime.UtcNow)
+                return (false, "Cannot calculate pricing for showtimes that have already started.", null);
 
-        if (showtime.Room.Cinema.Status != "active")
-            return (false, "Cinema is not active.", null);
+            if (showtime.Room.Cinema.Status != "active")
+                return (false, "Cinema is not active.", null);
+        }
 
         seatIds = seatIds.Distinct().ToList();
 
-        var seats = await _bookingRepository.GetSeatsByIdsAsync(seatIds, cancellationToken);
+        var seatDetails = new List<SeatPricingDetail>();
+        var seatsSubTotal = 0m;
 
-        if (seats.Count != seatIds.Count || seats.Any(seat =>
-                seat.RoomID != showtime.RoomID || seat.Status != "active"
-                || seat.IsGap || seat.SeatType is null))
-            return (false, "One or more seats do not belong to the showtime room or are inactive.", null);
-
-        var seatDetails = seats.Select(seat => new SeatPricingDetail
+        if (!isFnbOnly)
         {
-            SeatId = seat.SeatID,
-            SeatRow = seat.SeatRow,
-            SeatCol = seat.SeatCol,
-            SeatTypeName = seat.SeatType!.TypeName,
-            Price = showtime.BasePrice + showtime.RoomExtraPrice + seat.SeatType.ExtraPrice
-        }).ToList();
+            var seats = await _bookingRepository.GetSeatsByIdsAsync(seatIds, cancellationToken);
 
-        var seatsSubTotal = seatDetails.Sum(s => s.Price);
+            if (seats.Count != seatIds.Count || seats.Any(seat =>
+                    seat.RoomID != showtime!.RoomID || seat.Status != "active"
+                    || seat.IsGap || seat.SeatType is null))
+                return (false, "One or more seats do not belong to the showtime room or are inactive.", null);
+
+            seatDetails = seats.Select(seat => new SeatPricingDetail
+            {
+                SeatId = seat.SeatID,
+                SeatRow = seat.SeatRow,
+                SeatCol = seat.SeatCol,
+                SeatTypeName = seat.SeatType!.TypeName,
+                Price = showtime.BasePrice + showtime.RoomExtraPrice + seat.SeatType.ExtraPrice
+            }).ToList();
+
+            seatsSubTotal = seatDetails.Sum(s => s.Price);
+        }
 
         var fnbDetails = new List<FnBPricingDetail>();
         var fnbSubTotal = 0m;
@@ -422,6 +449,9 @@ public sealed class BookingService : IBookingService
             }
         }
 
+        if (isFnbOnly && fnbSubTotal == 0)
+            return (false, "F&B only booking requires at least one F&B item.", null);
+
         var totalBeforeDiscount = seatsSubTotal + fnbSubTotal;
 
         User? user = null;
@@ -461,8 +491,6 @@ public sealed class BookingService : IBookingService
             if (now > voucher.ValidUntil)
                 return (false, "Voucher has expired.", null);
 
-            // Public voucher only: MaxUses gates booking use. For loyalty vouchers, MaxUses is
-            // enforced at redeem; the presence of an owned UserVoucher is the entitlement check.
             if (!voucher.IsRedeemable
                 && voucher.MaxUses.HasValue
                 && voucher.UsedCount >= voucher.MaxUses.Value)
@@ -483,17 +511,17 @@ public sealed class BookingService : IBookingService
             {
                 BookingId = 0,
                 CustomerId = userId,
-                CinemaId = showtime.Room.CinemaID,
-                MovieId = showtime.MovieID,
-                RoomId = showtime.RoomID,
-                ShowtimeDateTime = showtime.StartTime,
+                CinemaId = showtime?.Room.CinemaID ?? 0,
+                MovieId = showtime?.MovieID ?? 0,
+                RoomId = showtime?.RoomID ?? 0,
+                ShowtimeDateTime = showtime?.StartTime ?? DateTime.MinValue,
                 MembershipTier = user?.LoyaltyTier?.TierName,
-                Seats = seats.Select(s => new Vouchers.RuleEngine.SeatValidationData
+                Seats = !isFnbOnly ? seatDetails.Select(s => new Vouchers.RuleEngine.SeatValidationData
                 {
-                    SeatID = s.SeatID,
-                    SeatType = s.SeatType!.TypeName,
-                    Price = showtime.BasePrice + showtime.RoomExtraPrice + s.SeatType.ExtraPrice
-                }).ToList(),
+                    SeatID = s.SeatId,
+                    SeatType = s.SeatTypeName,
+                    Price = s.Price
+                }).ToList() : new List<Vouchers.RuleEngine.SeatValidationData>(),
                 Products = normalizedFnbItems.Select(fnbItem =>
                 {
                     var product = products.First(p => p.ItemID == fnbItem.ItemId);

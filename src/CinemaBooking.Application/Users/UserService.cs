@@ -34,12 +34,14 @@ public sealed class UserService : IUserService
     public Task<User?> LookupCustomerAsync(
         string? email,
         string? phone,
+        string? barcode,
         CancellationToken cancellationToken = default)
     {
         var normalizedEmail = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
         var normalizedPhone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
+        var normalizedBarcode = string.IsNullOrWhiteSpace(barcode) ? null : barcode.Trim();
 
-        return _userRepository.LookupCustomerAsync(normalizedEmail, normalizedPhone, cancellationToken);
+        return _userRepository.LookupCustomerAsync(normalizedEmail, normalizedPhone, normalizedBarcode, cancellationToken);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, User? User)> UpdateProfileAsync(

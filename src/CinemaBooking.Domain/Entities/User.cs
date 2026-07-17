@@ -18,6 +18,7 @@ public class User
     public int TotalPoints { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public string? BarCode { get; set; }
 
     public Cinema? Cinema { get; set; }
     public LoyaltyTier? LoyaltyTier { get; set; }

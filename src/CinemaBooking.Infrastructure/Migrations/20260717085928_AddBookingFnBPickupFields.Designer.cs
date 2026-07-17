@@ -4,6 +4,7 @@ using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CinemaBooking.Infrastructure.Migrations
 {
     [DbContext(typeof(CinemaBookingDbContext))]
-    partial class CinemaBookingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260717085928_AddBookingFnBPickupFields")]
+    partial class AddBookingFnBPickupFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -126,7 +129,7 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<int?>("ShowtimeID")
+                    b.Property<int>("ShowtimeID")
                         .HasColumnType("int");
 
                     b.Property<string>("Status")
@@ -681,6 +684,9 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
+                    b.Property<string>("Cast")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
@@ -688,6 +694,10 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Director")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<int>("DurationMin")
                         .HasColumnType("int");
@@ -764,39 +774,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasDatabaseName("UQ_MovieGenre_MovieID_GenreID");
 
                     b.ToTable("MovieGenre", (string)null);
-                });
-
-            modelBuilder.Entity("CinemaBooking.Domain.Entities.MoviePerson", b =>
-                {
-                    b.Property<int>("MovieId")
-                        .HasColumnType("int")
-                        .HasColumnName("MovieId");
-
-                    b.Property<int>("PersonId")
-                        .HasColumnType("int")
-                        .HasColumnName("PersonId");
-
-                    b.Property<string>("Role")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int>("DisplayOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0);
-
-                    b.HasKey("MovieId", "PersonId", "Role");
-
-                    b.HasIndex("PersonId")
-                        .HasDatabaseName("IX_MoviePerson_PersonId");
-
-                    b.HasIndex("MovieId", "Role", "DisplayOrder")
-                        .HasDatabaseName("IX_MoviePerson_MovieId_Role_DisplayOrder");
-
-                    b.ToTable("MoviePerson", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_MoviePerson_Role", "[Role] IN ('Director', 'Actor')");
-                        });
                 });
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Notification", b =>
@@ -1111,39 +1088,6 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                             t.HasCheckConstraint("CK_PaymentSession_Status", "[Status] IN ('waiting', 'processing', 'completed', 'expired', 'cancelled')");
                         });
-                });
-
-            modelBuilder.Entity("CinemaBooking.Domain.Entities.Person", b =>
-                {
-                    b.Property<int>("PersonId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("PersonId");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PersonId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.HasKey("PersonId");
-
-                    b.HasIndex("Name")
-                        .IsUnique()
-                        .HasDatabaseName("UQ_Person_Name");
-
-                    b.ToTable("Person", (string)null);
                 });
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Product", b =>
@@ -2140,6 +2084,7 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .WithMany("Bookings")
                         .HasForeignKey("ShowtimeID")
                         .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
                         .HasConstraintName("FK_Booking_Showtime");
 
                     b.HasOne("CinemaBooking.Domain.Entities.User", "User")
@@ -2308,27 +2253,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Navigation("Genre");
 
                     b.Navigation("Movie");
-                });
-
-            modelBuilder.Entity("CinemaBooking.Domain.Entities.MoviePerson", b =>
-                {
-                    b.HasOne("CinemaBooking.Domain.Entities.Movie", "Movie")
-                        .WithMany("MoviePersons")
-                        .HasForeignKey("MovieId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired()
-                        .HasConstraintName("FK_MoviePerson_Movie");
-
-                    b.HasOne("CinemaBooking.Domain.Entities.Person", "Person")
-                        .WithMany("MoviePersons")
-                        .HasForeignKey("PersonId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired()
-                        .HasConstraintName("FK_MoviePerson_Person");
-
-                    b.Navigation("Movie");
-
-                    b.Navigation("Person");
                 });
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Notification", b =>
@@ -2719,8 +2643,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                 {
                     b.Navigation("MovieGenres");
 
-                    b.Navigation("MoviePersons");
-
                     b.Navigation("Showtimes");
                 });
 
@@ -2729,11 +2651,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Navigation("PaymentSessions");
 
                     b.Navigation("Refunds");
-                });
-
-            modelBuilder.Entity("CinemaBooking.Domain.Entities.Person", b =>
-                {
-                    b.Navigation("MoviePersons");
                 });
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Product", b =>

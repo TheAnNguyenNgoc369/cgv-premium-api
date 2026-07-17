@@ -179,14 +179,16 @@ public sealed class UserController : ControllerBase
     public async Task<IActionResult> Lookup(
         [FromQuery] string? email,
         [FromQuery] string? phone,
+        [FromQuery] string? barcode,
         CancellationToken cancellationToken)
     {
         var normalizedEmail = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
         var normalizedPhone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
+        var normalizedBarcode = string.IsNullOrWhiteSpace(barcode) ? null : barcode.Trim();
 
-        if (normalizedEmail is null && normalizedPhone is null)
+        if (normalizedEmail is null && normalizedPhone is null && normalizedBarcode is null)
         {
-            return BadRequest(new { success = false, message = "email or phone is required." });
+            return BadRequest(new { success = false, message = "email, phone or barcode is required." });
         }
 
         if (normalizedEmail is not null && !new EmailAddressAttribute().IsValid(normalizedEmail))
@@ -199,7 +201,7 @@ public sealed class UserController : ControllerBase
             return BadRequest(new { success = false, message = "phone must contain 10 digits and start with 0." });
         }
 
-        var user = await _userService.LookupCustomerAsync(normalizedEmail, normalizedPhone, cancellationToken);
+        var user = await _userService.LookupCustomerAsync(normalizedEmail, normalizedPhone, normalizedBarcode, cancellationToken);
 
         if (user is null)
         {

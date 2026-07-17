@@ -11,6 +11,7 @@ public interface IUserRepository
     Task<User?> LookupCustomerAsync(
         string? email,
         string? phone,
+        string? barcode,
         CancellationToken cancellationToken = default);
 
     Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default);

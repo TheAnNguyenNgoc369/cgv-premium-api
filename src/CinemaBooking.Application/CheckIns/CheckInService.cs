@@ -270,4 +270,22 @@ public sealed class CheckInService : ICheckInService
             isManager: false,
             isStaff: false,
             cancellationToken);
+
+    public async Task<(bool Succeeded, string? ErrorMessage)> ConfirmFnBPickupAsync(
+        string bookingCode,
+        int staffId,
+        CancellationToken cancellationToken = default)
+    {
+        var staffCinemaId = await _bookingRepository.GetStaffCinemaIdAsync(staffId, cancellationToken);
+
+        if (staffCinemaId is null)
+            return (false, "Staff cinema assignment not found.");
+
+        var success = await _bookingRepository.UpdateBookingFnBPickupAsync(bookingCode, staffId, cancellationToken);
+
+        if (!success)
+            return (false, "Booking not found, not paid, cancelled, has no F&B items, or all items already picked up.");
+
+        return (true, "F&B pickup confirmed.");
+    }
 }

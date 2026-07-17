@@ -73,7 +73,7 @@ public sealed class UserServicePasswordTests
         }
 
         public Task<User?> GetProfileByIdAsync(int userId, CancellationToken cancellationToken = default) => Task.FromResult<User?>(null);
-        public Task<User?> LookupCustomerAsync(string? email, string? phone, CancellationToken cancellationToken = default) => Task.FromResult<User?>(null);
+        public Task<User?> LookupCustomerAsync(string? email, string? phone, string? barcode, CancellationToken cancellationToken = default) => Task.FromResult<User?>(null);
         public Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task<bool> PhoneExistsAsync(string phone, int? excludingUserId = null, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default) => Task.FromResult<User?>(null);

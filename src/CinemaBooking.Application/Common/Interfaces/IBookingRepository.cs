@@ -60,6 +60,10 @@ public interface IBookingRepository
         string qrCode,
         CancellationToken cancellationToken = default);
 
+    Task<Booking?> GetBookingByCodeAsync(
+        string bookingCode,
+        CancellationToken cancellationToken = default);
+
     Task<Booking?> GetBookingWithFullDetailsForCheckInAsync(
         int bookingId,
         CancellationToken cancellationToken = default);
@@ -121,5 +125,10 @@ public interface IBookingRepository
         CancellationToken cancellationToken = default);
 
     Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(
+        CancellationToken cancellationToken = default);
+
+    Task<bool> UpdateBookingFnBPickupAsync(
+        string bookingCode,
+        int staffId,
         CancellationToken cancellationToken = default);
 }
