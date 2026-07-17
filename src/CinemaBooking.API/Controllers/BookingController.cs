@@ -166,8 +166,25 @@ public sealed class BookingController : ControllerBase
         {
             var staffCinemaId = await _bookingRepository.GetStaffCinemaIdAsync(
                 currentUserId, cancellationToken);
-            if (!staffCinemaId.HasValue
-                || booking.Showtime.Room.CinemaID != staffCinemaId.Value)
+            if (!staffCinemaId.HasValue)
+                return Forbid();
+
+            booking = await _bookingRepository.GetBookingByIdAsync(booking.BookingID, cancellationToken);
+            if (booking is null)
+                return NotFound(new { success = false, message = "Booking not found." });
+
+            int? bookingCinemaId = null;
+
+            if (booking.Showtime is not null)
+            {
+                bookingCinemaId = booking.Showtime.Room?.CinemaID;
+            }
+            else if (booking.CreatedByStaffID.HasValue)
+            {
+                bookingCinemaId = booking.CreatedByStaff?.CinemaID;
+            }
+
+            if (!bookingCinemaId.HasValue || bookingCinemaId.Value != staffCinemaId.Value)
                 return Forbid();
         }
 

@@ -72,7 +72,7 @@ public sealed class ShowtimeCompletionJob : BackgroundService
                 .Include(booking => booking.User)
                 .Where(booking => booking.Status == BookingStatus.Paid
                     && booking.UserID.HasValue
-                    && booking.Showtime.Status == "completed"
+                    && booking.Showtime!.Status == "completed"
                     && !booking.LoyaltyPoints.Any(point =>
                         point.TransactionType == LoyaltyTransactionTypes.Earned))
                 .ToListAsync(cancellationToken);
@@ -93,9 +93,9 @@ public sealed class ShowtimeCompletionJob : BackgroundService
 
                     booking.PointsEarned = pointsEarned;
                     booking.User!.TotalPoints += pointsEarned;
-                    booking.User.UpdatedAt = now;
-                    booking.User.LoyaltyTierID = tiers
-                        .Where(tier => booking.User.TotalPoints >= tier.MinPoints)
+                    booking.User!.UpdatedAt = now;
+                    booking.User!.LoyaltyTierID = tiers
+                        .Where(tier => booking.User!.TotalPoints >= tier.MinPoints)
                         .OrderByDescending(tier => tier.MinPoints)
                         .Select(tier => (int?)tier.TierID)
                         .FirstOrDefault();

@@ -29,10 +29,10 @@ public sealed class RefundRepository : IRefundRepository
     {
         return await _db.Refunds
             .Include(r => r.Booking)
-                .ThenInclude(b => b.Showtime)
+                .ThenInclude(b => b.Showtime!)
                     .ThenInclude(s => s.Movie)
             .Include(r => r.Booking)
-                .ThenInclude(b => b.Showtime)
+                .ThenInclude(b => b.Showtime!)
                     .ThenInclude(s => s.Room)
                         .ThenInclude(r => r.Cinema)
             .Include(r => r.Booking)
@@ -50,10 +50,10 @@ public sealed class RefundRepository : IRefundRepository
     {
         return await _db.Refunds
             .Include(r => r.Booking)
-                .ThenInclude(b => b.Showtime)
+                .ThenInclude(b => b.Showtime!)
                     .ThenInclude(s => s.Movie)
             .Include(r => r.Booking)
-                .ThenInclude(b => b.Showtime)
+                .ThenInclude(b => b.Showtime!)
                     .ThenInclude(s => s.Room)
                         .ThenInclude(r => r.Cinema)
             .Include(r => r.Payment)
@@ -69,10 +69,10 @@ public sealed class RefundRepository : IRefundRepository
     {
         return await _db.Refunds
             .Include(r => r.Booking)
-                .ThenInclude(b => b.Showtime)
+                .ThenInclude(b => b.Showtime!)
                     .ThenInclude(s => s.Movie)
             .Include(r => r.Booking)
-                .ThenInclude(b => b.Showtime)
+                .ThenInclude(b => b.Showtime!)
                     .ThenInclude(s => s.Room)
                         .ThenInclude(r => r.Cinema)
             .Include(r => r.Booking)
@@ -123,10 +123,10 @@ public sealed class RefundRepository : IRefundRepository
         CancellationToken cancellationToken = default)
     {
         return await _db.Bookings
-            .Include(b => b.Showtime)
+            .Include(b => b.Showtime!)
                 .ThenInclude(s => s.Room)
                     .ThenInclude(r => r.Cinema)
-            .Include(b => b.Showtime)
+            .Include(b => b.Showtime!)
                 .ThenInclude(s => s.Movie)
             .Include(b => b.Payment)
             .Include(b => b.BookingSeats)

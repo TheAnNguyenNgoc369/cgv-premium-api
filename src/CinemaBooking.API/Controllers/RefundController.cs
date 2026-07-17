@@ -99,14 +99,19 @@ public sealed class RefundController : ControllerBase
 
     private static RefundDetailResponse MapToDetailResponse(Refund refund)
     {
+        var showtime = refund.Booking.Showtime;
+        var room = showtime?.Room;
+        var cinema = room?.Cinema;
+        var movie = showtime?.Movie;
+
         return new RefundDetailResponse(
             refund.RefundID,
             refund.BookingID,
             refund.Booking.BookingCode,
-            refund.Booking.Showtime.Movie.Title,
-            refund.Booking.Showtime.StartTime,
-            refund.Booking.Showtime.Room.Cinema.CinemaName,
-            refund.Booking.Showtime.Room.RoomName,
+            movie?.Title ?? "F&B Only",
+            showtime?.StartTime ?? DateTime.MinValue,
+            cinema?.CinemaName ?? "N/A",
+            room?.RoomName ?? "N/A",
             refund.Amount,
             refund.Reason ?? string.Empty,
             refund.Status,

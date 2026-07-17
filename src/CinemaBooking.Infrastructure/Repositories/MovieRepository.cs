@@ -92,8 +92,8 @@ public sealed class MovieRepository : IMovieRepository
             .SelectMany(payment => payment.Booking.BookingSeats)
             .GroupBy(bookingSeat => new
             {
-                bookingSeat.Booking.Showtime.MovieID,
-                bookingSeat.Booking.Showtime.Movie.Title
+                bookingSeat.Booking.Showtime!.MovieID,
+                bookingSeat.Booking.Showtime!.Movie.Title
             })
             .Select(group => new MovieTicketSales(
                 group.Key.MovieID,

@@ -184,16 +184,16 @@ public sealed class BookingService : IBookingService
                 }).ToList();
         }
 
-        var bookingFnBs = pricingResult.Result.FnBDetails
+        var bookingFnBs = pricingResult.Result?.FnBDetails
             .Select(f => new BookingFnB
             {
                 ItemID = f.ItemId,
                 Quantity = f.Quantity,
                 UnitPrice = f.UnitPrice,
                 SubTotal = f.SubTotal
-            }).ToList();
+            }).ToList() ?? [];
 
-        var productQuantities = pricingResult.Result.FnBDetails
+        var productQuantities = pricingResult.Result!.FnBDetails
             .ToDictionary(f => f.ItemId, f => f.Quantity);
 
         BookingVoucher? bookingVoucher = null;
@@ -402,7 +402,7 @@ public sealed class BookingService : IBookingService
                 SeatRow = seat.SeatRow,
                 SeatCol = seat.SeatCol,
                 SeatTypeName = seat.SeatType!.TypeName,
-                Price = showtime.BasePrice + showtime.RoomExtraPrice + seat.SeatType.ExtraPrice
+                Price = showtime!.BasePrice + showtime!.RoomExtraPrice + seat.SeatType.ExtraPrice
             }).ToList();
 
             seatsSubTotal = seatDetails.Sum(s => s.Price);
