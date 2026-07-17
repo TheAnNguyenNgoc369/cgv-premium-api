@@ -95,7 +95,7 @@ public sealed class RefundService : IRefundService
             return (false, "Booking has been cancelled.", null);
 
         var now = DateTime.UtcNow;
-        var minutesUntilShowtime = (booking.Showtime.StartTime - now).TotalMinutes;
+        var minutesUntilShowtime = (booking.Showtime!.StartTime - now).TotalMinutes;
         if (minutesUntilShowtime <= MinimumMinutesBeforeShowtime)
             return (false, "Refund period has expired.", null);
 

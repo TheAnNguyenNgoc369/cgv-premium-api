@@ -254,27 +254,7 @@ public sealed class UserController : ControllerBase
         int totalRefunds,
         int usedRefunds)
     {
-        return new
-        {
-            user.UserID,
-            user.FullName,
-            user.Email,
-            user.Phone,
-            user.Role,
-            user.Status,
-            user.AvatarURL,
-            user.TotalPoints,
-            total_refunds = totalRefunds,
-            used_refunds = usedRefunds,
-            user.CreatedAt
-        };
-    }
-
-    private static object ToProfileResponseWithCinema(
-        User user,
-        int totalRefunds,
-        int usedRefunds)
-    {
+        long? barcode = long.TryParse(user.BarCode, out var parsed) ? parsed : null;
         return new
         {
             user.UserID,
@@ -288,6 +268,30 @@ public sealed class UserController : ControllerBase
             total_refunds = totalRefunds,
             used_refunds = usedRefunds,
             user.CreatedAt,
+            barcode
+        };
+    }
+
+    private static object ToProfileResponseWithCinema(
+        User user,
+        int totalRefunds,
+        int usedRefunds)
+    {
+        long? barcode = long.TryParse(user.BarCode, out var parsed) ? parsed : null;
+        return new
+        {
+            user.UserID,
+            user.FullName,
+            user.Email,
+            user.Phone,
+            user.Role,
+            user.Status,
+            user.AvatarURL,
+            user.TotalPoints,
+            total_refunds = totalRefunds,
+            used_refunds = usedRefunds,
+            user.CreatedAt,
+            barcode,
             cinema = user.Role is Roles.Manager or Roles.Staff && user.Cinema is not null
                 ? new CinemaSummaryResponse(
                     user.Cinema.CinemaID,

@@ -141,20 +141,21 @@ public sealed class BookingRepository : IBookingRepository
         await _db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<Booking?> GetBookingByIdAsync(
+public async Task<Booking?> GetBookingByIdAsync(
         int bookingId,
         CancellationToken cancellationToken = default)
     {
         return await _db.Bookings
-            .Include(b => b.Showtime).ThenInclude(s => s.Movie)
-            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
-            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.RoomType)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Movie)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.RoomType)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat).ThenInclude(s => s.SeatType)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket)
             .Include(b => b.User)
             .Include(b => b.Payment)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
             .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)
+            .Include(b => b.CreatedByStaff!).ThenInclude(s => s.Cinema)
             .AsSplitQuery()
             .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
     }
@@ -184,9 +185,9 @@ public sealed class BookingRepository : IBookingRepository
     {
         return await _db.Bookings
             .Include(b => b.User)
-            .Include(b => b.Showtime).ThenInclude(s => s.Movie)
-            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
-            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.RoomType)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Movie)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.RoomType)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat).ThenInclude(s => s.SeatType)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
@@ -219,8 +220,8 @@ public sealed class BookingRepository : IBookingRepository
     {
         var query = _db.Bookings
             .Include(b => b.User)
-            .Include(b => b.Showtime).ThenInclude(s => s.Movie)
-            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Movie)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket).ThenInclude(t => t!.CheckedInBy)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat).ThenInclude(s => s.SeatType)
             .Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.Status == TicketStatus.Used));
@@ -229,7 +230,7 @@ public sealed class BookingRepository : IBookingRepository
             query = query.Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.CheckedInByID == staffId.Value));
 
         if (cinemaId.HasValue)
-            query = query.Where(b => b.Showtime.Room.CinemaID == cinemaId.Value);
+            query = query.Where(b => b.Showtime!.Room.CinemaID == cinemaId.Value);
 
         if (from.HasValue)
             query = query.Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.CheckedInAt >= from.Value));
@@ -269,8 +270,8 @@ public sealed class BookingRepository : IBookingRepository
         CancellationToken cancellationToken = default)
     {
         return await _db.Bookings
-            .Include(b => b.Showtime).ThenInclude(s => s.Movie)
-            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Movie)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
             .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)

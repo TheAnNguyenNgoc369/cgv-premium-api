@@ -226,15 +226,20 @@ public sealed class CheckInService : ICheckInService
                 })
                 .ToList();
 
+            var showtime = b.Showtime;
+            var room = showtime?.Room;
+            var cinema = room?.Cinema;
+            var movie = showtime?.Movie;
+
             return new CheckInHistoryResult.CheckInRecord
             {
                 BookingId = b.BookingID,
                 BookingCode = b.BookingCode,
                 CustomerName = b.User?.FullName,
-                MovieTitle = b.Showtime.Movie.Title,
-                CinemaName = b.Showtime.Room.Cinema.CinemaName,
-                RoomName = b.Showtime.Room.RoomName,
-                ShowtimeStart = b.Showtime.StartTime,
+                MovieTitle = movie?.Title ?? "F&B Only",
+                CinemaName = cinema?.CinemaName ?? "N/A",
+                RoomName = room?.RoomName ?? "N/A",
+                ShowtimeStart = showtime?.StartTime ?? DateTime.MinValue,
                 CheckedInAt = mostRecentTicket?.CheckedInAt ?? DateTime.MinValue,
                 StaffName = mostRecentTicket?.CheckedInBy?.FullName ?? "Unknown",
                 SeatCount = b.BookingSeats.Count,
