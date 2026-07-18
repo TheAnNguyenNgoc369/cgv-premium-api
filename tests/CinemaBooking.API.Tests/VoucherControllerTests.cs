@@ -2,6 +2,7 @@ using System.Security.Claims;
 using CinemaBooking.API.Contracts.Vouchers;
 using CinemaBooking.API.Controllers;
 using CinemaBooking.Application.Vouchers;
+using CinemaBooking.Application.Vouchers.RuleEngine.Metadata;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Http;
@@ -405,7 +406,7 @@ public sealed class VoucherControllerTests
             new Claim(ClaimTypes.Role, Roles.Admin)
         ], "Test");
 
-        return new VoucherController(new StubVoucherService(createResult))
+        return new VoucherController(new StubVoucherService(createResult), new StubVoucherRuleMetadataProvider())
         {
             ControllerContext = new ControllerContext
             {
@@ -639,5 +640,10 @@ public sealed class VoucherControllerTests
 
         public Task<UserVouchersResult> GetUserVouchersAsync(int userId, CancellationToken ct) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class StubVoucherRuleMetadataProvider : IVoucherRuleMetadataProvider
+    {
+        public IReadOnlyList<VoucherRuleTypeMetadata> GetAll() => [];
     }
 }
