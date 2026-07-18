@@ -13,6 +13,10 @@ public interface IBookingRepository
         int showtimeId,
         CancellationToken cancellationToken = default);
 
+    Task<(int TotalSeats, int BookedSeats)> GetShowtimeOccupancyAsync(
+        int showtimeId,
+        CancellationToken cancellationToken = default);
+
     Task<List<Seat>> GetSeatsByIdsAsync(
         List<int> seatIds,
         CancellationToken cancellationToken = default);

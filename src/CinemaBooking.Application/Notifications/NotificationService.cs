@@ -5,7 +5,7 @@ namespace CinemaBooking.Application.Notifications;
 
 public sealed class NotificationService : INotificationService
 {
-    private static readonly HashSet<string> Types = ["system", "promotion", "refund", "payment", "booking", "account"];
+    private static readonly HashSet<string> Types = ["system", "promotion", "refund", "payment", "booking", "account", "analytics", "report", "movie", "showtime"];
     private readonly INotificationRepository _repository;
     private readonly IUserRepository _userRepository;
 
@@ -55,6 +55,7 @@ public sealed class NotificationService : INotificationService
         string? referenceType = null,
         int? referenceId = null,
         string? actionUrl = null,
+        string? eventId = null,
         CancellationToken cancellationToken = default)
     {
         var users = await _userRepository.GetUsersByRolesAsync(roles, cancellationToken);
@@ -63,6 +64,7 @@ public sealed class NotificationService : INotificationService
         var notifications = users.Select(user => new Notification
         {
             UserID = user.UserID,
+            EventId = eventId!,
             Title = title,
             Message = message,
             Type = type,

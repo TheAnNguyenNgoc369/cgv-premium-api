@@ -1,5 +1,6 @@
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Enums;
+using CinemaBooking.Application.Notifications;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Application.Common.Security;
 using System.Text.RegularExpressions;
@@ -9,10 +10,12 @@ namespace CinemaBooking.Application.Rooms;
 public sealed class RoomService : IRoomService
 {
     private readonly IRoomRepository _roomRepository;
+    private readonly INotificationOutbox _notificationOutbox;
 
-    public RoomService(IRoomRepository roomRepository)
+    public RoomService(IRoomRepository roomRepository, INotificationOutbox notificationOutbox)
     {
         _roomRepository = roomRepository;
+        _notificationOutbox = notificationOutbox;
     }
 
     public Task<List<Room>> GetRoomsAsync(CancellationToken cancellationToken = default)
@@ -72,6 +75,12 @@ public sealed class RoomService : IRoomService
 
         var createdRoom = await _roomRepository.AddAsync(room, cancellationToken);
 
+        // Trigger Room Created notification
+        await _notificationOutbox.EnqueueRoomCreatedAsync(
+            createdRoom.RoomID,
+            $"Room {createdRoom.RoomName} has been created.",
+            cancellationToken);
+
         return (true, null, createdRoom);
     }
 
@@ -123,9 +132,27 @@ public sealed class RoomService : IRoomService
             NormalizeNullable(description),
             cancellationToken);
 
-        return updatedRoom is null
-            ? (false, "Room not found", null)
-            : (true, null, updatedRoom);
+        if (updatedRoom is null)
+        {
+            return (false, "Room not found", null);
+        }
+
+        // Trigger Room Updated notification for any change
+        await _notificationOutbox.EnqueueRoomUpdatedAsync(
+            updatedRoom.RoomID,
+            $"Room {updatedRoom.RoomName} has been updated.",
+            cancellationToken);
+
+        // Trigger Room Inactive notification if status changed to inactive
+        if (existingRoom.Status != "inactive" && validation.Status == "inactive")
+        {
+            await _notificationOutbox.EnqueueRoomInactiveAsync(
+                updatedRoom.RoomID,
+                $"Room {updatedRoom.RoomName} has been marked as inactive.",
+                cancellationToken);
+        }
+
+        return (true, null, updatedRoom);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage)> DeleteRoomAsync(
@@ -189,7 +216,7 @@ public sealed class RoomService : IRoomService
         var normalizedStatus = NormalizeStatus(status);
         if (normalizedStatus is null)
         {
-            return (false, "Status must be ACTIVE, MAINTENANCE, or INACTIVE", null);
+            return (false, "Status must be ACTIVE or INACTIVE", null);
         }
 
         if (await _roomRepository.NameExistsInCinemaAsync(
