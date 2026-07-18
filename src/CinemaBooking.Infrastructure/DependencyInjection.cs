@@ -78,10 +78,6 @@ public static class DependencyInjection
         services.AddHostedService<ShowtimeCompletionJob>();
         services.AddHostedService<EmailDeliveryJob>();
         services.AddHostedService<NotificationOutboxJob>();
-        services.Configure<HostOptions>(options =>
-        {
-            options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
-        });
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScopedByConvention(typeof(DependencyInjection).Assembly, "Repository");
 

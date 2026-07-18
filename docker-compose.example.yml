@@ -52,7 +52,7 @@ services:
   api:
     build:
       context: ..
-      dockerfile: deploy/Dockerfile
+      dockerfile: Dockerfile
     container_name: cinema-booking-api
     restart: unless-stopped
     depends_on:

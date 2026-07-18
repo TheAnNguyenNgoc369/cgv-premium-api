@@ -5,18 +5,6 @@ using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
-Console.WriteLine(
-    $"ASPNETCORE_ENVIRONMENT = {Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")}"
-);
-
-Console.WriteLine(
-    $"DOTNET_ENVIRONMENT = {Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")}"
-);
-
-Console.WriteLine(
-    $"Current Environment = {builder.Environment.EnvironmentName}"
-);
-
 builder.Logging.ClearProviders();
 builder.Logging.AddConfiguration(builder.Configuration.GetSection("Logging"));
 builder.Logging.AddConsole();
@@ -24,20 +12,36 @@ builder.Logging.AddDebug();
 
 builder.Services.AddApiServices(builder.Configuration, builder.Environment);
 builder.Services.AddInfrastructureServices(builder.Configuration);
+
+var isDevelopment = builder.Environment.IsDevelopment();
+var isProduction = builder.Environment.IsProduction();
+
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
-    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor
-        | ForwardedHeaders.XForwardedProto;
-    options.KnownNetworks.Clear();
-    options.KnownProxies.Clear();
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    if (!isDevelopment)
+    {
+        options.KnownNetworks.Clear();
+        options.KnownProxies.Clear();
+    }
 });
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("CorsPolicy", policy =>
     {
+        var isDevelopment = builder.Environment.IsDevelopment();
+        
+        if (isDevelopment)
+        {
+            policy.AllowAnyOrigin();
+        }
+        else
+        {
+            policy.AllowAnyOrigin();
+        }
+
         policy
-            .AllowAnyOrigin()
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -47,12 +51,15 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 
-//Seed initial data
-using (var scope = app.Services.CreateScope())
+var runSeeder = builder.Configuration.GetValue<bool>("RunSeeder", false);
+if (runSeeder && !isProduction)
 {
+    using var scope = app.Services.CreateScope();
     var seeder = scope.ServiceProvider;
-
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("Running database seeder...");
     await CinemaBookingDbSeeder.SeedUsersAsync(seeder);
+    logger.LogInformation("Database seeder completed.");
 }
 
 if (app.Environment.IsDevelopment())
@@ -70,7 +77,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseCors("AllowAll");
+app.UseCors("CorsPolicy");
 
 app.UseRateLimiter();
 
