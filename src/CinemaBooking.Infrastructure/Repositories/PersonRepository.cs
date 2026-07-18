@@ -85,14 +85,6 @@ public sealed class PersonRepository : IPersonRepository
         return person;
     }
 
-    public Task<bool> IsAssignedToAnyMovieAsync(
-        int personId,
-        CancellationToken cancellationToken = default)
-    {
-        return _dbContext.MoviePersons
-            .AnyAsync(mp => mp.PersonId == personId, cancellationToken);
-    }
-
     public Task<List<string>> GetAssignedMovieTitlesAsync(
         int personId,
         CancellationToken cancellationToken = default)

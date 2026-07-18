@@ -211,21 +211,28 @@ public sealed class MovieService : IMovieService
 
         var normalizedPosterUrl = NormalizeNullable(posterUrl);
         var normalizedPosterPublicId = NormalizeNullable(posterPublicId);
+        var previousPosterUrl = existingMovie.PosterURL;
         var previousPosterPublicId = existingMovie.PosterPublicId;
-        var shouldDeletePreviousPosterAfterUpdate =
-            !string.IsNullOrWhiteSpace(previousPosterPublicId)
-            && !string.Equals(previousPosterPublicId, normalizedPosterPublicId, StringComparison.Ordinal);
 
-        if (shouldDeletePreviousPosterAfterUpdate)
+        // When the caller omits PosterPublicId (null), keep the existing poster untouched.
+        // Only replace when a new public id is explicitly provided and it differs from the current one.
+        string? posterUrlToPersist;
+        string? posterPublicIdToPersist;
+        bool shouldDeletePreviousPosterAfterUpdate;
+
+        if (normalizedPosterPublicId is null)
         {
-            try
-            {
-                await _imageStorageService.DeleteImageAsync(previousPosterPublicId!, cancellationToken);
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                return (false, PosterDeleteFailedMessage, null);
-            }
+            posterUrlToPersist = previousPosterUrl;
+            posterPublicIdToPersist = previousPosterPublicId;
+            shouldDeletePreviousPosterAfterUpdate = false;
+        }
+        else
+        {
+            posterUrlToPersist = normalizedPosterUrl;
+            posterPublicIdToPersist = normalizedPosterPublicId;
+            shouldDeletePreviousPosterAfterUpdate =
+                !string.IsNullOrWhiteSpace(previousPosterPublicId)
+                && !string.Equals(previousPosterPublicId, normalizedPosterPublicId, StringComparison.Ordinal);
         }
 
         var (updatedMovie, missingPersonIds) = await _movieRepository.UpdateMovieAsync(
@@ -239,8 +246,8 @@ public sealed class MovieService : IMovieService
             durationMinutes,
             showingFromDate,
             showingToDate,
-            normalizedPosterUrl,
-            normalizedPosterPublicId,
+            posterUrlToPersist,
+            posterPublicIdToPersist,
             NormalizeNullable(trailerUrl),
             normalizedStatus ?? existingMovie.Status,
             DateTime.UtcNow,
@@ -254,6 +261,20 @@ public sealed class MovieService : IMovieService
         if (updatedMovie is null)
         {
             return (false, "Movie not found", null);
+        }
+
+        if (shouldDeletePreviousPosterAfterUpdate)
+        {
+            try
+            {
+                await _imageStorageService.DeleteImageAsync(previousPosterPublicId!, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // Best-effort cleanup: the DB is authoritative and already updated with the new
+                // poster. A stale Cloudinary asset can be reaped later; failing the request now
+                // would misleadingly report a save failure.
+            }
         }
 
         return (true, null, updatedMovie);

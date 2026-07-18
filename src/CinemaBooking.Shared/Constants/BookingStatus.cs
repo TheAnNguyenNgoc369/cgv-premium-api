@@ -15,4 +15,5 @@ public static class BookingStatus
     public const string Expired = "expired";
     public const string PaymentFailed = "payment_failed";
     public const string PartiallyRefunded = "partially_refunded";
+    public const string NoShow = "no_show";
 }

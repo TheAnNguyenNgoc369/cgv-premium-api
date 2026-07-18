@@ -24,7 +24,7 @@ public static class DatabaseEnumMappings
         EnumValueMapper.CreateMappings("payos", "momo", "credit_card", "banking", "cash", "wallet");
     public static readonly IReadOnlyDictionary<string, string> BookingStatuses =
         EnumValueMapper.CreateMappings("pending", "paid", "cancelled", "refunded", "used",
-            "expired", "payment_failed", "partially_refunded");
+            "expired", "payment_failed", "partially_refunded", "no_show");
     public static readonly IReadOnlyDictionary<string, string> PaymentStatuses =
         EnumValueMapper.CreateMappings("pending", "success", "failed", "refunded", "cancelled", "expired");
     public static readonly IReadOnlyDictionary<string, string> PaymentSessionStatuses =
