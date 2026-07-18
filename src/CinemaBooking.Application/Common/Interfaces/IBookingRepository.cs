@@ -81,6 +81,15 @@ public interface IBookingRepository
         int pageSize,
         CancellationToken cancellationToken = default);
 
+    Task<(List<Booking> Bookings, int TotalCount)> GetFnBPickupHistoryAsync(
+        int? staffId,
+        int? cinemaId,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
     Task UpdateBookingQRCodeAsync(
         int bookingId,
         string qrCode,

@@ -87,6 +87,17 @@ public sealed class UserRepository : IUserRepository
             .FirstOrDefaultAsync(u => u.UserID == userId, cancellationToken);
     }
 
+    public Task<List<User>> GetUsersByRolesAsync(
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        var rolesList = roles.ToList();
+        return _dbContext.Users
+            .AsNoTracking()
+            .Where(u => rolesList.Contains(u.Role))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<User?> UpdateProfileAsync(
         int userId,
         string fullName,

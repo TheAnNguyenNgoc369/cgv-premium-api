@@ -178,6 +178,7 @@ public sealed class BookingAuthorizationTests
         public Task UpdateBookingStatusAsync(int bookingId, string status, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> UpdateBookingFnBPickupAsync(string bookingCode, int staffId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<(List<Booking> Bookings, int TotalCount)> GetFnBPickupHistoryAsync(int? staffId, int? cinemaId, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class StubPaymentService : IPaymentService

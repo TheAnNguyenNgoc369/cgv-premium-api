@@ -609,12 +609,14 @@ public sealed class BookingService : IBookingService
             BookingCode = booking.BookingCode,
             CustomerName = booking.User?.FullName ?? string.Empty,
             CustomerPhone = booking.User?.Phone ?? string.Empty,
+            CustomerAvatarURL = booking.User?.AvatarURL,
             PaymentStatus = booking.Payment?.Status ?? "pending",
             TotalAmount = booking.FinalAmount,
             FnbItems = booking.BookingFnBs.Select(fnb => new LookupBookingFnbResult.LookupBookingFnbItem
             {
                 ItemId = fnb.ItemID,
                 ItemName = fnb.Product.ItemName,
+                ImageURL = fnb.Product.ImageURL,
                 Quantity = fnb.Quantity,
                 PickedUp = fnb.PickedUp
             }).ToList()

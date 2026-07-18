@@ -189,12 +189,14 @@ public sealed class BookingController : ControllerBase
             BookingCode = result.Result.BookingCode,
             CustomerName = result.Result.CustomerName,
             CustomerPhone = result.Result.CustomerPhone,
+            CustomerAvatarURL = result.Result.CustomerAvatarURL,
             PaymentStatus = result.Result.PaymentStatus,
             TotalAmount = result.Result.TotalAmount,
             FnbItems = result.Result.FnbItems.Select(f => new LookupBookingFnbResponse.FnbItemInfo
             {
                 ItemId = f.ItemId,
                 ItemName = f.ItemName,
+                ImageURL = f.ImageURL,
                 Quantity = f.Quantity,
                 PickedUp = f.PickedUp
             }).ToList()

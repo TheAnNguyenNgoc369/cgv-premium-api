@@ -27,6 +27,10 @@ public interface IUserRepository
 
     Task<User?> GetByIdAsync(int userId, CancellationToken cancellationToken = default);
 
+    Task<List<User>> GetUsersByRolesAsync(
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default);
+
     Task<User?> UpdateProfileAsync(
         int userId,
         string fullName,

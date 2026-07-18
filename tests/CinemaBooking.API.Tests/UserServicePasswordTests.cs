@@ -96,6 +96,7 @@ public sealed class UserServicePasswordTests
         public Task<bool> TryIncrementTokenVersionAsync(int userId, int expectedTokenVersion, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<bool> BarCodeExistsAsync(string barcode, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task<List<User>> GetUsersByRolesAsync(IEnumerable<string> roles, CancellationToken cancellationToken = default) => Task.FromResult(new List<User>());
     }
 
     private sealed class StubImageStorageService : IImageStorageService

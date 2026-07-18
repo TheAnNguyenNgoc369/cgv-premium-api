@@ -11,4 +11,5 @@ public interface INotificationRepository
     Task SaveChangesAsync(CancellationToken cancellationToken);
     Task<int> MarkAllReadAsync(int userId, DateTime now, CancellationToken cancellationToken);
     Task<int> DeleteReadAsync(int userId, DateTime now, CancellationToken cancellationToken);
+    Task AddRangeAsync(IEnumerable<Notification> notifications, CancellationToken cancellationToken = default);
 }
