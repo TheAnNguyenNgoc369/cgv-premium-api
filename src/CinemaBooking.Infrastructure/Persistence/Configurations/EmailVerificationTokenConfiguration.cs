@@ -12,7 +12,7 @@ public class EmailVerificationTokenConfiguration : IEntityTypeConfiguration<Emai
 
         builder.HasKey(t => t.TokenID);
 
-        builder.Property(t => t.Token).HasMaxLength(255).IsRequired();
+        builder.Property(t => t.Token).HasMaxLength(6).IsRequired();
         builder.Property(t => t.CreatedAt).HasDefaultValueSql("GETDATE()");
 
         builder.HasIndex(t => t.Token).IsUnique().HasDatabaseName("UQ_EmailVerificationToken_Token");

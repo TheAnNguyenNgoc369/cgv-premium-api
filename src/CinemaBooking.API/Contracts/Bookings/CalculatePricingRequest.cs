@@ -6,11 +6,8 @@ public sealed class CalculatePricingRequest
 {
     public int? CustomerId { get; set; }
 
-    [Required]
-    public int ShowtimeId { get; set; }
+    public int? ShowtimeId { get; set; }
 
-    [Required]
-    [MinLength(1, ErrorMessage = "Please select at least one seat")]
     public List<int> SeatIds { get; set; } = new();
 
     public List<BookingFnBItem> FnbItems { get; set; } = new();

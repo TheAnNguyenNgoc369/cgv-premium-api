@@ -29,6 +29,7 @@ public sealed class UserRepository : IUserRepository
     public Task<User?> LookupCustomerAsync(
         string? email,
         string? phone,
+        string? barcode,
         CancellationToken cancellationToken = default)
     {
         var users = _dbContext.Users
@@ -37,9 +38,16 @@ public sealed class UserRepository : IUserRepository
             .AsNoTracking()
             .Where(user => user.Role == Roles.Customer);
 
-        return !string.IsNullOrWhiteSpace(email)
-            ? users.FirstOrDefaultAsync(user => user.Email == email, cancellationToken)
-            : users.FirstOrDefaultAsync(user => user.Phone == phone, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(email))
+            return users.FirstOrDefaultAsync(user => user.Email == email, cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(phone))
+            return users.FirstOrDefaultAsync(user => user.Phone == phone, cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(barcode))
+            return users.FirstOrDefaultAsync(user => user.BarCode == barcode, cancellationToken);
+
+        return Task.FromResult<User?>(null);
     }
 
     public Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default)
@@ -58,6 +66,11 @@ public sealed class UserRepository : IUserRepository
             cancellationToken);
     }
 
+    public Task<bool> BarCodeExistsAsync(string barcode, CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Users.AnyAsync(u => u.BarCode == barcode, cancellationToken);
+    }
+
     public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         return _dbContext.Users
@@ -72,6 +85,17 @@ public sealed class UserRepository : IUserRepository
             .Include(u => u.LoyaltyTier)
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.UserID == userId, cancellationToken);
+    }
+
+    public Task<List<User>> GetUsersByRolesAsync(
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        var rolesList = roles.ToList();
+        return _dbContext.Users
+            .AsNoTracking()
+            .Where(u => rolesList.Contains(u.Role))
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<User?> UpdateProfileAsync(

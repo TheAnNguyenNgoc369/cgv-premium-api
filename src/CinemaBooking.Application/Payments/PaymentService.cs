@@ -706,8 +706,25 @@ public sealed class PaymentService : IPaymentService
         CancellationToken cancellationToken)
     {
         var staffCinemaId = await _bookingRepository.GetStaffCinemaIdAsync(staffUserId, cancellationToken);
-        if (!staffCinemaId.HasValue
-            || booking.Showtime.Room.CinemaID != staffCinemaId.Value)
+        if (!staffCinemaId.HasValue)
+            return Error(PaymentErrorType.Forbidden, "You cannot access bookings outside your assigned cinema.");
+
+        var fullBooking = await _bookingRepository.GetBookingByIdAsync(booking.BookingID, cancellationToken);
+        if (fullBooking is null)
+            return Error(PaymentErrorType.NotFound, "Booking not found.");
+
+        int? bookingCinemaId = null;
+
+        if (fullBooking.Showtime is not null)
+        {
+            bookingCinemaId = fullBooking.Showtime.Room?.CinemaID;
+        }
+        else if (fullBooking.CreatedByStaffID.HasValue)
+        {
+            bookingCinemaId = fullBooking.CreatedByStaff?.CinemaID;
+        }
+
+        if (!bookingCinemaId.HasValue || bookingCinemaId.Value != staffCinemaId.Value)
             return Error(PaymentErrorType.Forbidden, "You cannot access bookings outside your assigned cinema.");
 
         return null;

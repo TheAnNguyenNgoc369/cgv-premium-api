@@ -98,6 +98,12 @@ public sealed class AdminUserService : IAdminUserService
         var log = BuildLog(adminId, null, AdminActionTypes.CreateUser,
             $"Created user with role {user.Role} and status {user.Status}.", ipAddress);
         await _repository.AddAsync(user, new Wallet { Balance = 0m }, log, cancellationToken);
+        
+        // Generate barcode for the new user
+        var barcode = await GenerateUniqueBarcodeAsync(user.UserID, cancellationToken);
+        user.BarCode = barcode;
+        await _repository.SaveChangesAsync(cancellationToken);
+        
         return AdminUserResult<User>.Success(user);
     }
 
@@ -404,4 +410,18 @@ public sealed class AdminUserService : IAdminUserService
         AdminUserResult<T>.Failure(AdminUserErrorType.Forbidden, message);
     private static AdminUserResult<T> NotFound<T>() =>
         AdminUserResult<T>.Failure(AdminUserErrorType.NotFound, "User not found");
+
+    private async Task<string> GenerateUniqueBarcodeAsync(int userId, CancellationToken cancellationToken)
+    {
+        const string prefix = "CV";
+        var barcode = $"{prefix}{userId:D6}";
+        
+        while (await _repository.BarCodeExistsAsync(barcode, cancellationToken))
+        {
+            userId++;
+            barcode = $"{prefix}{userId:D6}";
+        }
+        
+        return barcode;
+    }
 }

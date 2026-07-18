@@ -68,6 +68,63 @@ public sealed class ShowtimeCompletionJob : BackgroundService
                     cancellationToken);
 
             noShowMarkedCount = await MarkNoShowBookingsAsync(dbContext, now, cancellationToken);
+            var eligibleBookings = await dbContext.Bookings
+                .Include(booking => booking.User)
+                .Where(booking => booking.Status == BookingStatus.Paid
+                    && booking.UserID.HasValue
+                    && booking.Showtime!.Status == "completed"
+                    && !booking.LoyaltyPoints.Any(point =>
+                        point.TransactionType == LoyaltyTransactionTypes.Earned))
+                .ToListAsync(cancellationToken);
+
+            processedBookingCount = eligibleBookings.Count;
+
+            if (eligibleBookings.Count > 0)
+            {
+                var tiers = await dbContext.LoyaltyTiers
+                    .OrderBy(tier => tier.MinPoints)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var booking in eligibleBookings)
+                {
+                    var pointsEarned = (int)(booking.FinalAmount * MembershipTiers.PointsPerVnd);
+                    if (pointsEarned <= 0)
+                        continue;
+
+                    booking.PointsEarned = pointsEarned;
+                    booking.User!.TotalPoints += pointsEarned;
+                    booking.User!.UpdatedAt = now;
+                    booking.User!.LoyaltyTierID = tiers
+                        .Where(tier => booking.User!.TotalPoints >= tier.MinPoints)
+                        .OrderByDescending(tier => tier.MinPoints)
+                        .Select(tier => (int?)tier.TierID)
+                        .FirstOrDefault();
+
+                    dbContext.LoyaltyPoints.Add(new LoyaltyPoints
+                    {
+                        UserID = booking.UserID.GetValueOrDefault(),
+                        BookingID = booking.BookingID,
+                        PointsDelta = pointsEarned,
+                        TransactionType = LoyaltyTransactionTypes.Earned,
+                        Description = $"Earned {pointsEarned} points after showtime completion",
+                        CreatedAt = now
+                    });
+                }
+
+                try
+                {
+                    await dbContext.Database.ExecuteSqlRawAsync(
+                        "EXEC sys.sp_set_session_context @key=N'SkipLoyaltyPointTrigger', @value=1",
+                        cancellationToken);
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                }
+                finally
+                {
+                    await dbContext.Database.ExecuteSqlRawAsync(
+                        "EXEC sys.sp_set_session_context @key=N'SkipLoyaltyPointTrigger', @value=NULL",
+                        CancellationToken.None);
+                }
+            }
 
             await transaction.CommitAsync(cancellationToken);
         });

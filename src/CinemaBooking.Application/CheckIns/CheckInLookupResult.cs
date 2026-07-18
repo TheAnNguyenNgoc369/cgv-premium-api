@@ -14,6 +14,8 @@ public sealed class CheckInLookupResult
     public bool CheckedIn { get; set; }
     public List<SeatInfo> Seats { get; set; } = [];
     public List<ProductInfo> Products { get; set; } = [];
+    public bool IsFromOtherCinema { get; set; }
+    public string? WarningMessage { get; set; }
 
     public sealed class MovieInfo
     {

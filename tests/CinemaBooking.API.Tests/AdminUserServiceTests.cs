@@ -244,6 +244,9 @@ public sealed class AdminUserServiceTests
             string phone, int? excludingUserId = null,
             CancellationToken cancellationToken = default) => Task.FromResult(PhoneExists);
 
+        public Task<bool> BarCodeExistsAsync(
+            string barcode, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
         public Task<bool> CinemaExistsAsync(
             int cinemaId, CancellationToken cancellationToken = default) => Task.FromResult(true);
 
@@ -299,5 +302,7 @@ public sealed class AdminUserServiceTests
             LastLog = actionLog;
             return Task.FromResult(TryDeleteResult);
         }
+
+        public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

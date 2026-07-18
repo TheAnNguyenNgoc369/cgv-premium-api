@@ -8,7 +8,7 @@ public sealed record HoldSeatsResponse(
 public sealed record BookingResponse(
     int BookingID,
     string BookingCode,
-    int ShowtimeID,
+    int? ShowtimeID,
     string MovieTitle,
     DateTime StartTime,
     string CinemaName,
@@ -26,7 +26,7 @@ public sealed record BookingResponse(
 public sealed record MyBookingResponse(
     int BookingID,
     string BookingCode,
-    int ShowtimeID,
+    int? ShowtimeID,
     BookingMovieResponse Movie,
     DateTime StartTime,
     string CinemaName,

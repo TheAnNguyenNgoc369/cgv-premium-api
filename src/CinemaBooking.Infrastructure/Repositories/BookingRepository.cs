@@ -141,20 +141,21 @@ public sealed class BookingRepository : IBookingRepository
         await _db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<Booking?> GetBookingByIdAsync(
+public async Task<Booking?> GetBookingByIdAsync(
         int bookingId,
         CancellationToken cancellationToken = default)
     {
         return await _db.Bookings
-            .Include(b => b.Showtime).ThenInclude(s => s.Movie)
-            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
-            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.RoomType)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Movie)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.RoomType)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat).ThenInclude(s => s.SeatType)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket)
             .Include(b => b.User)
             .Include(b => b.Payment)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
             .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)
+            .Include(b => b.CreatedByStaff!).ThenInclude(s => s.Cinema)
             .AsSplitQuery()
             .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
     }
@@ -167,15 +168,26 @@ public sealed class BookingRepository : IBookingRepository
             .FirstOrDefaultAsync(b => b.QRCode == qrCode, cancellationToken);
     }
 
+    public async Task<Booking?> GetBookingByCodeAsync(
+        string bookingCode,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Bookings
+            .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
+            .Include(b => b.Payment)
+            .Include(b => b.User)
+            .FirstOrDefaultAsync(b => b.BookingCode == bookingCode, cancellationToken);
+    }
+
     public async Task<Booking?> GetBookingWithFullDetailsForCheckInAsync(
         int bookingId,
         CancellationToken cancellationToken = default)
     {
         return await _db.Bookings
             .Include(b => b.User)
-            .Include(b => b.Showtime).ThenInclude(s => s.Movie)
-            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
-            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.RoomType)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Movie)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.RoomType)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat).ThenInclude(s => s.SeatType)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
@@ -208,8 +220,8 @@ public sealed class BookingRepository : IBookingRepository
     {
         var query = _db.Bookings
             .Include(b => b.User)
-            .Include(b => b.Showtime).ThenInclude(s => s.Movie)
-            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Movie)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Ticket).ThenInclude(t => t!.CheckedInBy)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat).ThenInclude(s => s.SeatType)
             .Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.Status == TicketStatus.Used));
@@ -218,7 +230,7 @@ public sealed class BookingRepository : IBookingRepository
             query = query.Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.CheckedInByID == staffId.Value));
 
         if (cinemaId.HasValue)
-            query = query.Where(b => b.Showtime.Room.CinemaID == cinemaId.Value);
+            query = query.Where(b => b.Showtime!.Room.CinemaID == cinemaId.Value);
 
         if (from.HasValue)
             query = query.Where(b => b.BookingSeats.Any(bs => bs.Ticket != null && bs.Ticket.CheckedInAt >= from.Value));
@@ -232,6 +244,48 @@ public sealed class BookingRepository : IBookingRepository
             .OrderByDescending(b => b.BookingSeats
                 .Where(bs => bs.Ticket != null && bs.Ticket.CheckedInAt != null)
                 .Max(bs => bs.Ticket!.CheckedInAt))
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+
+        return (bookings, totalCount);
+    }
+
+    public async Task<(List<Booking> Bookings, int TotalCount)> GetFnBPickupHistoryAsync(
+        int? staffId,
+        int? cinemaId,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _db.Bookings
+            .Include(b => b.User)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
+            .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.PickedUpByStaff)
+            .Where(b => b.BookingFnBs.Any(fnb => fnb.PickedUp && fnb.PickedUpAt != null));
+
+        if (staffId.HasValue)
+            query = query.Where(b => b.BookingFnBs.Any(fnb => fnb.PickedUp && fnb.PickedUpByStaffId == staffId.Value));
+
+        if (cinemaId.HasValue)
+            query = query.Where(b => b.Showtime!.Room.CinemaID == cinemaId.Value);
+
+        if (from.HasValue)
+            query = query.Where(b => b.BookingFnBs.Any(fnb => fnb.PickedUp && fnb.PickedUpAt >= from.Value));
+
+        if (to.HasValue)
+            query = query.Where(b => b.BookingFnBs.Any(fnb => fnb.PickedUp && fnb.PickedUpAt <= to.Value));
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var bookings = await query
+            .OrderByDescending(b => b.BookingFnBs
+                .Where(fnb => fnb.PickedUp && fnb.PickedUpAt != null)
+                .Max(fnb => fnb.PickedUpAt))
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .AsSplitQuery()
@@ -258,8 +312,8 @@ public sealed class BookingRepository : IBookingRepository
         CancellationToken cancellationToken = default)
     {
         return await _db.Bookings
-            .Include(b => b.Showtime).ThenInclude(s => s.Movie)
-            .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Movie)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
             .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
             .Include(b => b.BookingVoucher!).ThenInclude(bv => bv.Voucher)
@@ -354,6 +408,39 @@ public sealed class BookingRepository : IBookingRepository
         return await _db.Vouchers
             .FromSqlRaw("SELECT * FROM Voucher WITH (UPDLOCK, ROWLOCK) WHERE VoucherCode = {0}", voucherCode)
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<bool> UpdateBookingFnBPickupAsync(
+        string bookingCode,
+        int staffId,
+        CancellationToken cancellationToken = default)
+    {
+        var booking = await GetBookingByCodeAsync(bookingCode, cancellationToken);
+        if (booking is null)
+            return false;
+
+        if (booking.Payment?.Status != PaymentStatus.Completed)
+            return false;
+
+        if (booking.Status == BookingStatus.Cancelled)
+            return false;
+
+        if (!booking.BookingFnBs.Any())
+            return false;
+
+        if (booking.BookingFnBs.All(fnb => fnb.PickedUp))
+            return false;
+
+        var now = DateTime.UtcNow;
+        foreach (var fnb in booking.BookingFnBs.Where(f => !f.PickedUp))
+        {
+            fnb.PickedUp = true;
+            fnb.PickedUpAt = now;
+            fnb.PickedUpByStaffId = staffId;
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(

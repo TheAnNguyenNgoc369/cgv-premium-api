@@ -21,3 +21,17 @@ public sealed record RedeemableVouchersResult(bool Succeeded, List<Voucher> Vouc
 public sealed record RedeemVoucherResult(bool Succeeded, int RemainingPoints, string VoucherCode, string? Error = null, string ErrorType = "validation");
 
 public sealed record UserVouchersResult(bool Succeeded, List<UserVoucher> Vouchers, string? Error = null);
+
+public sealed record UserRedeemableVoucher(
+    int VoucherId,
+    string VoucherCode,
+    string DiscountType,
+    decimal DiscountValue,
+    int RequiredPoints,
+    int? ExchangeLimit,
+    DateTimeOffset ValidFrom,
+    DateTimeOffset ValidUntil,
+    string? ImageUrl,
+    string? Description);
+
+public sealed record UserRedeemableVouchersResult(bool Succeeded, List<UserRedeemableVoucher> Vouchers, string? Error = null);

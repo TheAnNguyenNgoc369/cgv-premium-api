@@ -1,3 +1,5 @@
+using CinemaBooking.Application.CheckIns;
+
 namespace CinemaBooking.Application.CheckIns;
 
 public interface ICheckInService
@@ -13,7 +15,25 @@ public interface ICheckInService
         string? ipAddress,
         CancellationToken cancellationToken = default);
 
+    Task<(bool Succeeded, string? ErrorMessage)> ConfirmFnBPickupAsync(
+        string bookingCode,
+        int staffId,
+        CancellationToken cancellationToken = default);
+
     Task<CheckInHistoryResult> GetHistoryAsync(
+        int? staffId,
+        int? cinemaId,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize,
+        int currentUserId,
+        bool isAdmin,
+        bool isManager,
+        bool isStaff,
+        CancellationToken cancellationToken = default);
+
+    Task<FnBPickupHistoryResult> GetFnBPickupHistoryAsync(
         int? staffId,
         int? cinemaId,
         DateTime? from,

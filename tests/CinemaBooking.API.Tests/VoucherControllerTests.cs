@@ -405,7 +405,7 @@ public sealed class VoucherControllerTests
             new Claim(ClaimTypes.Role, Roles.Admin)
         ], "Test");
 
-        return new VoucherController(new StubVoucherService(createResult))
+        return new VoucherController(new StubVoucherService(createResult), new StubVoucherRuleMetadataProvider())
         {
             ControllerContext = new ControllerContext
             {
@@ -415,6 +415,11 @@ public sealed class VoucherControllerTests
                 }
             }
         };
+    }
+
+    private sealed class StubVoucherRuleMetadataProvider : IVoucherRuleMetadataProvider
+    {
+        public IReadOnlyList<VoucherRuleTypeMetadata> GetAll() => [];
     }
 
     // ============ UPDATE OPERATIONS ============
@@ -638,6 +643,9 @@ public sealed class VoucherControllerTests
             throw new NotSupportedException();
 
         public Task<UserVouchersResult> GetUserVouchersAsync(int userId, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<UserRedeemableVouchersResult> GetUserRedeemableVouchersAsync(int userId, CancellationToken ct) =>
             throw new NotSupportedException();
     }
 }

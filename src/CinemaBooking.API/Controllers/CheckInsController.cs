@@ -41,9 +41,6 @@ public sealed class CheckInsController : ControllerBase
             if (result.ErrorMessage == "Booking not found.")
                 return NotFound(new { success = false, message = result.ErrorMessage });
 
-            if (result.ErrorMessage == "You cannot check in tickets from another cinema.")
-                return StatusCode(403, new { success = false, message = result.ErrorMessage });
-
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
@@ -92,7 +89,9 @@ public sealed class CheckInsController : ControllerBase
                 Quantity = p.Quantity,
                 UnitPrice = p.UnitPrice,
                 Subtotal = p.Subtotal
-            }).ToList()
+            }).ToList(),
+            IsFromOtherCinema = result.Data.IsFromOtherCinema,
+            WarningMessage = result.Data.WarningMessage
         };
 
         return Ok(new { success = true, data = response });
@@ -140,6 +139,36 @@ public sealed class CheckInsController : ControllerBase
             bookingCode = result.BookingCode,
             checkedInAt = result.CheckedInAt
         });
+    }
+
+    [HttpPost("fnb-pickup")]
+    [Authorize(Roles = Roles.Staff)]
+    public async Task<IActionResult> ConfirmFnBPickup(
+        [FromBody] FnBPickupRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(Roles.Staff))
+            return Forbid();
+
+        if (!ModelState.IsValid)
+            return BadRequest(new { success = false, message = "Invalid request." });
+
+        var staffId = GetCurrentUserId();
+
+        var result = await _checkInService.ConfirmFnBPickupAsync(
+            request.BookingCode,
+            staffId,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            if (result.ErrorMessage?.Contains("not found") == true)
+                return NotFound(new { success = false, message = result.ErrorMessage });
+
+            return BadRequest(new { success = false, message = result.ErrorMessage });
+        }
+
+        return Ok(new { success = true, message = result.ErrorMessage });
     }
 
     private int GetCurrentUserId()
@@ -208,6 +237,68 @@ public sealed class CheckInsController : ControllerBase
                     SeatType = s.SeatType,
                     TicketPrice = s.TicketPrice,
                     CheckedInAt = s.CheckedInAt
+                }).ToList()
+            }).ToList(),
+            TotalCount = result.TotalCount,
+            Page = request.Page,
+            PageSize = request.PageSize
+        };
+
+        return Ok(new { success = true, data = response });
+    }
+
+    [HttpGet("fnb-pickup-history")]
+    [Authorize(Roles = $"{Roles.Staff},{Roles.Manager},{Roles.Admin}")]
+    public async Task<IActionResult> GetFnBPickupHistory(
+        [FromQuery] FnBPickupHistoryRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(Roles.Staff)
+            && !User.IsInRole(Roles.Manager)
+            && !User.IsInRole(Roles.Admin))
+            return Forbid();
+
+        if (!ModelState.IsValid)
+        {
+            var error = ModelState
+                .Where(entry => entry.Value?.Errors.Count > 0)
+                .Select(entry => entry.Value!.Errors[0].ErrorMessage)
+                .FirstOrDefault() ?? "Invalid request.";
+
+            return BadRequest(new { success = false, message = error });
+        }
+
+        var result = await _checkInService.GetFnBPickupHistoryAsync(
+            request.StaffId,
+            request.CinemaId,
+            request.From,
+            request.To,
+            request.Page,
+            request.PageSize,
+            GetCurrentUserId(),
+            User.IsInRole(Roles.Admin),
+            User.IsInRole(Roles.Manager),
+            User.IsInRole(Roles.Staff),
+            cancellationToken);
+
+        var response = new FnBPickupHistoryResponse
+        {
+            Records = result.Records.Select(r => new FnBPickupHistoryResponse.FnBPickupRecord
+            {
+                BookingId = r.BookingId,
+                BookingCode = r.BookingCode,
+                CustomerName = r.CustomerName,
+                CinemaName = r.CinemaName,
+                PickedUpAt = r.PickedUpAt,
+                StaffName = r.StaffName,
+                TotalAmount = r.TotalAmount,
+                Items = r.Items.Select(i => new FnBPickupHistoryResponse.FnBPickupItem
+                {
+                    ItemId = i.ItemId,
+                    ItemName = i.ItemName,
+                    Quantity = i.Quantity,
+                    UnitPrice = i.UnitPrice,
+                    SubTotal = i.SubTotal
                 }).ToList()
             }).ToList(),
             TotalCount = result.TotalCount,

@@ -25,12 +25,17 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.TotalPoints).HasDefaultValue(0);
         builder.Property(u => u.CreatedAt).HasDefaultValueSql("GETDATE()");
         builder.Property(u => u.UpdatedAt).HasDefaultValueSql("GETDATE()");
+        builder.Property(u => u.BarCode).HasMaxLength(50);
 
         builder.HasIndex(u => u.Email).IsUnique().HasDatabaseName("UQ_Users_Email");
         builder.HasIndex(u => u.Phone)
             .IsUnique()
             .HasDatabaseName("UQ_Users_Phone")
             .HasFilter("[Phone] IS NOT NULL");
+        builder.HasIndex(u => u.BarCode)
+            .IsUnique()
+            .HasDatabaseName("UQ_Users_BarCode")
+            .HasFilter("[BarCode] IS NOT NULL");
         builder.HasIndex(u => new { u.Role, u.Status }).HasDatabaseName("IX_Users_Role_Status");
 
         builder.HasOne(u => u.Cinema)

@@ -11,6 +11,7 @@ public interface IUserRepository
     Task<User?> LookupCustomerAsync(
         string? email,
         string? phone,
+        string? barcode,
         CancellationToken cancellationToken = default);
 
     Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default);
@@ -20,9 +21,15 @@ public interface IUserRepository
         int? excludingUserId = null,
         CancellationToken cancellationToken = default);
 
+    Task<bool> BarCodeExistsAsync(string barcode, CancellationToken cancellationToken = default);
+
     Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
 
     Task<User?> GetByIdAsync(int userId, CancellationToken cancellationToken = default);
+
+    Task<List<User>> GetUsersByRolesAsync(
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default);
 
     Task<User?> UpdateProfileAsync(
         int userId,

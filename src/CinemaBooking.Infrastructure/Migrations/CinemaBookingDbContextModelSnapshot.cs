@@ -126,7 +126,7 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<int>("ShowtimeID")
+                    b.Property<int?>("ShowtimeID")
                         .HasColumnType("int");
 
                     b.Property<string>("Status")
@@ -193,6 +193,17 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Property<int>("ItemID")
                         .HasColumnType("int");
 
+                    b.Property<bool>("PickedUp")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("PickedUpAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("PickedUpByStaffId")
+                        .HasColumnType("int");
+
                     b.Property<int>("Quantity")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
@@ -206,7 +217,12 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.HasKey("BookingFnBID");
 
+                    b.HasIndex("BookingID")
+                        .HasDatabaseName("IX_BookingFnB_BookingId");
+
                     b.HasIndex("ItemID");
+
+                    b.HasIndex("PickedUpByStaffId");
 
                     b.HasIndex("BookingID", "ItemID")
                         .IsUnique()
@@ -1743,6 +1759,10 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("BarCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<int?>("CinemaID")
                         .HasColumnType("int");
 
@@ -1804,6 +1824,11 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .HasDefaultValueSql("GETDATE()");
 
                     b.HasKey("UserID");
+
+                    b.HasIndex("BarCode")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_Users_BarCode")
+                        .HasFilter("[BarCode] IS NOT NULL");
 
                     b.HasIndex("CinemaID");
 
@@ -2133,7 +2158,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .WithMany("Bookings")
                         .HasForeignKey("ShowtimeID")
                         .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired()
                         .HasConstraintName("FK_Booking_Showtime");
 
                     b.HasOne("CinemaBooking.Domain.Entities.User", "User")
@@ -2165,7 +2189,15 @@ namespace CinemaBooking.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("FK_BookingFnB_Product");
 
+                    b.HasOne("CinemaBooking.Domain.Entities.User", "PickedUpByStaff")
+                        .WithMany()
+                        .HasForeignKey("PickedUpByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("FK_BookingFnB_PickedUpByStaff");
+
                     b.Navigation("Booking");
+
+                    b.Navigation("PickedUpByStaff");
 
                     b.Navigation("Product");
                 });

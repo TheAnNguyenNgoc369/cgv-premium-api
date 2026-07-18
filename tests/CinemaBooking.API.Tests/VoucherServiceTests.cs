@@ -80,7 +80,7 @@ public sealed class VoucherServiceTests
     {
         public Task<User?> GetByIdAsync(int id, CancellationToken ct) => Task.FromResult<User?>(null);
         public Task<User?> GetProfileByIdAsync(int id, CancellationToken ct) => throw new NotSupportedException();
-        public Task<User?> LookupCustomerAsync(string? email, string? phone, CancellationToken ct) => throw new NotSupportedException();
+        public Task<User?> LookupCustomerAsync(string? email, string? phone, string? barcode, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> EmailExistsAsync(string email, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> PhoneExistsAsync(string phone, int? excludingUserId, CancellationToken ct) => throw new NotSupportedException();
         public Task<User?> GetByEmailAsync(string email, CancellationToken ct) => throw new NotSupportedException();
@@ -103,5 +103,7 @@ public sealed class VoucherServiceTests
         public Task<bool> TryIncrementTokenVersionAsync(int userId, int expectedVersion, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> TryUpdatePasswordHashAsync(int userId, string oldPasswordHash, string newPasswordHash, CancellationToken ct) => throw new NotSupportedException();
         public Task SaveChangesAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<bool> BarCodeExistsAsync(string barcode, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task<List<User>> GetUsersByRolesAsync(IEnumerable<string> roles, CancellationToken cancellationToken = default) => Task.FromResult(new List<User>());
     }
 }

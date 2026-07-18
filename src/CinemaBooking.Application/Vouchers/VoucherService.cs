@@ -1,6 +1,7 @@
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
+using CinemaBooking.Shared.Time;
 
 namespace CinemaBooking.Application.Vouchers;
 
@@ -303,4 +304,36 @@ public sealed class VoucherService : IVoucherService
     }
 
     private static VoucherResult Fail(string error) => new(false, error, null);
+
+    public async Task<UserRedeemableVouchersResult> GetUserRedeemableVouchersAsync(int userId, CancellationToken ct)
+    {
+        var result = await GetUserVouchersAsync(userId, ct);
+        if (!result.Succeeded || result.Vouchers is null)
+        {
+            return new(true, []);
+        }
+
+        var now = DateTime.UtcNow;
+        var vouchers = result.Vouchers
+            .Where(uv => uv.Voucher.IsRedeemable
+                && uv.Voucher.IsActive
+                && uv.Voucher.RequiredPoints.HasValue
+                && uv.Voucher.ValidFrom <= now
+                && uv.Voucher.ValidUntil >= now
+                && uv.Status == UserVoucherStatus.Available)
+            .Select(uv => new UserRedeemableVoucher(
+                uv.Voucher.VoucherID,
+                uv.Voucher.VoucherCode,
+                uv.Voucher.DiscountType,
+                uv.Voucher.DiscountValue,
+                uv.Voucher.RequiredPoints!.Value,
+                uv.Voucher.ExchangeLimit,
+                VietnamTime.FromUtc(uv.Voucher.ValidFrom),
+                VietnamTime.FromUtc(uv.Voucher.ValidUntil),
+                uv.Voucher.ImageURL,
+                uv.Voucher.Description))
+            .ToList();
+
+        return new(true, vouchers);
+    }
 }

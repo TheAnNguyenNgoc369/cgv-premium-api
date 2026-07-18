@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <PackageReference Include="AutoMapper" Version="16.1.1" />
+    <PackageReference Include="BarcodeLib" Version="3.1.5" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.17" />
     <PackageReference Include="QRCoder" Version="1.8.0" />
   </ItemGroup>

@@ -49,7 +49,7 @@ public sealed class UserServicePasswordTests
     }
 
     private static UserService CreateService(StubUserRepository repository) =>
-        new(repository, new StubImageStorageService(), NullLogger<UserService>.Instance);
+        new(repository, new StubUserVoucherRepository(), new StubImageStorageService(), NullLogger<UserService>.Instance);
 
     private sealed class StubUserRepository : IUserRepository
     {
@@ -73,7 +73,7 @@ public sealed class UserServicePasswordTests
         }
 
         public Task<User?> GetProfileByIdAsync(int userId, CancellationToken cancellationToken = default) => Task.FromResult<User?>(null);
-        public Task<User?> LookupCustomerAsync(string? email, string? phone, CancellationToken cancellationToken = default) => Task.FromResult<User?>(null);
+        public Task<User?> LookupCustomerAsync(string? email, string? phone, string? barcode, CancellationToken cancellationToken = default) => Task.FromResult<User?>(null);
         public Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task<bool> PhoneExistsAsync(string phone, int? excludingUserId = null, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default) => Task.FromResult<User?>(null);
@@ -95,6 +95,8 @@ public sealed class UserServicePasswordTests
         public Task<bool> TryResetPasswordAsync(string token, string passwordHash, DateTime resetAt, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task<bool> TryIncrementTokenVersionAsync(int userId, int expectedTokenVersion, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<bool> BarCodeExistsAsync(string barcode, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task<List<User>> GetUsersByRolesAsync(IEnumerable<string> roles, CancellationToken cancellationToken = default) => Task.FromResult(new List<User>());
     }
 
     private sealed class StubImageStorageService : IImageStorageService
@@ -102,5 +104,21 @@ public sealed class UserServicePasswordTests
         public Task<StoredImageResult> UploadImageAsync(Stream imageStream, string fileName, string folder,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task DeleteImageAsync(string publicId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class StubUserVoucherRepository : IUserVoucherRepository
+    {
+        public Task<List<UserVoucher>> GetUserVouchersAsync(int userId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new List<UserVoucher>());
+        public Task<UserVoucher?> GetUserVoucherByIdAsync(int userVoucherId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<UserVoucher?>(null);
+        public Task<UserVoucher?> GetUserVoucherByCodeAsync(string code, CancellationToken cancellationToken = default) =>
+            Task.FromResult<UserVoucher?>(null);
+        public Task AddUserVoucherAsync(UserVoucher userVoucher, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+        public Task UpdateUserVoucherAsync(UserVoucher userVoucher, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+        public Task<bool> HasUsedVoucherCodeAsync(int userId, string voucherCode, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
     }
 }
