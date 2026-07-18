@@ -36,4 +36,5 @@ public class User
     public ICollection<AdminActionLog> TargetedAdminActions { get; set; } = [];
     public ICollection<EmailLog> EmailLogs { get; set; } = [];
     public ICollection<Notification> Notifications { get; set; } = [];
+    public ICollection<MovieReview> Reviews { get; set; } = [];
 }

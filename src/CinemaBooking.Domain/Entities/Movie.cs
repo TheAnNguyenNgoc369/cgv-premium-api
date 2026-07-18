@@ -19,4 +19,5 @@ public class Movie
     public ICollection<MovieGenre> MovieGenres { get; set; } = [];
     public ICollection<Showtime> Showtimes { get; set; } = [];
     public ICollection<MoviePerson> MoviePersons { get; set; } = [];
+    public ICollection<MovieReview> Reviews { get; set; } = [];
 }

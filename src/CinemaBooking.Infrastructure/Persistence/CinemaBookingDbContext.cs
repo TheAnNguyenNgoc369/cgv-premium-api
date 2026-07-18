@@ -53,6 +53,8 @@ public class CinemaBookingDbContext : DbContext
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotificationOutbox> NotificationOutbox => Set<NotificationOutbox>();
+    public DbSet<ReviewRewardSettings> ReviewRewardSettings => Set<ReviewRewardSettings>();
+    public DbSet<MovieReview> MovieReviews => Set<MovieReview>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

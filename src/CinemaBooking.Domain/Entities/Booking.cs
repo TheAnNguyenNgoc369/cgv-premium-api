@@ -29,4 +29,5 @@ public class Booking
     public ICollection<WalletTransaction> WalletTransactions { get; set; } = [];
     public BookingVoucher? BookingVoucher { get; set; }
     public ICollection<LoyaltyPoints> LoyaltyPoints { get; set; } = [];
+    public MovieReview? Review { get; set; }
 }
