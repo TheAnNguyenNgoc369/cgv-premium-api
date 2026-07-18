@@ -43,9 +43,7 @@ public sealed class CheckInService : ICheckInService
             return (false, "Booking data is incomplete (missing showtime/room/cinema).", null);
 
         var showtimeCinemaId = booking.Showtime.Room.Cinema.CinemaID;
-
-        if (staffCinemaId != showtimeCinemaId)
-            return (false, "You cannot check in tickets from another cinema.", null);
+        var isFromOtherCinema = staffCinemaId != showtimeCinemaId;
 
         var response = new CheckInLookupResult
         {
@@ -92,7 +90,11 @@ public sealed class CheckInService : ICheckInService
                 Quantity = fnb.Quantity,
                 UnitPrice = fnb.UnitPrice,
                 Subtotal = fnb.SubTotal
-            }).ToList()
+            }).ToList(),
+            IsFromOtherCinema = isFromOtherCinema,
+            WarningMessage = isFromOtherCinema
+                ? "This ticket belongs to another cinema. Check-in is not allowed here. Please inform the customer to go to the correct cinema."
+                : null
         };
 
         return (true, null, response);

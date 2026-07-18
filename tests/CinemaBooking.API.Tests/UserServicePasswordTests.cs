@@ -49,7 +49,7 @@ public sealed class UserServicePasswordTests
     }
 
     private static UserService CreateService(StubUserRepository repository) =>
-        new(repository, new StubImageStorageService(), NullLogger<UserService>.Instance);
+        new(repository, new StubUserVoucherRepository(), new StubImageStorageService(), NullLogger<UserService>.Instance);
 
     private sealed class StubUserRepository : IUserRepository
     {
@@ -103,5 +103,21 @@ public sealed class UserServicePasswordTests
         public Task<StoredImageResult> UploadImageAsync(Stream imageStream, string fileName, string folder,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task DeleteImageAsync(string publicId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class StubUserVoucherRepository : IUserVoucherRepository
+    {
+        public Task<List<UserVoucher>> GetUserVouchersAsync(int userId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new List<UserVoucher>());
+        public Task<UserVoucher?> GetUserVoucherByIdAsync(int userVoucherId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<UserVoucher?>(null);
+        public Task<UserVoucher?> GetUserVoucherByCodeAsync(string code, CancellationToken cancellationToken = default) =>
+            Task.FromResult<UserVoucher?>(null);
+        public Task AddUserVoucherAsync(UserVoucher userVoucher, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+        public Task UpdateUserVoucherAsync(UserVoucher userVoucher, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+        public Task<bool> HasUsedVoucherCodeAsync(int userId, string voucherCode, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
     }
 }

@@ -36,7 +36,7 @@ public sealed class BookingEmailService : IBookingEmailService
             if (ticketSeats.Count == 0)
                 return;
 
-            var images = new List<EmailInlineImage>(ticketSeats.Count);
+            var images = new List<EmailInlineImage>(ticketSeats.Count + 1);
             var ticketsHtml = new StringBuilder();
             foreach (var bookingSeat in ticketSeats)
             {
@@ -55,6 +55,13 @@ public sealed class BookingEmailService : IBookingEmailService
                     $"ticket-{booking.BookingCode}-{bookingSeat.Seat.SeatRow}{bookingSeat.Seat.SeatCol}.png"));
             }
 
+            var barcodeContentId = $"booking-barcode-{booking.BookingCode}";
+            images.Add(new EmailInlineImage(
+                barcodeContentId,
+                BarcodeHelper.GenerateCode128(booking.BookingCode),
+                "image/png",
+                $"booking-barcode-{booking.BookingCode}.png"));
+
             var showtime = booking.Showtime!;
             var localStart = VietnamTime.FromUtc(showtime.StartTime);
             var paymentMethod = booking.Payment?.PaymentMethod ?? "N/A";
@@ -69,7 +76,8 @@ public sealed class BookingEmailService : IBookingEmailService
                 showtime.Room.RoomName,
                 $"{booking.FinalAmount:N0}",
                 paymentMethod,
-                ticketsHtml.ToString());
+                ticketsHtml.ToString(),
+                barcodeContentId);
 
             await _emailQueue.EnqueueAsync(
                 booking.UserID, booking.User.Email, $"booking_confirmed:{booking.BookingID}", "booking_confirmed",
