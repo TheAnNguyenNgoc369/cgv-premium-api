@@ -12,6 +12,9 @@ namespace CinemaBooking.API.Controllers;
 public sealed class UploadController : ControllerBase
 {
     private const string VoucherImageFolder = "cgvp/vouchers";
+    private const string PersonPhotoFolder = "cgvp/persons";
+    private const long PersonPhotoMaxSizeBytes = 10 * 1024 * 1024;
+
     private readonly IImageStorageService _imageStorage;
     public UploadController(IImageStorageService imageStorage) => _imageStorage = imageStorage;
 
@@ -30,5 +33,26 @@ public sealed class UploadController : ControllerBase
         await using var stream = request.File.OpenReadStream();
         var uploaded = await _imageStorage.UploadImageAsync(stream, request.File.FileName, VoucherImageFolder, ct);
         return Ok(new ImageUploadResponse(uploaded.SecureUrl, uploaded.PublicId));
+    }
+
+    /// <summary>
+    /// Upload a person photo (jpg/jpeg/png/webp, up to 10 MB) and get back the URL + public id.
+    /// </summary>
+    [HttpPost("person-photo"), Authorize(Roles = Roles.Admin), Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadPersonPhoto([FromForm] ImageUploadRequest request, CancellationToken ct)
+    {
+        if (request.File is null)
+            return BadRequest(new { success = false, message = "Image file is required" });
+
+        var error = ImageFileValidator.Validate(
+            request.File.FileName,
+            request.File.ContentType,
+            request.File.Length,
+            PersonPhotoMaxSizeBytes);
+        if (error is not null) return BadRequest(new { success = false, message = error });
+
+        await using var stream = request.File.OpenReadStream();
+        var uploaded = await _imageStorage.UploadImageAsync(stream, request.File.FileName, PersonPhotoFolder, ct);
+        return Ok(new PersonPhotoUploadResponse(uploaded.SecureUrl, uploaded.PublicId));
     }
 }

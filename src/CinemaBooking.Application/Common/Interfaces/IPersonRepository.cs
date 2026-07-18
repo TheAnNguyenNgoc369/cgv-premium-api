@@ -4,17 +4,14 @@ namespace CinemaBooking.Application.Common.Interfaces;
 
 public interface IPersonRepository
 {
-    Task<List<Person>> GetPersonsAsync(
+    Task<PersonPageResult> GetPersonsPageAsync(
         string? searchTerm,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 
     Task<Person?> GetByIdAsync(
         int personId,
-        CancellationToken cancellationToken = default);
-
-    Task<bool> NameExistsAsync(
-        string name,
-        int? excludingPersonId = null,
         CancellationToken cancellationToken = default);
 
     Task<Person> AddAsync(
@@ -23,11 +20,14 @@ public interface IPersonRepository
 
     Task<Person?> UpdateAsync(
         int personId,
-        string name,
-        DateTime updatedAt,
+        PersonUpdateData data,
         CancellationToken cancellationToken = default);
 
     Task<bool> IsAssignedToAnyMovieAsync(
+        int personId,
+        CancellationToken cancellationToken = default);
+
+    Task<List<string>> GetAssignedMovieTitlesAsync(
         int personId,
         CancellationToken cancellationToken = default);
 
@@ -35,3 +35,17 @@ public interface IPersonRepository
         int personId,
         CancellationToken cancellationToken = default);
 }
+
+public sealed record PersonPageResult(
+    IReadOnlyList<Person> Items,
+    int Total);
+
+public sealed record PersonUpdateData(
+    string Name,
+    string? Biography,
+    DateOnly? DateOfBirth,
+    string? Nationality,
+    string? Gender,
+    string? PhotoUrl,
+    string? PhotoPublicId,
+    DateTime UpdatedAt);
