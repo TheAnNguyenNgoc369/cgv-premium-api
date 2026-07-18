@@ -16,6 +16,14 @@ public sealed class UnitOfWork : IUnitOfWork
         Func<Task<T>> operation,
         CancellationToken cancellationToken = default)
     {
+        // Reuse the ambient transaction when the caller is already inside one (e.g. PaymentService
+        // wraps FinalizeSuccessfulBookingAsync, which now delegates loyalty into a nested
+        // ExecuteInTransactionAsync). Opening a second EF transaction on the same DbContext throws.
+        if (_dbContext.Database.CurrentTransaction is not null)
+        {
+            return await operation();
+        }
+
         var strategy = _dbContext.Database.CreateExecutionStrategy();
 
         return await strategy.ExecuteAsync(async () =>

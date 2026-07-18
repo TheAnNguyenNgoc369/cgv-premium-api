@@ -276,7 +276,7 @@ CREATE TABLE Booking (
     CONSTRAINT FK_Booking_CreatedByStaff FOREIGN KEY (CreatedByStaffID) REFERENCES Users(UserID),
     CONSTRAINT CK_Booking_Amounts CHECK (SubTotal >= 0 AND DiscountAmount >= 0 AND FinalAmount >= 0),
     CONSTRAINT CK_Booking_Points CHECK (ISNULL(PointsEarned,0) >= 0 AND ISNULL(PointsRedeemed,0) >= 0),
-    CONSTRAINT CK_Booking_Status CHECK (Status IN ('pending', 'paid', 'cancelled', 'refunded', 'used', 'expired', 'payment_failed', 'partially_refunded'))
+    CONSTRAINT CK_Booking_Status CHECK (Status IN ('pending', 'paid', 'cancelled', 'refunded', 'used', 'expired', 'payment_failed', 'partially_refunded', 'no_show'))
 );
 GO
 

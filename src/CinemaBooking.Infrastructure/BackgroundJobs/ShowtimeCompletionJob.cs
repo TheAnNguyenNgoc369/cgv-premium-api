@@ -1,4 +1,3 @@
-using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
 using CinemaBooking.Shared.Constants;
 using System.Data;
@@ -30,7 +29,7 @@ public sealed class ShowtimeCompletionJob : BackgroundService
         {
             try
             {
-                await CompleteShowtimesAndAwardPointsAsync(stoppingToken);
+                await CompleteShowtimesAndMarkNoShowAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -38,20 +37,20 @@ public sealed class ShowtimeCompletionJob : BackgroundService
             }
             catch (Exception exception)
             {
-                _logger.LogError(exception, "Failed to complete showtimes and award loyalty points");
+                _logger.LogError(exception, "Failed to complete showtimes and mark NoShow bookings");
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
-    internal async Task CompleteShowtimesAndAwardPointsAsync(
+    internal async Task CompleteShowtimesAndMarkNoShowAsync(
         CancellationToken cancellationToken = default)
     {
         await using var strategyScope = _scopeFactory.CreateAsyncScope();
         var strategyContext = strategyScope.ServiceProvider.GetRequiredService<CinemaBookingDbContext>();
         var strategy = strategyContext.Database.CreateExecutionStrategy();
         var completedShowtimeCount = 0;
-        var processedBookingCount = 0;
+        var noShowMarkedCount = 0;
 
         await strategy.ExecuteAsync(async () =>
         {
@@ -68,6 +67,7 @@ public sealed class ShowtimeCompletionJob : BackgroundService
                     setters => setters.SetProperty(showtime => showtime.Status, "completed"),
                     cancellationToken);
 
+            noShowMarkedCount = await MarkNoShowBookingsAsync(dbContext, now, cancellationToken);
             var eligibleBookings = await dbContext.Bookings
                 .Include(booking => booking.User)
                 .Where(booking => booking.Status == BookingStatus.Paid
@@ -129,12 +129,44 @@ public sealed class ShowtimeCompletionJob : BackgroundService
             await transaction.CommitAsync(cancellationToken);
         });
 
-        if (completedShowtimeCount > 0 || processedBookingCount > 0)
+        if (completedShowtimeCount > 0 || noShowMarkedCount > 0)
         {
             _logger.LogInformation(
-                "Completed {ShowtimeCount} showtimes and processed {BookingCount} loyalty bookings",
+                "Completed {ShowtimeCount} showtimes and marked {NoShowCount} bookings as NoShow",
                 completedShowtimeCount,
-                processedBookingCount);
+                noShowMarkedCount);
         }
+    }
+
+    private async Task<int> MarkNoShowBookingsAsync(
+        CinemaBookingDbContext dbContext,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var noShowCandidates = await dbContext.Bookings
+            .Where(booking => booking.Status == BookingStatus.Paid
+                && booking.Showtime.Status == "completed"
+                && !booking.BookingSeats.Any(seat =>
+                    seat.Ticket != null && seat.Ticket.Status == TicketStatus.Used))
+            .ToListAsync(cancellationToken);
+
+        if (noShowCandidates.Count == 0)
+            return 0;
+
+        foreach (var booking in noShowCandidates)
+        {
+            _logger.LogInformation(
+                "Marking booking as NoShow BookingId={BookingId} BookingCode={BookingCode} OldStatus={OldStatus} NewStatus={NewStatus}",
+                booking.BookingID,
+                booking.BookingCode,
+                booking.Status,
+                BookingStatus.NoShow);
+
+            booking.Status = BookingStatus.NoShow;
+            booking.UpdatedAt = now;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return noShowCandidates.Count;
     }
 }

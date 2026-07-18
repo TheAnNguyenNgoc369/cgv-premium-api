@@ -49,7 +49,7 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         {
             t.HasCheckConstraint("CK_Booking_Amounts", "[SubTotal] >= 0 AND [DiscountAmount] >= 0 AND [FinalAmount] >= 0");
             t.HasCheckConstraint("CK_Booking_Points", "ISNULL([PointsEarned],0) >= 0 AND ISNULL([PointsRedeemed],0) >= 0");
-            t.HasCheckConstraint("CK_Booking_Status", "[Status] IN ('pending', 'paid', 'cancelled', 'refunded', 'used', 'expired', 'payment_failed', 'partially_refunded')");
+            t.HasCheckConstraint("CK_Booking_Status", "[Status] IN ('pending', 'paid', 'cancelled', 'refunded', 'used', 'expired', 'payment_failed', 'partially_refunded', 'no_show')");
         });
     }
 }

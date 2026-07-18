@@ -8,13 +8,16 @@ public sealed class MembershipService : IMembershipService
 {
     private readonly ILoyaltyRepository _loyaltyRepository;
     private readonly IRefundRepository _refundRepository;
+    private readonly IUnitOfWork _unitOfWork;
 
     public MembershipService(
         ILoyaltyRepository loyaltyRepository,
-        IRefundRepository refundRepository)
+        IRefundRepository refundRepository,
+        IUnitOfWork unitOfWork)
     {
         _loyaltyRepository = loyaltyRepository;
         _refundRepository = refundRepository;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<MembershipInfo> GetMyMembershipAsync(
@@ -134,32 +137,37 @@ public sealed class MembershipService : IMembershipService
         decimal finalAmount,
         CancellationToken cancellationToken = default)
     {
-        if (await _loyaltyRepository.HasPointsForBookingAsync(bookingId, cancellationToken))
-            return;
-
-        var pointsEarned = (int)(finalAmount * MembershipTiers.PointsPerVnd);
-
-        if (pointsEarned <= 0)
-            return;
-
-        var loyaltyPoint = new LoyaltyPoints
+        await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
-            UserID = userId,
-            BookingID = bookingId,
-            PointsDelta = pointsEarned,
-            TransactionType = LoyaltyTransactionTypes.Earned,
-            Description = $"Earned {pointsEarned} points from booking payment of {finalAmount:N0} VND",
-            CreatedAt = DateTime.UtcNow
-        };
+            if (await _loyaltyRepository.HasPointsForBookingAsync(bookingId, cancellationToken))
+                return 0;
 
-        await _loyaltyRepository.AddLoyaltyPointAsync(loyaltyPoint, cancellationToken);
+            var pointsEarned = (int)(finalAmount * MembershipTiers.PointsPerVnd);
 
-        var currentTotalPoints = await _loyaltyRepository.GetUserTotalPointsAsync(userId, cancellationToken);
-        var newTotalPoints = currentTotalPoints + pointsEarned;
+            if (pointsEarned <= 0)
+                return 0;
 
-        await _loyaltyRepository.UpdateUserTotalPointsAsync(userId, newTotalPoints, cancellationToken);
+            var loyaltyPoint = new LoyaltyPoints
+            {
+                UserID = userId,
+                BookingID = bookingId,
+                PointsDelta = pointsEarned,
+                TransactionType = LoyaltyTransactionTypes.Earned,
+                Description = $"Earned {pointsEarned} points from booking payment of {finalAmount:N0} VND",
+                CreatedAt = DateTime.UtcNow
+            };
 
-        await CheckAndUpgradeTierAsync(userId, cancellationToken);
+            await _loyaltyRepository.AddLoyaltyPointAsync(loyaltyPoint, cancellationToken);
+
+            var currentTotalPoints = await _loyaltyRepository.GetUserTotalPointsAsync(userId, cancellationToken);
+            var newTotalPoints = currentTotalPoints + pointsEarned;
+
+            await _loyaltyRepository.UpdateUserTotalPointsAsync(userId, newTotalPoints, cancellationToken);
+
+            await CheckAndUpgradeTierAsync(userId, cancellationToken);
+
+            return pointsEarned;
+        }, cancellationToken);
     }
 
     public async Task CheckAndUpgradeTierAsync(

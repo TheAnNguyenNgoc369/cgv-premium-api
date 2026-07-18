@@ -3,6 +3,7 @@ using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Configuration;
 using CinemaBooking.Application.Contracts.Payment;
 using CinemaBooking.Application.Invoices;
+using CinemaBooking.Application.Membership;
 using CinemaBooking.Application.Notifications;
 using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Application.Tickets;
@@ -30,6 +31,7 @@ public sealed class PaymentService : IPaymentService
     private readonly FrontendSettings _frontendSettings;
     private readonly ILogger<PaymentService> _logger;
     private readonly IVoucherRepository _voucherRepository;
+    private readonly IMembershipService _membershipService;
 
     public PaymentService(
         IPaymentRepository paymentRepository,
@@ -43,7 +45,8 @@ public sealed class PaymentService : IPaymentService
         IUserVoucherRepository userVoucherRepository,
         IOptions<FrontendSettings> frontendSettings,
         ILogger<PaymentService> logger,
-        IVoucherRepository voucherRepository)
+        IVoucherRepository voucherRepository,
+        IMembershipService membershipService)
     {
         _paymentRepository = paymentRepository;
         _walletRepository = walletRepository;
@@ -57,6 +60,7 @@ public sealed class PaymentService : IPaymentService
         _frontendSettings = frontendSettings.Value;
         _logger = logger;
         _voucherRepository = voucherRepository;
+        _membershipService = membershipService;
     }
 
     public async Task<PaymentOperationResult> InitiatePaymentAsync(
@@ -638,6 +642,15 @@ public sealed class PaymentService : IPaymentService
 
         var qrCode = GenerateQRCode();
         await _bookingRepository.UpdateBookingQRCodeAsync(booking.BookingID, qrCode, cancellationToken);
+
+        if (booking.UserID.HasValue)
+        {
+            await _membershipService.AddPointsAfterPaymentSuccessAsync(
+                booking.UserID.Value,
+                booking.BookingID,
+                booking.FinalAmount,
+                cancellationToken);
+        }
     }
 
     private static string GenerateQRCode()

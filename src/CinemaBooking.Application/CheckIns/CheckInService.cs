@@ -135,6 +135,9 @@ public sealed class CheckInService : ICheckInService
         if (booking.Status == BookingStatus.Cancelled)
             return (false, "Booking has been cancelled.", null, null);
 
+        if (booking.Status == BookingStatus.NoShow)
+            return (false, "Booking has been marked as NoShow.", null, null);
+
         var hasCompletedRefund = booking.Refunds.Any(r => r.Status == "completed");
         if (hasCompletedRefund)
             return (false, "Ticket has been refunded.", null, null);

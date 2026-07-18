@@ -23,10 +23,6 @@ public interface IPersonRepository
         PersonUpdateData data,
         CancellationToken cancellationToken = default);
 
-    Task<bool> IsAssignedToAnyMovieAsync(
-        int personId,
-        CancellationToken cancellationToken = default);
-
     Task<List<string>> GetAssignedMovieTitlesAsync(
         int personId,
         CancellationToken cancellationToken = default);
