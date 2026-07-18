@@ -81,7 +81,7 @@ internal static class BookingEmailTemplate
     private static string OpenCard() => """
         <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
             <div style="background: #c62828; padding: 22px 32px; text-align: center;">
-                <span style="color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: 1px;">CGV Premium</span>
+                <span style="color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: 1px;">CV Premium</span>
             </div>
             <div style="padding: 32px 36px 24px;">
         """;
@@ -89,7 +89,7 @@ internal static class BookingEmailTemplate
     private static string CloseCard() => $"""
             </div>
             <div style="background: #f9f9f9; border-top: 1px solid #eeeeee; padding: 14px 36px; text-align: center;">
-                <p style="margin: 0 0 2px; font-size: 11px; color: #aaaaaa;">&copy; {DateTime.UtcNow.Year} CGV Premium. All rights reserved.</p>
+                <p style="margin: 0 0 2px; font-size: 11px; color: #aaaaaa;">&copy; {DateTime.UtcNow.Year} CV Premium. All rights reserved.</p>
             </div>
         </div>
         """;

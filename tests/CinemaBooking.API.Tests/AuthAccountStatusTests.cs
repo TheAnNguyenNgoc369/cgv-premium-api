@@ -93,7 +93,7 @@ public sealed class AuthAccountStatusTests
         };
         var token = new EmailVerificationToken
         {
-            Token = "verification-code",
+            Token = "123456",
             UserID = user.UserID,
             User = user,
             CreatedAt = DateTime.UtcNow,
@@ -183,6 +183,7 @@ public sealed class AuthAccountStatusTests
             return Task.CompletedTask;
         }
         public Task<bool> BarCodeExistsAsync(string barcode, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task<List<User>> GetUsersByRolesAsync(IEnumerable<string> roles, CancellationToken cancellationToken = default) => Task.FromResult(new List<User>());
 
         private static Task Unsupported() => throw new NotSupportedException();
         private static Task<T> Unsupported<T>() => throw new NotSupportedException();

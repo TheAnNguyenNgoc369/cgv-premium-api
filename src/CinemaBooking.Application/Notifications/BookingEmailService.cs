@@ -81,7 +81,7 @@ public sealed class BookingEmailService : IBookingEmailService
 
             await _emailQueue.EnqueueAsync(
                 booking.UserID, booking.User.Email, $"booking_confirmed:{booking.BookingID}", "booking_confirmed",
-                $"[CGV Premium] Booking confirmed successful - {booking.BookingCode}",
+                $"[CV Premium] Booking confirmed successful - {booking.BookingCode}",
                 html, images, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -118,7 +118,7 @@ public sealed class BookingEmailService : IBookingEmailService
 
             await _emailQueue.EnqueueAsync(
                 booking.UserID, booking.User.Email, $"refund_processed:{booking.BookingID}", "refund_processed",
-                $"[CGV Premium] Refund confirmed successful - Order number {booking.BookingCode}",
+                $"[CV Premium] Refund confirmed successful - Order number {booking.BookingCode}",
                 html, cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -278,6 +278,77 @@ public sealed class CheckInService : ICheckInService
             isStaff: false,
             cancellationToken);
 
+    public async Task<FnBPickupHistoryResult> GetFnBPickupHistoryAsync(
+        int? staffId,
+        int? cinemaId,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize,
+        int currentUserId,
+        bool isAdmin,
+        bool isManager,
+        bool isStaff,
+        CancellationToken cancellationToken = default)
+    {
+        if (isStaff && !isManager && !isAdmin)
+        {
+            staffId = currentUserId;
+            cinemaId = await _bookingRepository.GetStaffCinemaIdAsync(currentUserId, cancellationToken)
+                ?? -1;
+        }
+        else if (isManager && !isAdmin)
+        {
+            cinemaId = await _bookingRepository.GetStaffCinemaIdAsync(currentUserId, cancellationToken)
+                ?? -1;
+        }
+
+        var (bookings, totalCount) = await _bookingRepository.GetFnBPickupHistoryAsync(
+            staffId,
+            cinemaId,
+            from,
+            to,
+            page,
+            pageSize,
+            cancellationToken);
+
+        var records = bookings.Select(b =>
+        {
+            var pickedUpFnbItems = b.BookingFnBs
+                .Where(fnb => fnb.PickedUp && fnb.PickedUpAt != null)
+                .ToList();
+
+            var mostRecentPickup = pickedUpFnbItems
+                .OrderByDescending(fnb => fnb.PickedUpAt)
+                .FirstOrDefault();
+
+            return new FnBPickupHistoryResult.FnBPickupRecord
+            {
+                BookingId = b.BookingID,
+                BookingCode = b.BookingCode,
+                CustomerName = b.User?.FullName,
+                CinemaName = b.Showtime?.Room?.Cinema?.CinemaName ?? "N/A",
+                PickedUpAt = mostRecentPickup?.PickedUpAt ?? DateTime.MinValue,
+                StaffName = mostRecentPickup?.PickedUpByStaff?.FullName ?? "Unknown",
+                TotalAmount = b.FinalAmount,
+                Items = pickedUpFnbItems.Select(fnb => new FnBPickupHistoryResult.FnBPickupItemRecord
+                {
+                    ItemId = fnb.ItemID,
+                    ItemName = fnb.Product.ItemName,
+                    Quantity = fnb.Quantity,
+                    UnitPrice = fnb.UnitPrice,
+                    SubTotal = fnb.SubTotal
+                }).ToList()
+            };
+        }).ToList();
+
+        return new FnBPickupHistoryResult
+        {
+            Records = records,
+            TotalCount = totalCount
+        };
+    }
+
     public async Task<(bool Succeeded, string? ErrorMessage)> ConfirmFnBPickupAsync(
         string bookingCode,
         int staffId,

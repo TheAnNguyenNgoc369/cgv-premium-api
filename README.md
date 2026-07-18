@@ -51,7 +51,7 @@ Configuration follows the standard ASP.NET Core precedence order: environment va
 For local development, use .NET user secrets instead of committing credentials:
 
 ```powershell
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=(localdb)\mssqllocaldb;Database=CGVPremiumDB;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true" --project src/CinemaBooking.API
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=(localdb)\mssqllocaldb;Database=CVPremiumDB;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true" --project src/CinemaBooking.API
 dotnet user-secrets set "Jwt:SigningKey" "replace-with-a-random-key-at-least-32-characters" --project src/CinemaBooking.API
 dotnet user-secrets set "Email:FromAddress" "your-email@example.com" --project src/CinemaBooking.API
 dotnet user-secrets set "Email:Username" "your-email@example.com" --project src/CinemaBooking.API

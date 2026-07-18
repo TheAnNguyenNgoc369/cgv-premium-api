@@ -246,4 +246,66 @@ public sealed class CheckInsController : ControllerBase
 
         return Ok(new { success = true, data = response });
     }
+
+    [HttpGet("fnb-pickup-history")]
+    [Authorize(Roles = $"{Roles.Staff},{Roles.Manager},{Roles.Admin}")]
+    public async Task<IActionResult> GetFnBPickupHistory(
+        [FromQuery] FnBPickupHistoryRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(Roles.Staff)
+            && !User.IsInRole(Roles.Manager)
+            && !User.IsInRole(Roles.Admin))
+            return Forbid();
+
+        if (!ModelState.IsValid)
+        {
+            var error = ModelState
+                .Where(entry => entry.Value?.Errors.Count > 0)
+                .Select(entry => entry.Value!.Errors[0].ErrorMessage)
+                .FirstOrDefault() ?? "Invalid request.";
+
+            return BadRequest(new { success = false, message = error });
+        }
+
+        var result = await _checkInService.GetFnBPickupHistoryAsync(
+            request.StaffId,
+            request.CinemaId,
+            request.From,
+            request.To,
+            request.Page,
+            request.PageSize,
+            GetCurrentUserId(),
+            User.IsInRole(Roles.Admin),
+            User.IsInRole(Roles.Manager),
+            User.IsInRole(Roles.Staff),
+            cancellationToken);
+
+        var response = new FnBPickupHistoryResponse
+        {
+            Records = result.Records.Select(r => new FnBPickupHistoryResponse.FnBPickupRecord
+            {
+                BookingId = r.BookingId,
+                BookingCode = r.BookingCode,
+                CustomerName = r.CustomerName,
+                CinemaName = r.CinemaName,
+                PickedUpAt = r.PickedUpAt,
+                StaffName = r.StaffName,
+                TotalAmount = r.TotalAmount,
+                Items = r.Items.Select(i => new FnBPickupHistoryResponse.FnBPickupItem
+                {
+                    ItemId = i.ItemId,
+                    ItemName = i.ItemName,
+                    Quantity = i.Quantity,
+                    UnitPrice = i.UnitPrice,
+                    SubTotal = i.SubTotal
+                }).ToList()
+            }).ToList(),
+            TotalCount = result.TotalCount,
+            Page = request.Page,
+            PageSize = request.PageSize
+        };
+
+        return Ok(new { success = true, data = response });
+    }
 }

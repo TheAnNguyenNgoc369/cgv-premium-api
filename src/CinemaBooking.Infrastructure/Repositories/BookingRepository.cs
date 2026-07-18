@@ -252,6 +252,48 @@ public async Task<Booking?> GetBookingByIdAsync(
         return (bookings, totalCount);
     }
 
+    public async Task<(List<Booking> Bookings, int TotalCount)> GetFnBPickupHistoryAsync(
+        int? staffId,
+        int? cinemaId,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _db.Bookings
+            .Include(b => b.User)
+            .Include(b => b.Showtime!).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+            .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.Product)
+            .Include(b => b.BookingFnBs).ThenInclude(fnb => fnb.PickedUpByStaff)
+            .Where(b => b.BookingFnBs.Any(fnb => fnb.PickedUp && fnb.PickedUpAt != null));
+
+        if (staffId.HasValue)
+            query = query.Where(b => b.BookingFnBs.Any(fnb => fnb.PickedUp && fnb.PickedUpByStaffId == staffId.Value));
+
+        if (cinemaId.HasValue)
+            query = query.Where(b => b.Showtime!.Room.CinemaID == cinemaId.Value);
+
+        if (from.HasValue)
+            query = query.Where(b => b.BookingFnBs.Any(fnb => fnb.PickedUp && fnb.PickedUpAt >= from.Value));
+
+        if (to.HasValue)
+            query = query.Where(b => b.BookingFnBs.Any(fnb => fnb.PickedUp && fnb.PickedUpAt <= to.Value));
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var bookings = await query
+            .OrderByDescending(b => b.BookingFnBs
+                .Where(fnb => fnb.PickedUp && fnb.PickedUpAt != null)
+                .Max(fnb => fnb.PickedUpAt))
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+
+        return (bookings, totalCount);
+    }
+
     public async Task UpdateBookingQRCodeAsync(
         int bookingId,
         string qrCode,

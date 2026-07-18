@@ -760,6 +760,10 @@ public sealed class CheckInServiceTests
             throw new NotSupportedException();
         public Task<bool> UpdateBookingFnBPickupAsync(string bookingCode, int staffId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+        public Task<(List<Booking> Bookings, int TotalCount)> GetFnBPickupHistoryAsync(
+            int? staffId, int? cinemaId, DateTime? from, DateTime? to, int page, int pageSize,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     #endregion

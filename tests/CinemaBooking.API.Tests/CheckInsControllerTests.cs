@@ -558,6 +558,26 @@ public sealed class CheckInsControllerTests
             CapturedStaffId = staffId;
             return Task.FromResult(PickupResult);
         }
+
+        public Task<FnBPickupHistoryResult> GetFnBPickupHistoryAsync(
+            int? staffId,
+            int? cinemaId,
+            DateTime? from,
+            DateTime? to,
+            int page,
+            int pageSize,
+            int currentUserId,
+            bool isAdmin,
+            bool isManager,
+            bool isStaff,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new FnBPickupHistoryResult
+            {
+                Records = new List<FnBPickupHistoryResult.FnBPickupRecord>(),
+                TotalCount = 0
+            });
+        }
     }
 
     #endregion
