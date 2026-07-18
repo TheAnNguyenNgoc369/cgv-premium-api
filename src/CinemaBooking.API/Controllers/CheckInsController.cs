@@ -41,9 +41,6 @@ public sealed class CheckInsController : ControllerBase
             if (result.ErrorMessage == "Booking not found.")
                 return NotFound(new { success = false, message = result.ErrorMessage });
 
-            if (result.ErrorMessage == "You cannot check in tickets from another cinema.")
-                return StatusCode(403, new { success = false, message = result.ErrorMessage });
-
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
@@ -92,7 +89,9 @@ public sealed class CheckInsController : ControllerBase
                 Quantity = p.Quantity,
                 UnitPrice = p.UnitPrice,
                 Subtotal = p.Subtotal
-            }).ToList()
+            }).ToList(),
+            IsFromOtherCinema = result.Data.IsFromOtherCinema,
+            WarningMessage = result.Data.WarningMessage
         };
 
         return Ok(new { success = true, data = response });

@@ -594,25 +594,6 @@ public sealed class BookingService : IBookingService
         if (booking is null)
             return (false, "Booking not found.", null);
 
-        var staffCinemaId = await _bookingRepository.GetStaffCinemaIdAsync(staffId, cancellationToken);
-
-        if (staffCinemaId is null)
-            return (false, "You are not authorized to access this booking.", null);
-
-        int? bookingCinemaId = null;
-
-        if (booking.Showtime is not null)
-        {
-            bookingCinemaId = booking.Showtime.Room?.CinemaID;
-        }
-        else if (booking.CreatedByStaffID.HasValue)
-        {
-            bookingCinemaId = booking.CreatedByStaff?.CinemaID;
-        }
-
-        if (!bookingCinemaId.HasValue || bookingCinemaId.Value != staffCinemaId.Value)
-            return (false, "You are not authorized to access this booking.", null);
-
         if (booking.Status == BookingStatus.Cancelled)
             return (false, "Booking has been cancelled.", null);
 

@@ -2,6 +2,7 @@ using CinemaBooking.Application.CheckIns;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
+using System;
 
 namespace CinemaBooking.API.Tests;
 
@@ -70,7 +71,7 @@ public sealed class CheckInServiceTests
     }
 
     [Fact]
-    public async Task LookupAsync_StaffFromDifferentCinema_ReturnsFailure()
+    public async Task LookupAsync_StaffFromDifferentCinema_ReturnsSuccessWithWarning()
     {
         var ticket = CreateValidTicket();
         var ticketRepo = new StubTicketRepository { TicketToReturn = ticket };
@@ -79,8 +80,12 @@ public sealed class CheckInServiceTests
 
         var result = await service.LookupAsync("QR123", staffId: 1);
 
-        Assert.False(result.Succeeded);
-        Assert.Equal("You cannot check in tickets from another cinema.", result.ErrorMessage);
+        Assert.True(result.Succeeded);
+        Assert.Null(result.ErrorMessage);
+        Assert.NotNull(result.Data);
+        Assert.True(result.Data.IsFromOtherCinema);
+        Assert.NotNull(result.Data.WarningMessage);
+        Assert.Contains("another cinema", result.Data.WarningMessage!, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -105,6 +110,8 @@ public sealed class CheckInServiceTests
         Assert.Single(result.Data.Seats);
         Assert.Equal("A", result.Data.Seats[0].Row);
         Assert.Equal(1, result.Data.Seats[0].Column);
+        Assert.False(result.Data.IsFromOtherCinema);
+        Assert.Null(result.Data.WarningMessage);
     }
 
     [Fact]

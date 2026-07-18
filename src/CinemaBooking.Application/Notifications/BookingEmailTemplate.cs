@@ -15,7 +15,8 @@ internal static class BookingEmailTemplate
         string roomName,
         string amount,
         string paymentMethod,
-        string ticketsHtml) => $"""
+        string ticketsHtml,
+        string bookingBarcodeContentId) => $"""
         {OpenCard()}
             <p style="margin: 0 0 6px; color: #111111; font-size: 20px; font-weight: 700;">Ticket booking confirmed</p>
             <p style="margin: 0 0 24px; color: #555555; font-size: 14px; line-height: 1.6;">
@@ -27,6 +28,13 @@ internal static class BookingEmailTemplate
             {DetailRow("Showtime", Encode(showtime))}
             {DetailRow("Cinema", $"{Encode(cinemaName)} - {Encode(roomName)}")}
             {DetailRow("Payment", $"{Encode(amount)} VND - {Encode(paymentMethod)}")}
+            <p style="margin: 24px 0 8px; color: #111111; font-size: 16px; font-weight: 700;">Booking barcode</p>
+            <div style="text-align: center; margin-bottom: 24px;">
+                <div style="display: inline-block; padding: 20px 28px; background: #ffffff; border: 1px solid #e8e8e8; border-radius: 8px;">
+                    <img src="cid:{Encode(bookingBarcodeContentId)}" alt="Booking code barcode {Encode(bookingCode)}" width="280" height="80" style="display: block; margin: 0 auto 12px;" />
+                    <p style="margin: 0; color: #666666; font-family: Consolas, 'Courier New', monospace; font-size: 14px; font-weight: 500; letter-spacing: 4px;">{Encode(bookingCode)}</p>
+                </div>
+            </div>
             <p style="margin: 24px 0 8px; color: #111111; font-size: 16px; font-weight: 700;">Digital ticket</p>
             <div style="text-align: center;">{ticketsHtml}</div>
             {Notice("Each QR code is valid for only one ticket and one check-in.")}
