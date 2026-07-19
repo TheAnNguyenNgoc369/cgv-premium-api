@@ -46,11 +46,11 @@ public sealed class ReviewService : IReviewService
             return new CreateReviewResult(false, "You do not own this booking.", null, "forbidden");
         }
 
-        // 3. Booking.Status == Paid.
-        // 4. Booking is NOT cancelled/refunded/partially_refunded/no_show.
-        if (booking.Status != BookingStatus.Paid)
+        // 3. Booking.Status == Used.
+        // 4. Booking is NOT paid/cancelled/refunded/partially_refunded/no_show.
+        if (booking.Status != BookingStatus.Used)
         {
-            return new CreateReviewResult(false, "Booking is not eligible for review.", null, "invalid_state");
+            return new CreateReviewResult(false, "You can only review a movie after attending the show.", null, "invalid_state");
         }
 
         // 5. Showtime has ended.
