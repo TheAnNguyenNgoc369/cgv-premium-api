@@ -96,7 +96,8 @@ public static class DependencyInjection
         services.Configure<MovieAnalyticsSettings>(configuration.GetSection(MovieAnalyticsSettings.SectionName));
         services.Configure<VoucherExpirySettings>(configuration.GetSection(VoucherExpirySettings.SectionName));
         services.Configure<GeminiSettings>(configuration.GetSection(GeminiSettings.SectionName));
-        services.AddHttpClient<IAIService, GeminiService>();
+        services.AddHttpClient();
+        services.AddScoped<IAIService, GeminiService>();
         services.AddScoped<IRecommendationEngine, RecommendationEngine>();
         services.AddSingleton<ISafetyFilter, SafetyFilter>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
