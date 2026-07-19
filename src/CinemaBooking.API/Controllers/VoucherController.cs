@@ -98,13 +98,32 @@ public sealed class VoucherController : ControllerBase
         var result = await _service.GetUserVouchersAsync(userId, ct);
         if (!result.Succeeded) return BadRequest(new { success = false, message = result.Error });
 
+        // Group by VoucherID so a customer with N copies of the same voucher sees one card
+        // with Quantity=N instead of N duplicate cards. Only USABLE copies (Available and
+        // not past ExpiredAt) count toward Quantity; groups with zero usable copies are
+        // dropped entirely. Redemption still operates on individual UserVoucher rows via
+        // (UserID, VoucherID) — the underlying rows are unchanged.
+        var now = DateTime.UtcNow;
+        var grouped = result.Vouchers
+            .Where(uv => uv.Status == UserVoucherStatus.Available && uv.ExpiredAt >= now)
+            .GroupBy(uv => uv.VoucherID)
+            .Select(g =>
+            {
+                var representative = g.OrderByDescending(uv => uv.RedeemedAt).First();
+                return (representative, quantity: g.Count());
+            })
+            .OrderByDescending(x => x.representative.RedeemedAt)
+            .ToList();
+
         var (movieNames, cinemaNames, tierNames) = await BuildRuleNameLookupsAsync(
-            result.Vouchers.Select(uv => uv.Voucher), ct);
+            grouped.Select(x => x.representative.Voucher), ct);
 
         return Ok(new
         {
             success = true,
-            vouchers = result.Vouchers.Select(uv => MapUserVoucher(uv, movieNames, cinemaNames, tierNames)).ToList()
+            vouchers = grouped
+                .Select(x => MapUserVoucher(x.representative, x.quantity, movieNames, cinemaNames, tierNames))
+                .ToList()
         });
     }
 
@@ -244,13 +263,28 @@ public sealed class VoucherController : ControllerBase
     };
     private static UserVoucherResponse MapUserVoucher(
         UserVoucher uv,
+        int quantity,
         Dictionary<int, string> movieNames,
         Dictionary<int, string> cinemaNames,
-        Dictionary<int, string> tierNames) => new(uv.UserVoucherID, uv.VoucherID,
-        uv.Voucher.VoucherCode, uv.Voucher.DiscountType, uv.Voucher.DiscountValue, uv.Status,
-        VietnamTime.FromUtc(uv.RedeemedAt), VietnamTime.FromUtc(uv.ExpiredAt),
-        uv.UsedAt.HasValue ? VietnamTime.FromUtc(uv.UsedAt.Value) : null, uv.Voucher.ImageURL,
-        MapVoucherRules(uv.Voucher, movieNames, cinemaNames, tierNames));
+        Dictionary<int, string> tierNames) => new(
+        // Voucher information
+        uv.VoucherID,
+        uv.Voucher.VoucherCode,
+        uv.Voucher.DiscountType,
+        uv.Voucher.DiscountValue,
+
+        // Display information
+        uv.Voucher.ImageURL,
+        MapVoucherRules(uv.Voucher, movieNames, cinemaNames, tierNames),
+
+        // Ownership information
+        quantity,
+        uv.Status,
+
+        // Lifecycle
+        VietnamTime.FromUtc(uv.RedeemedAt),
+        VietnamTime.FromUtc(uv.ExpiredAt),
+        uv.UsedAt.HasValue ? VietnamTime.FromUtc(uv.UsedAt.Value) : null);
     private static string Status(Voucher v, DateTime currentTime)
     {
         if (!v.IsActive) return "DISABLED";

@@ -63,15 +63,22 @@ public sealed record RedeemVoucherResponse(
     string? Message = null);
 
 public sealed record UserVoucherResponse(
-    int UserVoucherId,
+    // Voucher information
     int VoucherId,
     string VoucherCode,
     string DiscountType,
     decimal DiscountValue,
+
+    // Display information
+    string? ImageUrl,
+    List<RedeemableVoucherRuleResponse> VoucherRules,
+
+    // Ownership information
+    int Quantity,
     string Status,
+
+    // Lifecycle
     DateTimeOffset RedeemedAt,
     DateTimeOffset ExpiredAt,
-    DateTimeOffset? UsedAt,
-    string? ImageUrl,
-    List<RedeemableVoucherRuleResponse> VoucherRules);
+    DateTimeOffset? UsedAt);
 
