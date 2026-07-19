@@ -35,6 +35,12 @@ public sealed record VoucherResponse(int VoucherId, string VoucherCode, string D
     List<VoucherRuleResponse>? Rules, bool IsRedeemable, int? RequiredPoints, int? ExchangeLimit);
 public sealed record VoucherPageResponse(IReadOnlyList<VoucherResponse> Items, int PageIndex, int PageSize, int TotalItems, int TotalPages);
 
+public sealed record RedeemableVoucherRuleResponse(
+    string RuleType,
+    string Operator,
+    string RuleValue,
+    string DisplayText);
+
 public sealed record RedeemableVoucherResponse(
     int VoucherId,
     string VoucherCode,
@@ -45,7 +51,8 @@ public sealed record RedeemableVoucherResponse(
     DateTimeOffset ValidFrom,
     DateTimeOffset ValidUntil,
     string? ImageUrl,
-    string? Description);
+    string? Description,
+    List<RedeemableVoucherRuleResponse> VoucherRules);
 
 public sealed record RedeemVoucherRequest(int VoucherId);
 

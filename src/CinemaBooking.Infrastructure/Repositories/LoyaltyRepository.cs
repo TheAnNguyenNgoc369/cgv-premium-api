@@ -225,4 +225,12 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
                          && lp.TransactionType == LoyaltyTransactionTypes.Earned,
                       cancellationToken);
     }
+
+    public async Task<List<LoyaltyTier>> GetTiersByIdsAsync(List<int> tierIds, CancellationToken cancellationToken = default)
+    {
+        return await _db.LoyaltyTiers
+            .AsNoTracking()
+            .Where(t => tierIds.Contains(t.TierID))
+            .ToListAsync(cancellationToken);
+    }
 }

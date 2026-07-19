@@ -49,4 +49,8 @@ public interface ICinemaRepository
         int cinemaId,
         DateTime updatedAt,
         CancellationToken cancellationToken = default);
+
+    Task<List<Cinema>> GetCinemasByIdsAsync(
+        List<int> cinemaIds,
+        CancellationToken cancellationToken = default);
 }
