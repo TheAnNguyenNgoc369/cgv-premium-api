@@ -78,10 +78,20 @@ public static class DependencyInjection
         services.AddHostedService<ShowtimeCompletionJob>();
         services.AddHostedService<EmailDeliveryJob>();
         services.AddHostedService<NotificationOutboxJob>();
-        services.Configure<HostOptions>(options =>
-        {
-            options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
-        });
+        
+        // Notification trigger jobs
+        services.AddHostedService<DailySummaryJob>();
+        services.AddHostedService<RevenueMonitorJob>();
+        services.AddHostedService<ShowtimeReminderJob>();
+        services.AddHostedService<LowOccupancyShowtimeJob>();
+        services.AddHostedService<MovieAnalyticsJob>();
+        services.AddHostedService<VoucherExpiryJob>();
+        services.AddHostedService<PaymentMonitorJob>();
+        services.AddHostedService<NewCustomerSummaryJob>();
+        
+        services.Configure<LowOccupancySettings>(configuration.GetSection(LowOccupancySettings.SectionName));
+        services.Configure<MovieAnalyticsSettings>(configuration.GetSection(MovieAnalyticsSettings.SectionName));
+        services.Configure<VoucherExpirySettings>(configuration.GetSection(VoucherExpirySettings.SectionName));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScopedByConvention(typeof(DependencyInjection).Assembly, "Repository");
 

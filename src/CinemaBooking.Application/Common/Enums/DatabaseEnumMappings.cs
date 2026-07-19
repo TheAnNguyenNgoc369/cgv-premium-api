@@ -11,7 +11,7 @@ public static class DatabaseEnumMappings
     public static readonly IReadOnlyDictionary<string, string> ShowtimeStatuses =
         EnumValueMapper.CreateMappings("scheduled", "completed", "cancelled");
     public static readonly IReadOnlyDictionary<string, string> RoomStatuses =
-        EnumValueMapper.CreateMappings("active", "maintenance", "inactive");
+        EnumValueMapper.CreateMappings("active", "inactive");
     public static readonly IReadOnlyDictionary<string, string> RoomTypes =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {

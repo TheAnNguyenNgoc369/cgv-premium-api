@@ -4,6 +4,7 @@ using CinemaBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CinemaBooking.Infrastructure.Migrations
 {
     [DbContext(typeof(CinemaBookingDbContext))]
-    partial class CinemaBookingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260718141736_AddNotificationOutboxMessageAndTypes")]
+    partial class AddNotificationOutboxMessageAndTypes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -175,7 +178,7 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                             t.HasCheckConstraint("CK_Booking_Points", "ISNULL([PointsEarned],0) >= 0 AND ISNULL([PointsRedeemed],0) >= 0");
 
-                            t.HasCheckConstraint("CK_Booking_Status", "[Status] IN ('pending', 'paid', 'cancelled', 'refunded', 'used', 'expired', 'payment_failed', 'partially_refunded', 'no_show')");
+                            t.HasCheckConstraint("CK_Booking_Status", "[Status] IN ('pending', 'paid', 'cancelled', 'refunded', 'used', 'expired', 'payment_failed', 'partially_refunded')");
                         });
                 });
 
@@ -799,71 +802,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                         });
                 });
 
-            modelBuilder.Entity("CinemaBooking.Domain.Entities.MovieReview", b =>
-                {
-                    b.Property<int>("ReviewId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ReviewId"));
-
-                    b.Property<int>("BookingId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Comment")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("HiddenAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("HiddenBy")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsHidden")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false);
-
-                    b.Property<int>("MovieId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("Rating")
-                        .HasColumnType("int");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("ReviewId");
-
-                    b.HasIndex("BookingId")
-                        .IsUnique()
-                        .HasDatabaseName("UQ_MovieReviews_BookingId");
-
-                    b.HasIndex("HiddenBy");
-
-                    b.HasIndex("IsHidden")
-                        .HasDatabaseName("IX_MovieReviews_IsHidden");
-
-                    b.HasIndex("MovieId")
-                        .HasDatabaseName("IX_MovieReviews_MovieId");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("IX_MovieReviews_UserId");
-
-                    b.HasIndex("UserId", "MovieId")
-                        .IsUnique()
-                        .HasDatabaseName("UQ_MovieReviews_UserId_MovieId");
-
-                    b.ToTable("MovieReviews", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_MovieReviews_Rating", "[Rating] BETWEEN 1 AND 5");
-                        });
-                });
-
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Notification", b =>
                 {
                     b.Property<int>("NotificationID")
@@ -940,7 +878,7 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.ToTable("Notification", null, t =>
                         {
-                            t.HasCheckConstraint("CK_Notification_Type", "[Type] IN ('booking', 'payment', 'refund', 'promotion', 'system', 'account', 'analytics', 'report', 'movie', 'showtime')");
+                            t.HasCheckConstraint("CK_Notification_Type", "[Type] IN ('booking', 'payment', 'refund', 'promotion', 'system', 'account')");
                         });
                 });
 
@@ -1353,47 +1291,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                             t.HasCheckConstraint("CK_Refund_Amount", "[Amount] >= 0");
 
                             t.HasCheckConstraint("CK_Refund_Status", "[Status] IN ('pending', 'approved', 'rejected', 'processing', 'completed', 'failed')");
-                        });
-                });
-
-            modelBuilder.Entity("CinemaBooking.Domain.Entities.ReviewRewardSettings", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("FirstReviewPoints")
-                        .HasColumnType("int");
-
-                    b.Property<int>("NextReviewPoints")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("UpdatedBy")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UpdatedBy");
-
-                    b.ToTable("ReviewRewardSettings", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_ReviewRewardSettings_FirstReviewPoints", "[FirstReviewPoints] >= 0");
-
-                            t.HasCheckConstraint("CK_ReviewRewardSettings_NextReviewPoints", "[NextReviewPoints] >= 0");
-                        });
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            FirstReviewPoints = 50,
-                            NextReviewPoints = 10,
-                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });
 
@@ -2455,44 +2352,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Navigation("Person");
                 });
 
-            modelBuilder.Entity("CinemaBooking.Domain.Entities.MovieReview", b =>
-                {
-                    b.HasOne("CinemaBooking.Domain.Entities.Booking", "Booking")
-                        .WithOne("Review")
-                        .HasForeignKey("CinemaBooking.Domain.Entities.MovieReview", "BookingId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired()
-                        .HasConstraintName("FK_MovieReviews_Bookings");
-
-                    b.HasOne("CinemaBooking.Domain.Entities.User", "HiddenByUser")
-                        .WithMany()
-                        .HasForeignKey("HiddenBy")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .HasConstraintName("FK_MovieReviews_HiddenByUsers");
-
-                    b.HasOne("CinemaBooking.Domain.Entities.Movie", "Movie")
-                        .WithMany("Reviews")
-                        .HasForeignKey("MovieId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired()
-                        .HasConstraintName("FK_MovieReviews_Movies");
-
-                    b.HasOne("CinemaBooking.Domain.Entities.User", "User")
-                        .WithMany("Reviews")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired()
-                        .HasConstraintName("FK_MovieReviews_Users");
-
-                    b.Navigation("Booking");
-
-                    b.Navigation("HiddenByUser");
-
-                    b.Navigation("Movie");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Notification", b =>
                 {
                     b.HasOne("CinemaBooking.Domain.Entities.User", "User")
@@ -2583,17 +2442,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Navigation("ProcessedByUser");
 
                     b.Navigation("Wallet");
-                });
-
-            modelBuilder.Entity("CinemaBooking.Domain.Entities.ReviewRewardSettings", b =>
-                {
-                    b.HasOne("CinemaBooking.Domain.Entities.User", "UpdatedByUser")
-                        .WithMany()
-                        .HasForeignKey("UpdatedBy")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .HasConstraintName("FK_ReviewRewardSettings_Users");
-
-                    b.Navigation("UpdatedByUser");
                 });
 
             modelBuilder.Entity("CinemaBooking.Domain.Entities.Room", b =>
@@ -2861,8 +2709,6 @@ namespace CinemaBooking.Infrastructure.Migrations
 
                     b.Navigation("Refunds");
 
-                    b.Navigation("Review");
-
                     b.Navigation("SeatHolds");
 
                     b.Navigation("WalletTransactions");
@@ -2895,8 +2741,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Navigation("MovieGenres");
 
                     b.Navigation("MoviePersons");
-
-                    b.Navigation("Reviews");
 
                     b.Navigation("Showtimes");
                 });
@@ -2980,8 +2824,6 @@ namespace CinemaBooking.Infrastructure.Migrations
                     b.Navigation("PasswordResetTokens");
 
                     b.Navigation("ProcessedRefunds");
-
-                    b.Navigation("Reviews");
 
                     b.Navigation("SeatHolds");
 

@@ -106,7 +106,7 @@ public static class DependencyInjection
                         }
                     }
 
-                    return new BadRequestObjectResult(new ValidationProblemDetails(context.ModelState));
+                    return new BadRequestObjectResult(new { success = false, message = "Invalid request data. Please check the input fields." });
                 };
             });
 

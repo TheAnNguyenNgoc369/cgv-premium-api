@@ -3,16 +3,19 @@ using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
 using CinemaBooking.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace CinemaBooking.Infrastructure.Repositories;
 
 public sealed class TicketRepository : ITicketRepository
 {
     private readonly CinemaBookingDbContext _db;
+    private readonly ILogger<TicketRepository> _logger;
 
-    public TicketRepository(CinemaBookingDbContext db)
+    public TicketRepository(CinemaBookingDbContext db, ILogger<TicketRepository> logger)
     {
         _db = db;
+        _logger = logger;
     }
 
     public async Task<Ticket> CreateTicketAsync(
@@ -211,7 +214,7 @@ public sealed class TicketRepository : ITicketRepository
             catch (Exception ex)
             {
                 await transaction.RollbackAsync(cancellationToken);
-                Console.WriteLine($"Check-in failed: {ex.Message}");
+                _logger.LogError(ex, "Check-in failed for ticket {TicketId}, booking {BookingId}", ticketId, bookingId);
                 throw;
             }
         });

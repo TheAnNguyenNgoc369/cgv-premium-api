@@ -31,6 +31,6 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
             .HasForeignKey(n => n.UserID)
             .HasConstraintName("FK_Notification_Users");
 
-        builder.ToTable(t => t.HasCheckConstraint("CK_Notification_Type", "[Type] IN ('booking', 'payment', 'refund', 'promotion', 'system', 'account')"));
+        builder.ToTable(t => t.HasCheckConstraint("CK_Notification_Type", "[Type] IN ('booking', 'payment', 'refund', 'promotion', 'system', 'account', 'analytics', 'report', 'movie', 'showtime')"));
     }
 }

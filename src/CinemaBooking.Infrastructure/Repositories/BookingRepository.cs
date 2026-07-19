@@ -25,6 +25,28 @@ public sealed class BookingRepository : IBookingRepository
             .FirstOrDefaultAsync(s => s.ShowtimeID == showtimeId, cancellationToken);
     }
 
+    public async Task<(int TotalSeats, int BookedSeats)> GetShowtimeOccupancyAsync(
+        int showtimeId,
+        CancellationToken cancellationToken = default)
+    {
+        var showtime = await _db.Showtimes
+            .Include(s => s.Room)
+                .ThenInclude(r => r.Seats)
+            .FirstOrDefaultAsync(s => s.ShowtimeID == showtimeId, cancellationToken);
+
+        if (showtime is null || showtime.Room is null)
+            return (0, 0);
+
+        var totalSeats = showtime.Room.Seats.Count(s => s.Status == "active" && !s.IsGap);
+        var bookedSeats = await _db.SeatHolds
+            .Where(h => h.ShowtimeID == showtimeId && h.Status == "confirmed")
+            .Select(h => h.SeatID)
+            .Distinct()
+            .CountAsync(cancellationToken);
+
+        return (totalSeats, bookedSeats);
+    }
+
     public async Task<List<Seat>> GetSeatsByIdsAsync(
         List<int> seatIds,
         CancellationToken cancellationToken = default)

@@ -625,6 +625,21 @@ public sealed class PaymentService : IPaymentService
 
     private async Task FinalizeSuccessfulBookingAsync(Booking booking, CancellationToken cancellationToken)
     {
+        if (booking.ShowtimeID.HasValue)
+        {
+            var (totalSeats, bookedSeats) = await _bookingRepository.GetShowtimeOccupancyAsync(
+                booking.ShowtimeID.Value, cancellationToken);
+            
+            // Check if showtime just became sold out (was not sold out before, now is)
+            if (totalSeats > 0 && bookedSeats >= totalSeats)
+            {
+                await _notificationOutbox.EnqueueShowtimeSoldOutAsync(
+                    booking.ShowtimeID.Value,
+                    $"Showtime for {booking.Showtime?.Movie?.Title ?? "Movie"} has sold out.",
+                    cancellationToken);
+            }
+        }
+
         await _bookingRepository.UpdateBookingStatusAsync(
             booking.BookingID, BookingStatus.Paid, cancellationToken);
 
