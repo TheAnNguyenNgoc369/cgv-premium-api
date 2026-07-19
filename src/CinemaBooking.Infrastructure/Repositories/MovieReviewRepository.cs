@@ -129,4 +129,91 @@ public sealed class MovieReviewRepository : IMovieReviewRepository
                 r.User!.AvatarURL))
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<(int? ReviewId, bool HasReview)> GetBookingReviewLookupAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default)
+    {
+        var reviewId = await _db.MovieReviews
+            .AsNoTracking()
+            .Where(r => r.BookingId == bookingId)
+            .Select(r => (int?)r.ReviewId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return (reviewId, reviewId.HasValue);
+    }
+
+    public async Task<IReadOnlyDictionary<int, int>> GetReviewIdsByBookingIdsAsync(
+        IReadOnlyCollection<int> bookingIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (bookingIds.Count == 0)
+        {
+            return new Dictionary<int, int>();
+        }
+
+        var rows = await _db.MovieReviews
+            .AsNoTracking()
+            .Where(r => bookingIds.Contains(r.BookingId))
+            .Select(r => new { r.BookingId, r.ReviewId })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(x => x.BookingId, x => x.ReviewId);
+    }
+
+    public async Task<(IReadOnlyList<AdminReviewListItem> Items, int Total)> SearchAdminReviewsAsync(
+        string? keyword,
+        int? movieId,
+        AdminReviewStatusFilter status,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _db.MovieReviews.AsNoTracking().AsQueryable();
+
+        if (status == AdminReviewStatusFilter.Active)
+        {
+            query = query.Where(r => !r.IsHidden);
+        }
+        else if (status == AdminReviewStatusFilter.Hidden)
+        {
+            query = query.Where(r => r.IsHidden);
+        }
+
+        if (movieId.HasValue)
+        {
+            query = query.Where(r => r.MovieId == movieId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var pattern = $"%{keyword.Trim()}%";
+            query = query.Where(r =>
+                EF.Functions.Like(r.User!.FullName, pattern)
+                || EF.Functions.Like(r.Movie!.Title, pattern));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(r => r.CreatedAt)
+            .ThenByDescending(r => r.ReviewId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(r => new AdminReviewListItem(
+                r.ReviewId,
+                r.MovieId,
+                r.Movie!.Title,
+                r.UserId,
+                r.User!.FullName,
+                r.User!.AvatarURL,
+                r.Rating,
+                r.Comment,
+                r.IsHidden,
+                r.CreatedAt,
+                r.HiddenAt))
+            .ToListAsync(cancellationToken);
+
+        return (items, total);
+    }
 }

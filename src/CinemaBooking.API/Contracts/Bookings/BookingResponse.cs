@@ -1,4 +1,4 @@
-﻿namespace CinemaBooking.API.Contracts.Bookings;
+namespace CinemaBooking.API.Contracts.Bookings;
 
 public sealed record HoldSeatsResponse(
     List<int> HoldIds,
@@ -20,7 +20,9 @@ public sealed record BookingResponse(
     DateTime BookingDate,
     List<BookingSeatResponse> Seats,
     List<BookingFnBResponse> FnbItems,
-    BookingVoucherResponse? VoucherApplied
+    BookingVoucherResponse? VoucherApplied,
+    bool HasReviewed,
+    int? ReviewId
 );
 
 public sealed record MyBookingResponse(
@@ -38,7 +40,9 @@ public sealed record MyBookingResponse(
     DateTime BookingDate,
     List<BookingSeatResponse> Seats,
     List<BookingFnBResponse> FnbItems,
-    BookingVoucherResponse? VoucherApplied
+    BookingVoucherResponse? VoucherApplied,
+    bool HasReviewed,
+    int? ReviewId
 );
 
 public sealed record BookingMovieResponse(

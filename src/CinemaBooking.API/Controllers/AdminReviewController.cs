@@ -17,6 +17,59 @@ public sealed class AdminReviewController : ControllerBase
         _reviewService = reviewService;
     }
 
+    [HttpGet]
+    public async Task<IActionResult> Search(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? keyword = null,
+        [FromQuery] int? movieId = null,
+        [FromQuery] string? status = null,
+        CancellationToken cancellationToken = default)
+    {
+        var statusFilter = (status?.Trim().ToLowerInvariant()) switch
+        {
+            "active" => AdminReviewStatusFilter.Active,
+            "hidden" => AdminReviewStatusFilter.Hidden,
+            null or "" or "all" => AdminReviewStatusFilter.All,
+            _ => (AdminReviewStatusFilter?)null
+        };
+
+        if (statusFilter is null)
+        {
+            return BadRequest(new { success = false, message = "status must be 'active', 'hidden', or 'all'." });
+        }
+
+        var result = await _reviewService.SearchAdminReviewsAsync(
+            keyword,
+            movieId,
+            statusFilter.Value,
+            page,
+            pageSize,
+            cancellationToken);
+
+        return Ok(new
+        {
+            items = result.Items.Select(i => new
+            {
+                reviewId = i.ReviewId,
+                movieId = i.MovieId,
+                movieTitle = i.MovieTitle,
+                userId = i.UserId,
+                customerName = i.CustomerName,
+                customerAvatar = i.CustomerAvatar,
+                rating = i.Rating,
+                comment = i.Comment,
+                isHidden = i.IsHidden,
+                createdAt = i.CreatedAt,
+                hiddenAt = i.HiddenAt
+            }),
+            page = result.Page,
+            pageSize = result.PageSize,
+            totalItems = result.TotalItems,
+            totalPages = result.TotalPages
+        });
+    }
+
     [HttpPatch("{reviewId:int}/hide")]
     public async Task<IActionResult> Hide(int reviewId, CancellationToken cancellationToken)
     {

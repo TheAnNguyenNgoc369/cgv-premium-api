@@ -28,4 +28,20 @@ public interface IMovieReviewRepository
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);
+
+    Task<(int? ReviewId, bool HasReview)> GetBookingReviewLookupAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyDictionary<int, int>> GetReviewIdsByBookingIdsAsync(
+        IReadOnlyCollection<int> bookingIds,
+        CancellationToken cancellationToken = default);
+
+    Task<(IReadOnlyList<AdminReviewListItem> Items, int Total)> SearchAdminReviewsAsync(
+        string? keyword,
+        int? movieId,
+        AdminReviewStatusFilter status,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
 }

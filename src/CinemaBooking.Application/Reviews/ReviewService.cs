@@ -229,4 +229,35 @@ public sealed class ReviewService : IReviewService
         await _reviewRepository.UpdateAsync(review, cancellationToken);
         return new HideReviewResult(true, null);
     }
+
+    public async Task<AdminReviewPage> SearchAdminReviewsAsync(
+        string? keyword,
+        int? movieId,
+        AdminReviewStatusFilter status,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedPage = page < 1 ? 1 : page;
+        var normalizedPageSize = pageSize switch
+        {
+            < 1 => 10,
+            > 50 => 50,
+            _ => pageSize
+        };
+
+        var (items, total) = await _reviewRepository.SearchAdminReviewsAsync(
+            keyword,
+            movieId,
+            status,
+            normalizedPage,
+            normalizedPageSize,
+            cancellationToken);
+
+        var totalPages = normalizedPageSize == 0
+            ? 0
+            : (int)Math.Ceiling(total / (double)normalizedPageSize);
+
+        return new AdminReviewPage(items, normalizedPage, normalizedPageSize, total, totalPages);
+    }
 }

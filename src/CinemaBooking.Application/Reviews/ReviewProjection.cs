@@ -22,3 +22,30 @@ public sealed record MovieReviewPage(
     IReadOnlyList<ReviewListItem> Items,
     int Page,
     int PageSize);
+
+public sealed record AdminReviewListItem(
+    int ReviewId,
+    int MovieId,
+    string MovieTitle,
+    int UserId,
+    string CustomerName,
+    string? CustomerAvatar,
+    int Rating,
+    string? Comment,
+    bool IsHidden,
+    DateTime CreatedAt,
+    DateTime? HiddenAt);
+
+public sealed record AdminReviewPage(
+    IReadOnlyList<AdminReviewListItem> Items,
+    int Page,
+    int PageSize,
+    int TotalItems,
+    int TotalPages);
+
+public enum AdminReviewStatusFilter
+{
+    All,
+    Active,
+    Hidden
+}
