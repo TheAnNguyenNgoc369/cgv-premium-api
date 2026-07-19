@@ -62,8 +62,7 @@ if (runSeeder && !isProduction)
     logger.LogInformation("Database seeder completed.");
 }
 
-app.UseSwagger();
-app.UseSwaggerUI(c =>
+if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
