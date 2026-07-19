@@ -1,3 +1,4 @@
+using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
 using CinemaBooking.Shared.Constants;
 using System.Data;
@@ -51,6 +52,7 @@ public sealed class ShowtimeCompletionJob : BackgroundService
         var strategy = strategyContext.Database.CreateExecutionStrategy();
         var completedShowtimeCount = 0;
         var noShowMarkedCount = 0;
+        var processedBookingCount = 0;
 
         await strategy.ExecuteAsync(async () =>
         {
@@ -145,7 +147,7 @@ public sealed class ShowtimeCompletionJob : BackgroundService
     {
         var noShowCandidates = await dbContext.Bookings
             .Where(booking => booking.Status == BookingStatus.Paid
-                && booking.Showtime.Status == "completed"
+                && booking.Showtime!.Status == "completed"
                 && !booking.BookingSeats.Any(seat =>
                     seat.Ticket != null && seat.Ticket.Status == TicketStatus.Used))
             .ToListAsync(cancellationToken);
