@@ -1,5 +1,6 @@
 using System.Reflection;
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Features.AI;
 using CinemaBooking.Infrastructure.Configuration;
 using CinemaBooking.Infrastructure.Email;
 using CinemaBooking.Infrastructure.Persistence;
@@ -18,6 +19,8 @@ using CinemaBooking.Application.ActivityLogs;
 using CinemaBooking.Infrastructure.ActivityLogs;
 using CinemaBooking.Application.Notifications;
 using CinemaBooking.Infrastructure.Notifications;
+using CinemaBooking.Infrastructure.Services;
+using CinemaBooking.Shared.Configuration;
 
 namespace CinemaBooking.Infrastructure;
 
@@ -92,6 +95,10 @@ public static class DependencyInjection
         services.Configure<LowOccupancySettings>(configuration.GetSection(LowOccupancySettings.SectionName));
         services.Configure<MovieAnalyticsSettings>(configuration.GetSection(MovieAnalyticsSettings.SectionName));
         services.Configure<VoucherExpirySettings>(configuration.GetSection(VoucherExpirySettings.SectionName));
+        services.Configure<GeminiSettings>(configuration.GetSection(GeminiSettings.SectionName));
+        services.AddHttpClient<IAIService, GeminiService>();
+        services.AddScoped<IRecommendationEngine, RecommendationEngine>();
+        services.AddSingleton<ISafetyFilter, SafetyFilter>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScopedByConvention(typeof(DependencyInjection).Assembly, "Repository");
 

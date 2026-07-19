@@ -1,4 +1,6 @@
 using System.Reflection;
+using CinemaBooking.Application.Features.AI;
+using CinemaBooking.Application.Features.AI.DTOs;
 using CinemaBooking.Application.Vouchers.RuleEngine;
 using CinemaBooking.Application.Vouchers.RuleEngine.Metadata;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +16,11 @@ public static class DependencyInjection
         services.AddAutoMapper(_ => { }, assembly);
         services.AddScopedByConvention(assembly, "Service");
         services.AddScoped<IVoucherRuleEngine, VoucherRuleEngine>();
+
+        // AI services
+        services.AddScoped<IIntentRouter, IntentRouter>();
+        services.AddSingleton<IConversationStore, ConversationStore>();
+        services.AddSingleton<IPromptBuilder, PromptBuilder>();
 
         // Registry data is static — safe to share a single instance process-wide.
         services.AddSingleton<IVoucherRuleMetadataProvider, VoucherRuleMetadataProvider>();
