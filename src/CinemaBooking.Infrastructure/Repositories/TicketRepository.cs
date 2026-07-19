@@ -153,7 +153,7 @@ public sealed class TicketRepository : ITicketRepository
             .FirstOrDefaultAsync(t => t.QRCode == qrCode, cancellationToken);
     }
 
-    public async Task<bool> PerformTicketCheckInAsync(
+    public async Task<(bool Success, bool BookingBecameUsed)> PerformTicketCheckInAsync(
         int ticketId,
         int bookingId,
         int staffId,
@@ -173,23 +173,25 @@ public sealed class TicketRepository : ITicketRepository
                     .FirstOrDefaultAsync(t => t.TicketID == ticketId, cancellationToken);
 
                 if (ticket is null)
-                    return false;
+                    return (false, false);
 
                 ticket.Status = TicketStatus.Used;
                 ticket.CheckedInAt = checkedInAt;
                 ticket.CheckedInByID = staffId;
 
                 var allTicketsUsed = await AreAllTicketsUsedInBookingAsync(bookingId, cancellationToken);
+                var bookingBecameUsed = false;
 
                 if (allTicketsUsed)
                 {
                     var booking = await _db.Bookings
                         .FirstOrDefaultAsync(b => b.BookingID == bookingId, cancellationToken);
 
-                    if (booking is not null)
+                    if (booking is not null && booking.Status != BookingStatus.Used)
                     {
                         booking.Status = BookingStatus.Used;
                         booking.UpdatedAt = checkedInAt;
+                        bookingBecameUsed = true;
                     }
                 }
 
@@ -209,7 +211,7 @@ public sealed class TicketRepository : ITicketRepository
                 await _db.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
-                return true;
+                return (true, bookingBecameUsed);
             }
             catch (Exception ex)
             {

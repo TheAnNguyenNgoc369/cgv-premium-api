@@ -32,7 +32,8 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
         CancellationToken cancellationToken = default)
     {
         var totalSpent = await _db.Bookings
-            .Where(b => b.UserID == userId && b.Status == BookingStatus.Paid)
+            .Where(b => b.UserID == userId
+                && (b.Status == BookingStatus.Paid || b.Status == BookingStatus.Used))
             .SumAsync(b => b.FinalAmount, cancellationToken);
 
         return totalSpent;
