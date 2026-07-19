@@ -390,4 +390,12 @@ public sealed class MovieRepository : IMovieRepository
 
         return rows;
     }
+
+    public async Task<List<Movie>> GetMoviesByIdsAsync(List<int> movieIds, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Movie
+            .AsNoTracking()
+            .Where(m => movieIds.Contains(m.MovieID))
+            .ToListAsync(cancellationToken);
+    }
 }

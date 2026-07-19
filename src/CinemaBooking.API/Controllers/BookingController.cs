@@ -19,15 +19,18 @@ public sealed class BookingController : ControllerBase
     private readonly IBookingService _bookingService;
     private readonly IBookingRepository _bookingRepository;
     private readonly IPaymentService _paymentService;
+    private readonly IMovieReviewRepository _movieReviewRepository;
 
     public BookingController(
         IBookingService bookingService,
         IBookingRepository bookingRepository,
-        IPaymentService paymentService)
+        IPaymentService paymentService,
+        IMovieReviewRepository movieReviewRepository)
     {
         _bookingService = bookingService;
         _bookingRepository = bookingRepository;
         _paymentService = paymentService;
+        _movieReviewRepository = movieReviewRepository;
     }
 
     [HttpPost("seat-holds")]
@@ -147,7 +150,7 @@ public sealed class BookingController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
-        return Ok(MapToResponse(result.Booking!));
+        return Ok(MapToResponse(result.Booking!, reviewId: null));
     }
 
     [HttpPost("bookings/lookup")]
@@ -248,7 +251,10 @@ public sealed class BookingController : ControllerBase
         booking = await SynchronizePendingPayOSBookingAsync(
             booking, currentUserId, User.IsInRole(Roles.Staff), cancellationToken);
 
-        return Ok(MapToResponse(booking));
+        var (reviewId, _) = await _movieReviewRepository.GetBookingReviewLookupAsync(
+            booking.BookingID, cancellationToken);
+
+        return Ok(MapToResponse(booking, reviewId));
     }
 
     [HttpGet("bookings/my")]
@@ -264,7 +270,13 @@ public sealed class BookingController : ControllerBase
                 booking, userId, isStaff: false, cancellationToken));
         }
 
-        return Ok(synchronized.Select(MapToMyResponse));
+        var reviewIdsByBooking = await _movieReviewRepository.GetReviewIdsByBookingIdsAsync(
+            synchronized.Select(b => b.BookingID).ToList(),
+            cancellationToken);
+
+        return Ok(synchronized.Select(b => MapToMyResponse(
+            b,
+            reviewIdsByBooking.TryGetValue(b.BookingID, out var rid) ? rid : (int?)null)));
     }
 
     private int GetCurrentUserId()
@@ -290,7 +302,7 @@ public sealed class BookingController : ControllerBase
             ?? booking;
     }
 
-    private static BookingResponse MapToResponse(Booking booking)
+    private static BookingResponse MapToResponse(Booking booking, int? reviewId)
     {
         return new BookingResponse(
             booking.BookingID,
@@ -319,11 +331,13 @@ public sealed class BookingController : ControllerBase
                     booking.BookingVoucher.Voucher.VoucherCode,
                     booking.BookingVoucher.DiscountApplied
                   )
-                : null
+                : null,
+            reviewId.HasValue,
+            reviewId
         );
     }
 
-    private static MyBookingResponse MapToMyResponse(Booking booking)
+    private static MyBookingResponse MapToMyResponse(Booking booking, int? reviewId)
     {
         return new MyBookingResponse(
             booking.BookingID,
@@ -356,7 +370,9 @@ public sealed class BookingController : ControllerBase
                     booking.BookingVoucher.Voucher.VoucherCode,
                     booking.BookingVoucher.DiscountApplied
                   )
-                : null
+                : null,
+            reviewId.HasValue,
+            reviewId
         );
     }
 

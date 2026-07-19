@@ -1,6 +1,7 @@
 using CinemaBooking.API.Contracts.Vouchers;
 using CinemaBooking.Application.Vouchers;
 using CinemaBooking.Application.Vouchers.RuleEngine.Metadata;
+using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using CinemaBooking.Shared.Time;
@@ -14,11 +15,22 @@ public sealed class VoucherController : ControllerBase
 {
     private readonly IVoucherService _service;
     private readonly IVoucherRuleMetadataProvider _ruleMetadata;
+    private readonly IMovieRepository _movieRepository;
+    private readonly ICinemaRepository _cinemaRepository;
+    private readonly ILoyaltyRepository _loyaltyRepository;
 
-    public VoucherController(IVoucherService service, IVoucherRuleMetadataProvider ruleMetadata)
+    public VoucherController(
+        IVoucherService service,
+        IVoucherRuleMetadataProvider ruleMetadata,
+        IMovieRepository movieRepository,
+        ICinemaRepository cinemaRepository,
+        ILoyaltyRepository loyaltyRepository)
     {
         _service = service;
         _ruleMetadata = ruleMetadata;
+        _movieRepository = movieRepository;
+        _cinemaRepository = cinemaRepository;
+        _loyaltyRepository = loyaltyRepository;
     }
 
     [HttpGet, AllowAnonymous]
@@ -54,7 +66,44 @@ public sealed class VoucherController : ControllerBase
     {
         var result = await _service.GetRedeemableVouchersAsync(ct);
         if (!result.Succeeded) return BadRequest(new { success = false, message = result.Error });
-        return Ok(new { success = true, vouchers = result.Vouchers.Select(MapRedeemable).ToList() });
+
+        var movieIds = new HashSet<int>();
+        var cinemaIds = new HashSet<int>();
+        var tierIds = new HashSet<int>();
+
+        foreach (var voucher in result.Vouchers)
+        {
+            foreach (var rule in voucher.VoucherRules ?? [])
+            {
+                if (rule.RuleType == "Movie" && int.TryParse(rule.RuleValue, out var movieId))
+                    movieIds.Add(movieId);
+                else if (rule.RuleType == "Cinema" && int.TryParse(rule.RuleValue, out var cinemaId))
+                    cinemaIds.Add(cinemaId);
+                else if (rule.RuleType == "Membership" && int.TryParse(rule.RuleValue, out var tierId))
+                    tierIds.Add(tierId);
+            }
+        }
+
+        var movieNames = movieIds.Any()
+            ? (await _movieRepository.GetMoviesByIdsAsync(movieIds.ToList(), ct))
+                .ToDictionary(m => m.MovieID, m => m.Title)
+            : new Dictionary<int, string>();
+
+        var cinemaNames = cinemaIds.Any()
+            ? (await _cinemaRepository.GetCinemasByIdsAsync(cinemaIds.ToList(), ct))
+                .ToDictionary(c => c.CinemaID, c => c.CinemaName)
+            : new Dictionary<int, string>();
+
+        var tierNames = tierIds.Any()
+            ? (await _loyaltyRepository.GetTiersByIdsAsync(tierIds.ToList(), ct))
+                .ToDictionary(t => t.TierID, t => t.TierName)
+            : new Dictionary<int, string>();
+
+        return Ok(new
+        {
+            success = true,
+            vouchers = result.Vouchers.Select(v => MapRedeemable(v, movieNames, cinemaNames, tierNames)).ToList()
+        });
     }
 
     /// <summary>
@@ -121,9 +170,55 @@ public sealed class VoucherController : ControllerBase
         VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description, v.IsActive, Status(v, currentTime), v.CreatedAt,
         v.VoucherRules?.Select(r => new VoucherRuleResponse(r.RuleID, r.RuleType, r.RuleValue, r.CreatedAt)).ToList(),
         v.IsRedeemable, v.RequiredPoints, v.ExchangeLimit);
-    private static RedeemableVoucherResponse MapRedeemable(Voucher v) => new(v.VoucherID, v.VoucherCode,
-        v.DiscountType, v.DiscountValue, v.RequiredPoints!.Value, v.ExchangeLimit,
-        VietnamTime.FromUtc(v.ValidFrom), VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description);
+    private static RedeemableVoucherResponse MapRedeemable(
+        Voucher v,
+        Dictionary<int, string> movieNames,
+        Dictionary<int, string> cinemaNames,
+        Dictionary<int, string> tierNames) => new(
+        v.VoucherID,
+        v.VoucherCode,
+        v.DiscountType,
+        v.DiscountValue,
+        v.RequiredPoints!.Value,
+        v.ExchangeLimit,
+        VietnamTime.FromUtc(v.ValidFrom),
+        VietnamTime.FromUtc(v.ValidUntil),
+        v.ImageURL,
+        v.Description,
+        (v.VoucherRules ?? [])
+            .Select(r => new RedeemableVoucherRuleResponse(
+                r.RuleType,
+                GetOperatorForRuleType(r.RuleType),
+                r.RuleValue,
+                RedeemableVoucherRuleDisplayTextGenerator.GenerateDisplayText(
+                    r.RuleType,
+                    r.RuleValue,
+                    movieNames,
+                    cinemaNames,
+                    null,
+                    tierNames)
+            ))
+            .ToList()
+    );
+
+    private static string GetOperatorForRuleType(string ruleType) => ruleType switch
+    {
+        "MinimumSpend" => ">=",
+        "MaximumSpend" => "<=",
+        "TicketQuantity" => ">=",
+        "Movie" => "=",
+        "Cinema" => "=",
+        "SeatType" => "=",
+        "Room" => "=",
+        "Membership" => "=",
+        "PaymentMethod" => "=",
+        "DayOfWeek" => "=",
+        "Product" => "=",
+        "FoodCategory" => "=",
+        "FoodAndDrink" => "=",
+        "ApplyScope" => "=",
+        _ => "="
+    };
     private static UserVoucherResponse MapUserVoucher(UserVoucher uv) => new(uv.UserVoucherID, uv.VoucherID,
         uv.Voucher.VoucherCode, uv.Voucher.DiscountType, uv.Voucher.DiscountValue, uv.Status,
         VietnamTime.FromUtc(uv.RedeemedAt), VietnamTime.FromUtc(uv.ExpiredAt),
