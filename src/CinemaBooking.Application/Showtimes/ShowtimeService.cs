@@ -35,8 +35,8 @@ public sealed class ShowtimeService : IShowtimeService
         if (pageSize is < 1 or > 100) return (false, "PageSize must be between 1 and 100", null);
 
         var normalizedSort = sortBy?.Trim().ToLowerInvariant();
-        if (normalizedSort is not ("starttime" or "endtime" or "baseprice" or "status"))
-            return (false, "SortBy must be startTime, endTime, basePrice, or status", null);
+        if (normalizedSort is not ("starttime" or "endtime" or "baseprice" or "status" or "id"))
+            return (false, "SortBy must be startTime, endTime, basePrice, status, or id", null);
         if (!string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase))
             return (false, "SortDir must be asc or desc", null);
