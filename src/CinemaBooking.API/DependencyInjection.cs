@@ -166,6 +166,11 @@ public static class DependencyInjection
                 httpContext => RateLimitPartition.GetFixedWindowLimiter(
                     GetClientPartitionKey(httpContext, "verify"),
                     _ => CreateFixedWindowOptions(10)));
+            options.AddPolicy(
+                AiRateLimitPolicyNames.Chat,
+                httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                    GetAiPartitionKey(httpContext),
+                    _ => CreateFixedWindowOptions(20)));
         });
 
         if (environment.IsDevelopment())
@@ -296,6 +301,18 @@ public static class DependencyInjection
     {
         var remoteIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         return $"{action}:{remoteIp}";
+    }
+
+    private static string GetAiPartitionKey(HttpContext httpContext)
+    {
+        var userId = httpContext.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            return $"ai-chat:user:{userId}";
+        }
+
+        var remoteIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return $"ai-chat:ip:{remoteIp}";
     }
 
     private static FixedWindowRateLimiterOptions CreateFixedWindowOptions(int permitLimit)
