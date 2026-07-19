@@ -15,6 +15,8 @@ public sealed class PersonService : IPersonService
     public const int DefaultPageSize = 20;
     public const int MaxPageSize = 50;
 
+    public const int DefaultFilmographyPageSize = 12;
+
     private readonly IPersonRepository _personRepository;
 
     public PersonService(IPersonRepository personRepository)
@@ -39,6 +41,38 @@ public sealed class PersonService : IPersonService
         CancellationToken cancellationToken = default)
     {
         return _personRepository.GetByIdAsync(personId, cancellationToken);
+    }
+
+    public async Task<PersonFilmographyResult?> GetFilmographyPageAsync(
+        int personId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var safePage = page < 1 ? DefaultPage : page;
+        var safePageSize = pageSize < 1
+            ? DefaultFilmographyPageSize
+            : Math.Min(pageSize, MaxPageSize);
+
+        var header = await _personRepository.GetHeaderByIdAsync(personId, cancellationToken);
+        if (header is null)
+        {
+            return null;
+        }
+
+        var pageResult = await _personRepository.GetFilmographyPageAsync(
+            personId,
+            safePage,
+            safePageSize,
+            cancellationToken);
+
+        return new PersonFilmographyResult(
+            header.PersonId,
+            header.Name,
+            pageResult.Total,
+            safePage,
+            safePageSize,
+            pageResult.Items);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, Person? Person)> CreatePersonAsync(
