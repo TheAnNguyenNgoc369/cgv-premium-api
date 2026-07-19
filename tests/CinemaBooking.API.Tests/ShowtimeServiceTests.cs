@@ -39,6 +39,24 @@ public sealed class ShowtimeServiceTests
         Assert.False(result.Succeeded);
     }
 
+    [Theory]
+    [InlineData("id", "asc")]
+    [InlineData("id", "desc")]
+    [InlineData("startTime", "asc")]
+    [InlineData("endTime", "desc")]
+    [InlineData("basePrice", "asc")]
+    [InlineData("status", "desc")]
+    public async Task GetShowtimesAsync_ValidSortBy_ReturnsSuccess(
+        string sortBy, string sortDir)
+    {
+        var service = new ShowtimeService(new StubShowtimeRepository());
+
+        var result = await service.GetShowtimesAsync(
+            null, null, null, null, null, null, 1, 10, sortBy, sortDir);
+
+        Assert.True(result.Succeeded);
+    }
+
     [Fact]
     public async Task CreateShowtimeAsync_StartTimeNotNormalizedToUtc_ReturnsValidationError()
     {
