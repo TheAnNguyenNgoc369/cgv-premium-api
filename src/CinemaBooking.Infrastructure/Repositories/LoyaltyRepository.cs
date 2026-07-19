@@ -227,6 +227,27 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
                       cancellationToken);
     }
 
+    public async Task<IReadOnlySet<int>> GetBookingIdsWithEarnedPointsAsync(
+        IReadOnlyCollection<int> bookingIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (bookingIds.Count == 0)
+        {
+            return new HashSet<int>();
+        }
+
+        var awarded = await _db.LoyaltyPoints
+            .AsNoTracking()
+            .Where(lp => lp.BookingID.HasValue
+                      && bookingIds.Contains(lp.BookingID.Value)
+                      && lp.TransactionType == LoyaltyTransactionTypes.Earned)
+            .Select(lp => lp.BookingID!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return new HashSet<int>(awarded);
+    }
+
     public async Task<List<LoyaltyTier>> GetTiersByIdsAsync(List<int> tierIds, CancellationToken cancellationToken = default)
     {
         return await _db.LoyaltyTiers

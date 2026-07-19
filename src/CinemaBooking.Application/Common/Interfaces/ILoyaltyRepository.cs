@@ -75,6 +75,10 @@ public interface ILoyaltyRepository
         int bookingId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlySet<int>> GetBookingIdsWithEarnedPointsAsync(
+        IReadOnlyCollection<int> bookingIds,
+        CancellationToken cancellationToken = default);
+
     Task<List<LoyaltyTier>> GetTiersByIdsAsync(
         List<int> tierIds,
         CancellationToken cancellationToken = default);
