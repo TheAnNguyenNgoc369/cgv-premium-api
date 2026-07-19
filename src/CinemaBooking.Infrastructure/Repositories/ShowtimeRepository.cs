@@ -42,6 +42,7 @@ public sealed class ShowtimeRepository : IShowtimeRepository
         var totalItems = await query.CountAsync(cancellationToken);
         IOrderedQueryable<Showtime> ordered = sortBy switch
         {
+            "id" => descending ? query.OrderByDescending(s => s.ShowtimeID) : query.OrderBy(s => s.ShowtimeID),
             "endtime" => descending ? query.OrderByDescending(s => s.EndTime) : query.OrderBy(s => s.EndTime),
             "baseprice" => descending ? query.OrderByDescending(s => s.BasePrice) : query.OrderBy(s => s.BasePrice),
             "status" => descending ? query.OrderByDescending(s => s.Status) : query.OrderBy(s => s.Status),

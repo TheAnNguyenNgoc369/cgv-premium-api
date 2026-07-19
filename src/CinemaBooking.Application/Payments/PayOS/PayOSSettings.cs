@@ -14,7 +14,7 @@ public sealed class PayOSSettings
 
     public string CancelUrl { get; init; } = string.Empty;
 
-    [Required, Url]
+    [Url]
     public string WebhookUrl { get; init; } = string.Empty;
 
     public bool ConfirmWebhookOnStartup { get; init; }

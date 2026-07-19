@@ -69,7 +69,7 @@ Response phân trang: `items`, `totalCount`, `pageIndex`, `pageSize`. Item list 
 | `status` | string? | null | `scheduled`, `completed`, `cancelled` |
 | `page` | int | `1` | Phải `>= 1` |
 | `pageSize` | int | `10` | Phải trong `1..100` |
-| `sortBy` | string | `startTime` | `startTime`, `endTime`, `basePrice`, `status` |
+| `sortBy` | string | `startTime` | `startTime`, `endTime`, `basePrice`, `status`, `id` |
 | `sortDir` | string | `asc` | `asc`, `desc` |
 
 Response phân trang: `items`, `page`, `pageSize`, `totalItems`, `totalPages`. Mỗi item có `movie`, `room`, `cinema`, `startTime`, `endTime`, `basePrice`, `status`, `isSoldOut`.
