@@ -103,6 +103,11 @@ public sealed class AuthService : IAuthService
             verificationToken,
             cancellationToken);
 
+        // Generate barcode for the new user
+        var barcode = await GenerateUniqueBarcodeAsync(user.UserID, cancellationToken);
+        user.BarCode = barcode;
+        await _userRepository.SaveChangesAsync(cancellationToken);
+
         await _authEmailService.QueueVerificationAsync(
             user.UserID,
             user.Email,
@@ -448,12 +453,8 @@ public sealed class AuthService : IAuthService
 
     private static string GenerateEmailVerificationToken()
     {
-        var bytes = RandomNumberGenerator.GetBytes(32);
-
-        return Convert.ToBase64String(bytes)
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
+        var random = new Random();
+        return random.Next(100000, 999999).ToString();
     }
 
     private static string GeneratePasswordResetToken()
@@ -470,19 +471,19 @@ public sealed class AuthService : IAuthService
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
         var encodedToken = WebUtility.HtmlEncode(token);
-        var verificationUrl = $"{frontendBaseUrl.TrimEnd('/')}/verify-email";
+        var verificationUrl = $"{frontendBaseUrl.TrimEnd('/')}/registerEmail";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
 
                 <div style="background: #c62828; padding: 22px 32px; text-align: center;">
-                    <span style="color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: 1px;">CGV Premium</span>
+                    <span style="color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: 1px;">CV Premium</span>
                 </div>
 
                 <div style="padding: 32px 36px 24px;">
                     <p style="margin: 0 0 6px; color: #111111; font-size: 20px; font-weight: 700;">Verify your email</p>
                     <p style="margin: 0 0 24px; color: #555555; font-size: 14px; line-height: 1.6;">
-                        Hello <strong>{encodedFullName}</strong>, welcome to CGV Premium!<br />
+                        Hello <strong>{encodedFullName}</strong>, welcome to CV Premium!<br />
                         Copy the verification code below and enter it in the verification screen.
                     </p>
 
@@ -505,7 +506,7 @@ public sealed class AuthService : IAuthService
                 </div>
 
                 <div style="background: #f9f9f9; border-top: 1px solid #eeeeee; padding: 14px 36px; text-align: center;">
-                    <p style="margin: 0 0 2px; font-size: 11px; color: #aaaaaa;">&copy; {DateTime.UtcNow.Year} CGV Premium. All rights reserved.</p>
+                    <p style="margin: 0 0 2px; font-size: 11px; color: #aaaaaa;">&copy; {DateTime.UtcNow.Year} CV Premium. All rights reserved.</p>
                     <p style="margin: 0; font-size: 11px; color: #bbbbbb;">This is an automated message &mdash; please do not reply to this email.</p>
                 </div>
 
@@ -516,13 +517,13 @@ public sealed class AuthService : IAuthService
     private static string BuildResetPasswordEmailBody(string fullName, string token, string frontendBaseUrl)
     {
         var encodedFullName = WebUtility.HtmlEncode(fullName);
-        var resetUrl = $"{frontendBaseUrl.TrimEnd('/')}/reset-password?token={Uri.EscapeDataString(token)}";
+        var resetUrl = $"{frontendBaseUrl.TrimEnd('/')}/resetPassword?token={Uri.EscapeDataString(token)}";
 
         return $"""
             <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
 
                 <div style="background: #c62828; padding: 22px 32px; text-align: center;">
-                    <span style="color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: 1px;">CGV Premium</span>
+                    <span style="color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: 1px;">CV Premium</span>
                 </div>
 
                 <div style="padding: 32px 36px 24px;">
@@ -547,10 +548,25 @@ public sealed class AuthService : IAuthService
                 </div>
 
                 <div style="background: #f9f9f9; border-top: 1px solid #eeeeee; padding: 14px 36px; text-align: center;">
-                    <p style="margin: 0 0 2px; font-size: 11px; color: #aaaaaa;">&copy; {DateTime.UtcNow.Year} CGV Premium. All rights reserved.</p>
+                    <p style="margin: 0 0 2px; font-size: 11px; color: #aaaaaa;">&copy; {DateTime.UtcNow.Year} CV Premium. All rights reserved.</p>
                 </div>
 
             </div>
             """;
+    }
+
+    private async Task<string> GenerateUniqueBarcodeAsync(int userId, CancellationToken cancellationToken)
+    {
+        const string prefix = "CV";
+        var barcode = $"{prefix}{userId:D6}";
+        
+        // Check if barcode already exists (unlikely but for safety)
+        while (await _userRepository.BarCodeExistsAsync(barcode, cancellationToken))
+        {
+            userId++;
+            barcode = $"{prefix}{userId:D6}";
+        }
+        
+        return barcode;
     }
 }

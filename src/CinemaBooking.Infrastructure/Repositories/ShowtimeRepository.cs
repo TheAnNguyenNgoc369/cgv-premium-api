@@ -163,8 +163,8 @@ public sealed class ShowtimeRepository : IShowtimeRepository
             .ToDictionary(group => group.Key, group => group.Sum(seat => seat.Capacity));
         var seatCapacity = activeSeats.ToDictionary(seat => seat.SeatID, seat => seat.Capacity);
 
-        var booked = await _db.BookingSeats.AsNoTracking()
-            .Where(bs => ids.Contains(bs.Booking.ShowtimeID)
+var booked = await _db.BookingSeats.AsNoTracking()
+            .Where(bs => ids.Contains(bs.Booking.ShowtimeID!.Value)
                 && (bs.Booking.Status == BookingStatus.Pending || bs.Booking.Status == BookingStatus.Paid
                     || bs.Booking.Status == BookingStatus.Used
                     || bs.Booking.Status == BookingStatus.PartiallyRefunded))
@@ -176,8 +176,8 @@ public sealed class ShowtimeRepository : IShowtimeRepository
                 && h.ExpiresAt > now)
             .Select(h => new { h.ShowtimeID, h.SeatID })
             .ToListAsync(cancellationToken);
-        var unavailableCapacity = booked.Select(item => (item.ShowtimeID, item.SeatID))
-            .Concat(held.Select(item => (item.ShowtimeID, item.SeatID)))
+        var unavailableCapacity = booked.Select(item => (ShowtimeID: item.ShowtimeID!.Value, item.SeatID))
+            .Concat(held.Select(item => (ShowtimeID: (int)item.ShowtimeID, item.SeatID)))
             .Distinct()
             .Where(item => seatCapacity.ContainsKey(item.SeatID))
             .GroupBy(item => item.ShowtimeID)

@@ -9,6 +9,7 @@ public interface IUserService
     Task<User?> LookupCustomerAsync(
         string? email,
         string? phone,
+        string? barcode,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, User? User)> UpdateProfileAsync(
@@ -41,4 +42,6 @@ public interface IUserService
         string newPassword,
         string confirmPassword,
         CancellationToken cancellationToken = default);
+
+    Task<List<UserVoucher>> GetUserRedeemableVouchersAsync(int userId, CancellationToken ct);
 }

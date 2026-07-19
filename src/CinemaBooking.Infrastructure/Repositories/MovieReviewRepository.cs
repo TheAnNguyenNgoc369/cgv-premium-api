@@ -1,0 +1,132 @@
+using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Reviews;
+using CinemaBooking.Domain.Entities;
+using CinemaBooking.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
+namespace CinemaBooking.Infrastructure.Repositories;
+
+public sealed class MovieReviewRepository : IMovieReviewRepository
+{
+    private readonly CinemaBookingDbContext _db;
+
+    public MovieReviewRepository(CinemaBookingDbContext db)
+    {
+        _db = db;
+    }
+
+    public async Task<MovieReview> AddAsync(MovieReview review, CancellationToken cancellationToken = default)
+    {
+        await _db.MovieReviews.AddAsync(review, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+        return review;
+    }
+
+    public async Task<MovieReview?> GetByIdAsync(int reviewId, CancellationToken cancellationToken = default)
+    {
+        return await _db.MovieReviews
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.ReviewId == reviewId, cancellationToken);
+    }
+
+    public async Task<bool> ExistsAsync(int reviewId, CancellationToken cancellationToken = default)
+    {
+        return await _db.MovieReviews
+            .AnyAsync(r => r.ReviewId == reviewId, cancellationToken);
+    }
+
+    public async Task<bool> BookingHasReviewAsync(int bookingId, CancellationToken cancellationToken = default)
+    {
+        return await _db.MovieReviews
+            .AnyAsync(r => r.BookingId == bookingId, cancellationToken);
+    }
+
+    public async Task<bool> UserHasReviewedMovieAsync(int userId, int movieId, CancellationToken cancellationToken = default)
+    {
+        return await _db.MovieReviews
+            .AnyAsync(r => r.UserId == userId && r.MovieId == movieId, cancellationToken);
+    }
+
+    public async Task<bool> UserHasAnyReviewAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        return await _db.MovieReviews
+            .AnyAsync(r => r.UserId == userId, cancellationToken);
+    }
+
+    public async Task<bool> MovieExistsAsync(int movieId, CancellationToken cancellationToken = default)
+    {
+        return await _db.Movie
+            .AnyAsync(m => m.MovieID == movieId, cancellationToken);
+    }
+
+    public async Task<MovieReview?> GetForUpdateAsync(int reviewId, CancellationToken cancellationToken = default)
+    {
+        return await _db.MovieReviews
+            .FirstOrDefaultAsync(r => r.ReviewId == reviewId, cancellationToken);
+    }
+
+    public async Task UpdateAsync(MovieReview review, CancellationToken cancellationToken = default)
+    {
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<MovieReviewStats> GetVisibleStatsForMovieAsync(
+        int movieId,
+        CancellationToken cancellationToken = default)
+    {
+        var buckets = await _db.MovieReviews
+            .AsNoTracking()
+            .Where(r => r.MovieId == movieId && !r.IsHidden)
+            .GroupBy(r => r.Rating)
+            .Select(g => new { Rating = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        var breakdown = new Dictionary<int, int> { { 5, 0 }, { 4, 0 }, { 3, 0 }, { 2, 0 }, { 1, 0 } };
+        var total = 0;
+        var weightedSum = 0L;
+
+        foreach (var bucket in buckets)
+        {
+            if (breakdown.ContainsKey(bucket.Rating))
+            {
+                breakdown[bucket.Rating] = bucket.Count;
+            }
+            total += bucket.Count;
+            weightedSum += (long)bucket.Rating * bucket.Count;
+        }
+
+        if (total == 0)
+        {
+            return new MovieReviewStats(null, 0, breakdown);
+        }
+
+        var average = Math.Round(weightedSum / (double)total, 1);
+        return new MovieReviewStats(average, total, breakdown);
+    }
+
+    public async Task<List<ReviewListItem>> GetVisibleReviewsForMovieAsync(
+        int movieId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var skip = (page - 1) * pageSize;
+
+        return await _db.MovieReviews
+            .AsNoTracking()
+            .Where(r => r.MovieId == movieId && !r.IsHidden)
+            .OrderByDescending(r => r.CreatedAt)
+            .ThenByDescending(r => r.ReviewId)
+            .Skip(skip)
+            .Take(pageSize)
+            .Select(r => new ReviewListItem(
+                r.ReviewId,
+                r.Rating,
+                r.Comment,
+                r.CreatedAt,
+                r.UserId,
+                r.User!.FullName,
+                r.User!.AvatarURL))
+            .ToListAsync(cancellationToken);
+    }
+}

@@ -1,4 +1,5 @@
 using CinemaBooking.API.Contracts.Movies;
+using CinemaBooking.API.Contracts.Persons;
 using CinemaBooking.Application.Movie;
 using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Shared.Time;
@@ -197,8 +198,8 @@ public sealed class MovieController : ControllerBase
             request.Title,
             request.Genres,
             request.AgeRating,
-            request.Director,
-            request.Cast,
+            request.DirectorIds,
+            request.ActorIds,
             request.Synopsis,
             request.DurationMinutes,
             request.ShowingFromDate,
@@ -240,8 +241,8 @@ public sealed class MovieController : ControllerBase
             request.Title,
             request.Genres,
             request.AgeRating,
-            request.Director,
-            request.Cast,
+            request.DirectorIds,
+            request.ActorIds,
             request.Synopsis,
             request.DurationMinutes,
             request.ShowingFromDate,
@@ -356,13 +357,25 @@ public sealed class MovieController : ControllerBase
 
     private static MovieDetailResponse ToDetailResponse(MovieEntity movie)
     {
+        var directors = movie.MoviePersons
+            .Where(mp => mp.Role == MoviePersonRoles.Director && mp.Person is not null)
+            .OrderBy(mp => mp.DisplayOrder)
+            .Select(mp => new PersonSummary(mp.Person.PersonId, mp.Person.Name))
+            .ToList();
+
+        var actors = movie.MoviePersons
+            .Where(mp => mp.Role == MoviePersonRoles.Actor && mp.Person is not null)
+            .OrderBy(mp => mp.DisplayOrder)
+            .Select(mp => new PersonSummary(mp.Person.PersonId, mp.Person.Name))
+            .ToList();
+
         return new MovieDetailResponse(
             movie.MovieID,
             movie.Title,
             movie.MovieGenres.Select(mg => mg.Genre.GenreName).ToList(),
             EnumValueMapper.ToApiValue(movie.AgeRating),
-            movie.Director,
-            movie.Cast,
+            directors,
+            actors,
             movie.Description,
             movie.DurationMin,
             movie.ShowingFrom,

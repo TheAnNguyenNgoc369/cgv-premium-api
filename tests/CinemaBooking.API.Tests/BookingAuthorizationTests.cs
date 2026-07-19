@@ -102,7 +102,7 @@ public sealed class BookingAuthorizationTests
             int actorUserId,
             int? customerId,
             bool isStaff,
-            int showtimeId,
+            int? showtimeId,
             List<int> seatIds,
             List<BookingFnBItemDto> fnbItems,
             string? voucherCode,
@@ -115,7 +115,7 @@ public sealed class BookingAuthorizationTests
 
         public Task<(bool Succeeded, string? ErrorMessage, PricingCalculationResult? Result)> CalculatePricingAsync(
             int? userId,
-            int showtimeId,
+            int? showtimeId,
             List<int> seatIds,
             List<BookingFnBItemDto> fnbItems,
             string? voucherCode,
@@ -133,6 +133,14 @@ public sealed class BookingAuthorizationTests
 
         public Task<List<Booking>> GetMyBookingsAsync(
             int userId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<(bool Succeeded, string? ErrorMessage, LookupBookingFnbResult? Result)> LookupBookingFnbAsync(
+            string bookingCode,
+            int staffId,
             CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
@@ -155,6 +163,7 @@ public sealed class BookingAuthorizationTests
         public Task MarkHoldsAsConfirmedAsync(IEnumerable<SeatHold> seatHolds, int bookingId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Booking?> GetBookingByIdAsync(int bookingId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Booking?> GetBookingByQRCodeAsync(string qrCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Booking?> GetBookingByCodeAsync(string bookingCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Booking?> GetBookingWithFullDetailsForCheckInAsync(int bookingId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<(List<Booking> Bookings, int TotalCount)> GetCheckInHistoryAsync(int? staffId, int? cinemaId, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task UpdateBookingQRCodeAsync(int bookingId, string qrCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -168,6 +177,8 @@ public sealed class BookingAuthorizationTests
         public Task<bool> HasActiveBookingHoldsAsync(int bookingId, DateTime now, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task UpdateBookingStatusAsync(int bookingId, string status, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> UpdateBookingFnBPickupAsync(string bookingCode, int staffId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<(List<Booking> Bookings, int TotalCount)> GetFnBPickupHistoryAsync(int? staffId, int? cinemaId, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class StubPaymentService : IPaymentService

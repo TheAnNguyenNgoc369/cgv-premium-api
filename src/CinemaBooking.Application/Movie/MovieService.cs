@@ -86,8 +86,8 @@ public sealed class MovieService : IMovieService
         string title,
         List<string>? genres,
         string? ageRating,
-        string director,
-        string? cast,
+        IReadOnlyList<int> directorIds,
+        IReadOnlyList<int> actorIds,
         string? synopsis,
         int durationMinutes,
         DateOnly? showingFromDate,
@@ -97,10 +97,13 @@ public sealed class MovieService : IMovieService
         string? trailerUrl,
         CancellationToken cancellationToken = default)
     {
+        var normalizedDirectorIds = NormalizePersonIds(directorIds);
+        var normalizedActorIds = NormalizePersonIds(actorIds);
+
         var validation = ValidateMovie(
             title,
             ageRating,
-            director,
+            normalizedDirectorIds,
             durationMinutes,
             showingFromDate,
             showingToDate);
@@ -123,8 +126,6 @@ public sealed class MovieService : IMovieService
         {
             Title = normalizedTitle,
             AgeRating = ageRating!.Trim().ToUpperInvariant(),
-            Director = director.Trim(),
-            Cast = NormalizeNullable(cast),
             Description = NormalizeNullable(synopsis),
             DurationMin = durationMinutes,
             ShowingFrom = showingFromDate,
@@ -140,10 +141,18 @@ public sealed class MovieService : IMovieService
             UpdatedAt = now
         };
 
-        var createdMovie = await _movieRepository.AddMovieAsync(
+        var (createdMovie, missingPersonIds) = await _movieRepository.AddMovieAsync(
             movie,
             NormalizeGenres(genres),
+            normalizedDirectorIds,
+            normalizedActorIds,
             cancellationToken);
+
+        if (missingPersonIds.Count > 0)
+        {
+            return (false, FormatMissingPersonError(missingPersonIds), null);
+        }
+
         return (true, null, createdMovie);
     }
 
@@ -152,8 +161,8 @@ public sealed class MovieService : IMovieService
         string title,
         List<string>? genres,
         string? ageRating,
-        string director,
-        string? cast,
+        IReadOnlyList<int> directorIds,
+        IReadOnlyList<int> actorIds,
         string? synopsis,
         int durationMinutes,
         DateOnly? showingFromDate,
@@ -170,10 +179,13 @@ public sealed class MovieService : IMovieService
             return (false, "Movie not found", null);
         }
 
+        var normalizedDirectorIds = NormalizePersonIds(directorIds);
+        var normalizedActorIds = NormalizePersonIds(actorIds);
+
         var validation = ValidateMovie(
             title,
             ageRating,
-            director,
+            normalizedDirectorIds,
             durationMinutes,
             showingFromDate,
             showingToDate);
@@ -199,10 +211,57 @@ public sealed class MovieService : IMovieService
 
         var normalizedPosterUrl = NormalizeNullable(posterUrl);
         var normalizedPosterPublicId = NormalizeNullable(posterPublicId);
+        var previousPosterUrl = existingMovie.PosterURL;
         var previousPosterPublicId = existingMovie.PosterPublicId;
-        var shouldDeletePreviousPosterAfterUpdate =
-            !string.IsNullOrWhiteSpace(previousPosterPublicId)
-            && !string.Equals(previousPosterPublicId, normalizedPosterPublicId, StringComparison.Ordinal);
+
+        // When the caller omits PosterPublicId (null), keep the existing poster untouched.
+        // Only replace when a new public id is explicitly provided and it differs from the current one.
+        string? posterUrlToPersist;
+        string? posterPublicIdToPersist;
+        bool shouldDeletePreviousPosterAfterUpdate;
+
+        if (normalizedPosterPublicId is null)
+        {
+            posterUrlToPersist = previousPosterUrl;
+            posterPublicIdToPersist = previousPosterPublicId;
+            shouldDeletePreviousPosterAfterUpdate = false;
+        }
+        else
+        {
+            posterUrlToPersist = normalizedPosterUrl;
+            posterPublicIdToPersist = normalizedPosterPublicId;
+            shouldDeletePreviousPosterAfterUpdate =
+                !string.IsNullOrWhiteSpace(previousPosterPublicId)
+                && !string.Equals(previousPosterPublicId, normalizedPosterPublicId, StringComparison.Ordinal);
+        }
+
+        var (updatedMovie, missingPersonIds) = await _movieRepository.UpdateMovieAsync(
+            movieId,
+            normalizedTitle,
+            genres is null ? null : NormalizeGenres(genres),
+            ageRating!.Trim().ToUpperInvariant(),
+            normalizedDirectorIds,
+            normalizedActorIds,
+            NormalizeNullable(synopsis),
+            durationMinutes,
+            showingFromDate,
+            showingToDate,
+            posterUrlToPersist,
+            posterPublicIdToPersist,
+            NormalizeNullable(trailerUrl),
+            normalizedStatus ?? existingMovie.Status,
+            DateTime.UtcNow,
+            cancellationToken);
+
+        if (missingPersonIds.Count > 0)
+        {
+            return (false, FormatMissingPersonError(missingPersonIds), null);
+        }
+
+        if (updatedMovie is null)
+        {
+            return (false, "Movie not found", null);
+        }
 
         if (shouldDeletePreviousPosterAfterUpdate)
         {
@@ -212,31 +271,10 @@ public sealed class MovieService : IMovieService
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                return (false, PosterDeleteFailedMessage, null);
+                // Best-effort cleanup: the DB is authoritative and already updated with the new
+                // poster. A stale Cloudinary asset can be reaped later; failing the request now
+                // would misleadingly report a save failure.
             }
-        }
-
-        var updatedMovie = await _movieRepository.UpdateMovieAsync(
-            movieId,
-            normalizedTitle,
-            genres is null ? null : NormalizeGenres(genres),
-            ageRating!.Trim().ToUpperInvariant(),
-            director.Trim(),
-            NormalizeNullable(cast),
-            NormalizeNullable(synopsis),
-            durationMinutes,
-            showingFromDate,
-            showingToDate,
-            normalizedPosterUrl,
-            normalizedPosterPublicId,
-            NormalizeNullable(trailerUrl),
-            normalizedStatus ?? existingMovie.Status,
-            DateTime.UtcNow,
-            cancellationToken);
-
-        if (updatedMovie is null)
-        {
-            return (false, "Movie not found", null);
         }
 
         return (true, null, updatedMovie);
@@ -363,7 +401,7 @@ public sealed class MovieService : IMovieService
     private static (bool Succeeded, string? ErrorMessage) ValidateMovie(
         string title,
         string? ageRating,
-        string director,
+        IReadOnlyList<int> directorIds,
         int durationMinutes,
         DateOnly? showingFromDate,
         DateOnly? showingToDate)
@@ -373,9 +411,9 @@ public sealed class MovieService : IMovieService
             return (false, "Title is required");
         }
 
-        if (string.IsNullOrWhiteSpace(director))
+        if (directorIds.Count == 0)
         {
-            return (false, "Director is required");
+            return (false, "At least one director is required");
         }
 
         if (durationMinutes <= 0)
@@ -460,5 +498,36 @@ public sealed class MovieService : IMovieService
             .Select(genre => genre.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList() ?? [];
+    }
+
+    private static IReadOnlyList<int> NormalizePersonIds(IReadOnlyList<int>? personIds)
+    {
+        if (personIds is null || personIds.Count == 0)
+        {
+            return [];
+        }
+
+        var seen = new HashSet<int>();
+        var result = new List<int>(personIds.Count);
+        foreach (var id in personIds)
+        {
+            if (id <= 0)
+            {
+                continue;
+            }
+
+            if (seen.Add(id))
+            {
+                result.Add(id);
+            }
+        }
+
+        return result;
+    }
+
+    private static string FormatMissingPersonError(IReadOnlyList<int> missingIds)
+    {
+        var joined = string.Join(", ", missingIds);
+        return $"Person(s) not found: {joined}";
     }
 }

@@ -1,5 +1,6 @@
 using CinemaBooking.API.Contracts.Vouchers;
 using CinemaBooking.Application.Vouchers;
+using CinemaBooking.Application.Vouchers.RuleEngine.Metadata;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using CinemaBooking.Shared.Time;
@@ -12,7 +13,13 @@ namespace CinemaBooking.API.Controllers;
 public sealed class VoucherController : ControllerBase
 {
     private readonly IVoucherService _service;
-    public VoucherController(IVoucherService service) => _service = service;
+    private readonly IVoucherRuleMetadataProvider _ruleMetadata;
+
+    public VoucherController(IVoucherService service, IVoucherRuleMetadataProvider ruleMetadata)
+    {
+        _service = service;
+        _ruleMetadata = ruleMetadata;
+    }
 
     [HttpGet, AllowAnonymous]
     public async Task<IActionResult> Get([FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 10,
@@ -22,6 +29,21 @@ public sealed class VoucherController : ControllerBase
         var currentTime = DateTime.UtcNow;
         return Ok(new VoucherPageResponse(result.Items.Select(v => Map(v, currentTime)).ToList(), result.PageIndex, result.PageSize,
             result.TotalItems, (int)Math.Ceiling(result.TotalItems / (double)result.PageSize)));
+    }
+
+    /// <summary>
+    /// Returns UI-rendering metadata for every supported voucher rule type so
+    /// the admin form can build its editor dynamically instead of hard-coding
+    /// rule names or option lists.
+    /// </summary>
+    [HttpGet("rule-types"), Authorize(Roles = Roles.Admin)]
+    public IActionResult GetRuleTypes()
+    {
+        var metadata = _ruleMetadata.GetAll()
+            .Select(m => new VoucherRuleTypeMetadataResponse(
+                m.RuleType, m.DisplayName, m.InputType, m.DataSource, m.Options))
+            .ToList();
+        return Ok(metadata);
     }
 
     /// <summary>

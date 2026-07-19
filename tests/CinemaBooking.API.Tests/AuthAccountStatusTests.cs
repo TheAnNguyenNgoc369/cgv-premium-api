@@ -93,7 +93,7 @@ public sealed class AuthAccountStatusTests
         };
         var token = new EmailVerificationToken
         {
-            Token = "verification-code",
+            Token = "123456",
             UserID = user.UserID,
             User = user,
             CreatedAt = DateTime.UtcNow,
@@ -143,7 +143,7 @@ public sealed class AuthAccountStatusTests
         public Task<bool> TryUpdatePasswordHashAsync(int userId, string expectedPasswordHash,
             string newPasswordHash, CancellationToken cancellationToken = default) => Task.FromResult(true);
         public Task<User?> GetProfileByIdAsync(int userId, CancellationToken cancellationToken = default) => Unsupported<User?>();
-        public Task<User?> LookupCustomerAsync(string? email, string? phone,
+        public Task<User?> LookupCustomerAsync(string? email, string? phone, string? barcode,
             CancellationToken cancellationToken = default) => Unsupported<User?>();
         public Task<User?> GetByIdAsync(int userId, CancellationToken cancellationToken = default) => Unsupported<User?>();
         public Task<User?> UpdateProfileAsync(int userId, string fullName, string? phone,
@@ -182,6 +182,8 @@ public sealed class AuthAccountStatusTests
             SaveChangesCalled = true;
             return Task.CompletedTask;
         }
+        public Task<bool> BarCodeExistsAsync(string barcode, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task<List<User>> GetUsersByRolesAsync(IEnumerable<string> roles, CancellationToken cancellationToken = default) => Task.FromResult(new List<User>());
 
         private static Task Unsupported() => throw new NotSupportedException();
         private static Task<T> Unsupported<T>() => throw new NotSupportedException();

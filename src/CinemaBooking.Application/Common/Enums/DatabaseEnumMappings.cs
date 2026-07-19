@@ -11,7 +11,7 @@ public static class DatabaseEnumMappings
     public static readonly IReadOnlyDictionary<string, string> ShowtimeStatuses =
         EnumValueMapper.CreateMappings("scheduled", "completed", "cancelled");
     public static readonly IReadOnlyDictionary<string, string> RoomStatuses =
-        EnumValueMapper.CreateMappings("active", "maintenance", "inactive");
+        EnumValueMapper.CreateMappings("active", "inactive");
     public static readonly IReadOnlyDictionary<string, string> RoomTypes =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -24,7 +24,7 @@ public static class DatabaseEnumMappings
         EnumValueMapper.CreateMappings("payos", "momo", "credit_card", "banking", "cash", "wallet");
     public static readonly IReadOnlyDictionary<string, string> BookingStatuses =
         EnumValueMapper.CreateMappings("pending", "paid", "cancelled", "refunded", "used",
-            "expired", "payment_failed", "partially_refunded");
+            "expired", "payment_failed", "partially_refunded", "no_show");
     public static readonly IReadOnlyDictionary<string, string> PaymentStatuses =
         EnumValueMapper.CreateMappings("pending", "success", "failed", "refunded", "cancelled", "expired");
     public static readonly IReadOnlyDictionary<string, string> PaymentSessionStatuses =
@@ -35,8 +35,6 @@ public static class DatabaseEnumMappings
         EnumValueMapper.CreateMappings("top_up", "payment", "refund");
     public static readonly IReadOnlyDictionary<string, string> LoyaltyTransactionTypes =
         EnumValueMapper.CreateMappings("earn", "redeem", "expire", "adjust");
-    public static readonly IReadOnlyDictionary<string, string> LoyaltyTierNames =
-        EnumValueMapper.CreateMappings("silver", "gold", "platinum", "megavip");
     public static readonly IReadOnlyDictionary<string, string> UserRoles =
         EnumValueMapper.CreateMappings("customer", "staff", "admin", "manager");
     public static readonly IReadOnlyDictionary<string, string> UserStatuses =

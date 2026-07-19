@@ -1,9 +1,11 @@
 using CinemaBooking.API.Contracts.Images;
 using CinemaBooking.API.Contracts.Users;
 using CinemaBooking.API.Contracts.Cinemas;
+using CinemaBooking.API.Contracts.Vouchers;
 using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Application.Membership;
 using CinemaBooking.Application.Users;
+using CinemaBooking.Application.Vouchers;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using System.ComponentModel.DataAnnotations;
@@ -20,13 +22,16 @@ public sealed class UserController : ControllerBase
 {
     private readonly IUserService _userService;
     private readonly IMembershipService _membershipService;
+    private readonly IVoucherService _voucherService;
 
     public UserController(
         IUserService userService,
-        IMembershipService membershipService)
+        IMembershipService membershipService,
+        IVoucherService voucherService)
     {
         _userService = userService;
         _membershipService = membershipService;
+        _voucherService = voucherService;
     }
 
     [HttpGet("profile")]
@@ -179,14 +184,16 @@ public sealed class UserController : ControllerBase
     public async Task<IActionResult> Lookup(
         [FromQuery] string? email,
         [FromQuery] string? phone,
+        [FromQuery] string? barcode,
         CancellationToken cancellationToken)
     {
         var normalizedEmail = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
         var normalizedPhone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
+        var normalizedBarcode = string.IsNullOrWhiteSpace(barcode) ? null : barcode.Trim();
 
-        if (normalizedEmail is null && normalizedPhone is null)
+        if (normalizedEmail is null && normalizedPhone is null && normalizedBarcode is null)
         {
-            return BadRequest(new { success = false, message = "email or phone is required." });
+            return BadRequest(new { success = false, message = "email, phone or barcode is required." });
         }
 
         if (normalizedEmail is not null && !new EmailAddressAttribute().IsValid(normalizedEmail))
@@ -199,7 +206,7 @@ public sealed class UserController : ControllerBase
             return BadRequest(new { success = false, message = "phone must contain 10 digits and start with 0." });
         }
 
-        var user = await _userService.LookupCustomerAsync(normalizedEmail, normalizedPhone, cancellationToken);
+        var user = await _userService.LookupCustomerAsync(normalizedEmail, normalizedPhone, normalizedBarcode, cancellationToken);
 
         if (user is null)
         {
@@ -207,8 +214,9 @@ public sealed class UserController : ControllerBase
         }
 
         var membership = await _membershipService.GetMyMembershipAsync(user.UserID, cancellationToken);
+        var vouchers = await _voucherService.GetUserRedeemableVouchersAsync(user.UserID, cancellationToken);
 
-        return Ok(ToLookupResponse(user, membership));
+        return Ok(ToLookupResponse(user, membership, vouchers));
     }
 
     [HttpPut("password")]
@@ -264,7 +272,8 @@ public sealed class UserController : ControllerBase
             user.TotalPoints,
             total_refunds = totalRefunds,
             used_refunds = usedRefunds,
-            user.CreatedAt
+            user.CreatedAt,
+            barcode = user.BarCode
         };
     }
 
@@ -286,6 +295,7 @@ public sealed class UserController : ControllerBase
             total_refunds = totalRefunds,
             used_refunds = usedRefunds,
             user.CreatedAt,
+            barcode = user.BarCode,
             cinema = user.Role is Roles.Manager or Roles.Staff && user.Cinema is not null
                 ? new CinemaSummaryResponse(
                     user.Cinema.CinemaID,
@@ -300,8 +310,21 @@ public sealed class UserController : ControllerBase
 
     private static UserLookupResponse ToLookupResponse(
         User user,
-        MembershipInfo membership)
+        MembershipInfo membership,
+        UserRedeemableVouchersResult redeemableVouchers)
     {
+        var voucherResponses = redeemableVouchers.Vouchers?.Select(v => new RedeemableVoucherResponse(
+            v.VoucherId,
+            v.VoucherCode,
+            v.DiscountType,
+            v.DiscountValue,
+            v.RequiredPoints,
+            v.ExchangeLimit,
+            v.ValidFrom,
+            v.ValidUntil,
+            v.ImageUrl,
+            v.Description)).ToList();
+
         return new UserLookupResponse(
             true,
             "User found.",
@@ -322,6 +345,7 @@ public sealed class UserController : ControllerBase
                 user.Wallet is null
                     ? null
                     : new UserLookupResponse.UserWalletInfo(user.Wallet.WalletID, user.Wallet.Balance),
-                null));
+                null,
+                voucherResponses));
     }
 }

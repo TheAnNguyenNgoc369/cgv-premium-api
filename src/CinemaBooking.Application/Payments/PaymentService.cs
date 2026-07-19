@@ -3,6 +3,7 @@ using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Configuration;
 using CinemaBooking.Application.Contracts.Payment;
 using CinemaBooking.Application.Invoices;
+using CinemaBooking.Application.Membership;
 using CinemaBooking.Application.Notifications;
 using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Application.Tickets;
@@ -30,6 +31,7 @@ public sealed class PaymentService : IPaymentService
     private readonly FrontendSettings _frontendSettings;
     private readonly ILogger<PaymentService> _logger;
     private readonly IVoucherRepository _voucherRepository;
+    private readonly IMembershipService _membershipService;
 
     public PaymentService(
         IPaymentRepository paymentRepository,
@@ -43,7 +45,8 @@ public sealed class PaymentService : IPaymentService
         IUserVoucherRepository userVoucherRepository,
         IOptions<FrontendSettings> frontendSettings,
         ILogger<PaymentService> logger,
-        IVoucherRepository voucherRepository)
+        IVoucherRepository voucherRepository,
+        IMembershipService membershipService)
     {
         _paymentRepository = paymentRepository;
         _walletRepository = walletRepository;
@@ -57,6 +60,7 @@ public sealed class PaymentService : IPaymentService
         _frontendSettings = frontendSettings.Value;
         _logger = logger;
         _voucherRepository = voucherRepository;
+        _membershipService = membershipService;
     }
 
     public async Task<PaymentOperationResult> InitiatePaymentAsync(
@@ -621,6 +625,21 @@ public sealed class PaymentService : IPaymentService
 
     private async Task FinalizeSuccessfulBookingAsync(Booking booking, CancellationToken cancellationToken)
     {
+        if (booking.ShowtimeID.HasValue)
+        {
+            var (totalSeats, bookedSeats) = await _bookingRepository.GetShowtimeOccupancyAsync(
+                booking.ShowtimeID.Value, cancellationToken);
+            
+            // Check if showtime just became sold out (was not sold out before, now is)
+            if (totalSeats > 0 && bookedSeats >= totalSeats)
+            {
+                await _notificationOutbox.EnqueueShowtimeSoldOutAsync(
+                    booking.ShowtimeID.Value,
+                    $"Showtime for {booking.Showtime?.Movie?.Title ?? "Movie"} has sold out.",
+                    cancellationToken);
+            }
+        }
+
         await _bookingRepository.UpdateBookingStatusAsync(
             booking.BookingID, BookingStatus.Paid, cancellationToken);
 
@@ -638,6 +657,15 @@ public sealed class PaymentService : IPaymentService
 
         var qrCode = GenerateQRCode();
         await _bookingRepository.UpdateBookingQRCodeAsync(booking.BookingID, qrCode, cancellationToken);
+
+        if (booking.UserID.HasValue)
+        {
+            await _membershipService.AddPointsAfterPaymentSuccessAsync(
+                booking.UserID.Value,
+                booking.BookingID,
+                booking.FinalAmount,
+                cancellationToken);
+        }
     }
 
     private static string GenerateQRCode()
@@ -693,8 +721,25 @@ public sealed class PaymentService : IPaymentService
         CancellationToken cancellationToken)
     {
         var staffCinemaId = await _bookingRepository.GetStaffCinemaIdAsync(staffUserId, cancellationToken);
-        if (!staffCinemaId.HasValue
-            || booking.Showtime.Room.CinemaID != staffCinemaId.Value)
+        if (!staffCinemaId.HasValue)
+            return Error(PaymentErrorType.Forbidden, "You cannot access bookings outside your assigned cinema.");
+
+        var fullBooking = await _bookingRepository.GetBookingByIdAsync(booking.BookingID, cancellationToken);
+        if (fullBooking is null)
+            return Error(PaymentErrorType.NotFound, "Booking not found.");
+
+        int? bookingCinemaId = null;
+
+        if (fullBooking.Showtime is not null)
+        {
+            bookingCinemaId = fullBooking.Showtime.Room?.CinemaID;
+        }
+        else if (fullBooking.CreatedByStaffID.HasValue)
+        {
+            bookingCinemaId = fullBooking.CreatedByStaff?.CinemaID;
+        }
+
+        if (!bookingCinemaId.HasValue || bookingCinemaId.Value != staffCinemaId.Value)
             return Error(PaymentErrorType.Forbidden, "You cannot access bookings outside your assigned cinema.");
 
         return null;

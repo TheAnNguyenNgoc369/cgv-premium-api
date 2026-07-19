@@ -1,5 +1,7 @@
 using CinemaBooking.API.Contracts.Bookings;
+using CinemaBooking.API.Contracts.CheckIns;
 using CinemaBooking.Application.Bookings;
+using CinemaBooking.Application.CheckIns;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Payments;
 using CinemaBooking.Domain.Entities;
@@ -148,6 +150,61 @@ public sealed class BookingController : ControllerBase
         return Ok(MapToResponse(result.Booking!));
     }
 
+    [HttpPost("bookings/lookup")]
+    [Authorize(Roles = Roles.Staff)]
+    public async Task<IActionResult> LookupBookingFnb(
+        [FromBody] LookupBookingFnbRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(new { success = false, message = "Invalid request." });
+
+        var staffId = GetCurrentUserId();
+        var result = await _bookingService.LookupBookingFnbAsync(
+            request.BookingCode, staffId, cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            if (result.ErrorMessage == "Booking not found.")
+                return NotFound(new { success = false, message = result.ErrorMessage });
+
+            if (result.ErrorMessage == "Booking has been cancelled.")
+                return BadRequest(new { success = false, message = result.ErrorMessage });
+
+            if (result.ErrorMessage == "Booking has not been paid.")
+                return BadRequest(new { success = false, message = result.ErrorMessage });
+
+            if (result.ErrorMessage == "This booking does not contain F&B items.")
+                return BadRequest(new { success = false, message = result.ErrorMessage });
+
+            if (result.ErrorMessage == "You are not authorized to access this booking.")
+                return StatusCode(403, new { success = false, message = result.ErrorMessage });
+
+            return BadRequest(new { success = false, message = result.ErrorMessage });
+        }
+
+        var response = new LookupBookingFnbResponse
+        {
+            BookingId = result.Result!.BookingId,
+            BookingCode = result.Result.BookingCode,
+            CustomerName = result.Result.CustomerName,
+            CustomerPhone = result.Result.CustomerPhone,
+            CustomerAvatarURL = result.Result.CustomerAvatarURL,
+            PaymentStatus = result.Result.PaymentStatus,
+            TotalAmount = result.Result.TotalAmount,
+            FnbItems = result.Result.FnbItems.Select(f => new LookupBookingFnbResponse.FnbItemInfo
+            {
+                ItemId = f.ItemId,
+                ItemName = f.ItemName,
+                ImageURL = f.ImageURL,
+                Quantity = f.Quantity,
+                PickedUp = f.PickedUp
+            }).ToList()
+        };
+
+        return Ok(new { success = true, message = "Booking found.", data = response });
+    }
+
     [HttpGet("bookings/{id}")]
     public async Task<IActionResult> GetBookingById(
         int id,
@@ -166,8 +223,25 @@ public sealed class BookingController : ControllerBase
         {
             var staffCinemaId = await _bookingRepository.GetStaffCinemaIdAsync(
                 currentUserId, cancellationToken);
-            if (!staffCinemaId.HasValue
-                || booking.Showtime.Room.CinemaID != staffCinemaId.Value)
+            if (!staffCinemaId.HasValue)
+                return Forbid();
+
+            booking = await _bookingRepository.GetBookingByIdAsync(booking.BookingID, cancellationToken);
+            if (booking is null)
+                return NotFound(new { success = false, message = "Booking not found." });
+
+            int? bookingCinemaId = null;
+
+            if (booking.Showtime is not null)
+            {
+                bookingCinemaId = booking.Showtime.Room?.CinemaID;
+            }
+            else if (booking.CreatedByStaffID.HasValue)
+            {
+                bookingCinemaId = booking.CreatedByStaff?.CinemaID;
+            }
+
+            if (!bookingCinemaId.HasValue || bookingCinemaId.Value != staffCinemaId.Value)
                 return Forbid();
         }
 
@@ -222,10 +296,10 @@ public sealed class BookingController : ControllerBase
             booking.BookingID,
             booking.BookingCode,
             booking.ShowtimeID,
-            booking.Showtime.Movie.Title,
-            booking.Showtime.StartTime,
-            booking.Showtime.Room.Cinema.CinemaName,
-            booking.Showtime.Room.RoomName,
+            booking.Showtime?.Movie.Title ?? "F&B Only",
+            booking.Showtime?.StartTime ?? DateTime.MinValue,
+            booking.Showtime?.Room.Cinema.CinemaName ?? "N/A",
+            booking.Showtime?.Room.RoomName ?? "N/A",
             booking.SubTotal,
             booking.DiscountAmount,
             booking.FinalAmount,
@@ -256,13 +330,13 @@ public sealed class BookingController : ControllerBase
             booking.BookingCode,
             booking.ShowtimeID,
             new BookingMovieResponse(
-                booking.Showtime.Movie.Title,
-                booking.Showtime.Movie.PosterURL,
-                booking.Showtime.Movie.AgeRating,
-                booking.Showtime.Movie.DurationMin),
-            booking.Showtime.StartTime,
-            booking.Showtime.Room.Cinema.CinemaName,
-            booking.Showtime.Room.RoomName,
+                booking.Showtime?.Movie.Title ?? "F&B Only",
+                booking.Showtime?.Movie.PosterURL,
+                booking.Showtime?.Movie.AgeRating ?? "N/A",
+                booking.Showtime?.Movie.DurationMin ?? 0),
+            booking.Showtime?.StartTime ?? DateTime.MinValue,
+            booking.Showtime?.Room.Cinema.CinemaName ?? "N/A",
+            booking.Showtime?.Room.RoomName ?? "N/A",
             booking.SubTotal,
             booking.DiscountAmount,
             booking.FinalAmount,

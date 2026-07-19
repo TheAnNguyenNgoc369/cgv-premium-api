@@ -27,3 +27,10 @@ public sealed record PointHistoryResponse(
     string? Description,
     DateTime CreatedAt
 );
+
+public sealed record CreateTierRequest(
+    string TierName,
+    int MinPoints,
+    decimal DiscountRate,
+    [property: JsonPropertyName("max_refund_per_month")] int MaxRefundPerMonth
+);

@@ -8,6 +8,7 @@ using CinemaBooking.API.OpenApi;
 using CinemaBooking.API.Services;
 using CinemaBooking.API.Serialization;
 using CinemaBooking.Application;
+using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Configuration;
 using CinemaBooking.Application.Payments.PayOS;
 using CinemaBooking.Shared.Constants;
@@ -105,7 +106,7 @@ public static class DependencyInjection
                         }
                     }
 
-                    return new BadRequestObjectResult(new ValidationProblemDetails(context.ModelState));
+                    return new BadRequestObjectResult(new { success = false, message = "Invalid request data. Please check the input fields." });
                 };
             });
 
@@ -140,6 +141,7 @@ public static class DependencyInjection
         services.AddApplicationServices();
         services.AddScoped<JwtTokenService>();
         services.AddScoped<ITokenRevocationService, DatabaseTokenRevocationService>();
+        services.AddScoped<IReviewRewardSettingsService, ReviewRewardSettingsService>();
         services.AddSingleton<IAuthRequestRateLimiter, AuthRequestRateLimiter>();
         services.AddRateLimiter(options =>
         {

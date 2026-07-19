@@ -25,4 +25,9 @@ public sealed class NotificationRepository : INotificationRepository
     public Task SaveChangesAsync(CancellationToken ct) => _db.SaveChangesAsync(ct);
     public Task<int> MarkAllReadAsync(int userId, DateTime now, CancellationToken ct) => _db.Notifications.Where(x => x.UserID == userId && !x.IsRead && x.DeletedAt == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.IsRead, true).SetProperty(x => x.ReadAt, now), ct);
     public Task<int> DeleteReadAsync(int userId, DateTime now, CancellationToken ct) => _db.Notifications.Where(x => x.UserID == userId && x.IsRead && x.DeletedAt == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.DeletedAt, now), ct);
+    public Task AddRangeAsync(IEnumerable<Notification> notifications, CancellationToken ct = default)
+    {
+        _db.Notifications.AddRange(notifications);
+        return _db.SaveChangesAsync(ct);
+    }
 }

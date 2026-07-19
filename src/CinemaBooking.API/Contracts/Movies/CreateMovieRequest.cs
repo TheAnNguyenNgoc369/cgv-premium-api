@@ -7,8 +7,8 @@ public sealed class CreateMovieRequest
     public string Title { get; init; } = string.Empty;
     public List<string>? Genres { get; init; }
     public string? AgeRating { get; init; }
-    public string Director { get; init; } = string.Empty;
-    public string? Cast { get; init; }
+    public int[] DirectorIds { get; init; } = [];
+    public int[] ActorIds { get; init; } = [];
     public string? Synopsis { get; init; }
     public int DurationMinutes { get; init; }
 

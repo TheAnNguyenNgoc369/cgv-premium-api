@@ -13,15 +13,18 @@ public sealed class UserService : IUserService
     private const string AvatarDeleteFailedMessage = "Avatar could not be deleted. Please try again later.";
 
     private readonly IUserRepository _userRepository;
+    private readonly IUserVoucherRepository _userVoucherRepository;
     private readonly IImageStorageService _imageStorageService;
     private readonly ILogger<UserService> _logger;
 
     public UserService(
         IUserRepository userRepository,
+        IUserVoucherRepository userVoucherRepository,
         IImageStorageService imageStorageService,
         ILogger<UserService> logger)
     {
         _userRepository = userRepository;
+        _userVoucherRepository = userVoucherRepository;
         _imageStorageService = imageStorageService;
         _logger = logger;
     }
@@ -34,12 +37,14 @@ public sealed class UserService : IUserService
     public Task<User?> LookupCustomerAsync(
         string? email,
         string? phone,
+        string? barcode,
         CancellationToken cancellationToken = default)
     {
         var normalizedEmail = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
         var normalizedPhone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
+        var normalizedBarcode = string.IsNullOrWhiteSpace(barcode) ? null : barcode.Trim();
 
-        return _userRepository.LookupCustomerAsync(normalizedEmail, normalizedPhone, cancellationToken);
+        return _userRepository.LookupCustomerAsync(normalizedEmail, normalizedPhone, normalizedBarcode, cancellationToken);
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, User? User)> UpdateProfileAsync(
@@ -316,5 +321,10 @@ public sealed class UserService : IUserService
     private static string CreateCorrelationId()
     {
         return System.Diagnostics.Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
+    }
+
+    public async Task<List<UserVoucher>> GetUserRedeemableVouchersAsync(int userId, CancellationToken ct)
+    {
+        return await _userVoucherRepository.GetUserVouchersAsync(userId, ct);
     }
 }

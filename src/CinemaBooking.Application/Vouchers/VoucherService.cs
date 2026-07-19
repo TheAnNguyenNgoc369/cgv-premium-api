@@ -1,6 +1,8 @@
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Notifications;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
+using CinemaBooking.Shared.Time;
 
 namespace CinemaBooking.Application.Vouchers;
 
@@ -11,10 +13,12 @@ public sealed class VoucherService : IVoucherService
     private readonly IUserRepository _userRepository;
     private readonly IImageStorageService _imageStorage;
     private readonly IVoucherRuleRepository _ruleRepository;
+    private readonly INotificationOutbox _notificationOutbox;
 
     public VoucherService(IVoucherRepository repository, IUserVoucherRepository userVoucherRepository,
-        IUserRepository userRepository, IImageStorageService imageStorage, IVoucherRuleRepository ruleRepository)
-    { _repository = repository; _userVoucherRepository = userVoucherRepository; _userRepository = userRepository; _imageStorage = imageStorage; _ruleRepository = ruleRepository; }
+        IUserRepository userRepository, IImageStorageService imageStorage, IVoucherRuleRepository ruleRepository,
+        INotificationOutbox notificationOutbox)
+    { _repository = repository; _userVoucherRepository = userVoucherRepository; _userRepository = userRepository; _imageStorage = imageStorage; _ruleRepository = ruleRepository; _notificationOutbox = notificationOutbox; }
 
     public async Task<VoucherPage> GetAsync(string? search, int pageIndex, int pageSize, CancellationToken cancellationToken)
     {
@@ -226,29 +230,29 @@ public sealed class VoucherService : IVoucherService
             CreatedAt = now
         };
 
-        var log = new AdminActionLog
-        {
-            AdminID = userId,
-            TargetTable = "UserVoucher",
-            ActionType = AdminActionTypes.RedeemVoucher,
-            Description = $"User redeemed voucher {voucher.VoucherCode}",
-            IPAddress = ip,
-            CreatedAt = now
-        };
+try
+            {
+                var (succeeded, error) = await _userVoucherRepository.RedeemVoucherAsync(
+                    userVoucher, loyaltyPoint, voucher.RequiredPoints.Value,
+                    voucher.MaxUses, voucher.ExchangeLimit, ct);
+                if (!succeeded)
+                    return new(false, user.TotalPoints, string.Empty, error ?? "Failed to redeem voucher", "validation");
 
-        try
-        {
-            var (succeeded, error) = await _userVoucherRepository.RedeemVoucherAsync(
-                userVoucher, loyaltyPoint, voucher.RequiredPoints.Value,
-                voucher.MaxUses, voucher.ExchangeLimit, log, ct);
-            if (!succeeded)
-                return new(false, user.TotalPoints, string.Empty, error ?? "Failed to redeem voucher", "validation");
-            return new(true, user.TotalPoints - voucher.RequiredPoints.Value, voucher.VoucherCode);
-        }
-        catch (Exception ex)
-        {
-            return new(false, user.TotalPoints, string.Empty, $"Failed to redeem voucher: {ex.Message}", "error");
-        }
+                // Check if voucher just reached its max uses (out of stock)
+                if (voucher.MaxUses.HasValue && voucher.UsedCount + 1 >= voucher.MaxUses.Value)
+                {
+                    await _notificationOutbox.EnqueueVoucherOutOfStockAsync(
+                        voucher.VoucherID,
+                        $"Voucher {voucher.VoucherCode} has reached its redemption limit.",
+                        ct);
+                }
+
+                return new(true, user.TotalPoints - voucher.RequiredPoints.Value, voucher.VoucherCode);
+            }
+            catch (Exception ex)
+            {
+                return new(false, user.TotalPoints, string.Empty, $"Failed to redeem voucher: {ex.Message}", "error");
+            }
     }
 
     public async Task<UserVouchersResult> GetUserVouchersAsync(int userId, CancellationToken ct)
@@ -313,4 +317,36 @@ public sealed class VoucherService : IVoucherService
     }
 
     private static VoucherResult Fail(string error) => new(false, error, null);
+
+    public async Task<UserRedeemableVouchersResult> GetUserRedeemableVouchersAsync(int userId, CancellationToken ct)
+    {
+        var result = await GetUserVouchersAsync(userId, ct);
+        if (!result.Succeeded || result.Vouchers is null)
+        {
+            return new(true, []);
+        }
+
+        var now = DateTime.UtcNow;
+        var vouchers = result.Vouchers
+            .Where(uv => uv.Voucher.IsRedeemable
+                && uv.Voucher.IsActive
+                && uv.Voucher.RequiredPoints.HasValue
+                && uv.Voucher.ValidFrom <= now
+                && uv.Voucher.ValidUntil >= now
+                && uv.Status == UserVoucherStatus.Available)
+            .Select(uv => new UserRedeemableVoucher(
+                uv.Voucher.VoucherID,
+                uv.Voucher.VoucherCode,
+                uv.Voucher.DiscountType,
+                uv.Voucher.DiscountValue,
+                uv.Voucher.RequiredPoints!.Value,
+                uv.Voucher.ExchangeLimit,
+                VietnamTime.FromUtc(uv.Voucher.ValidFrom),
+                VietnamTime.FromUtc(uv.Voucher.ValidUntil),
+                uv.Voucher.ImageURL,
+                uv.Voucher.Description))
+            .ToList();
+
+        return new(true, vouchers);
+    }
 }

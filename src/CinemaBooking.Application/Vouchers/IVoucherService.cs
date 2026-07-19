@@ -9,4 +9,5 @@ public interface IVoucherService
     Task<RedeemableVouchersResult> GetRedeemableVouchersAsync(CancellationToken cancellationToken);
     Task<RedeemVoucherResult> RedeemVoucherAsync(int userId, int voucherId, string? ip, CancellationToken cancellationToken);
     Task<UserVouchersResult> GetUserVouchersAsync(int userId, CancellationToken cancellationToken);
+    Task<UserRedeemableVouchersResult> GetUserRedeemableVouchersAsync(int userId, CancellationToken cancellationToken);
 }

@@ -55,7 +55,6 @@ CREATE TABLE LoyaltyTiers (
     DiscountRate DECIMAL(4,2) NOT NULL,
     CONSTRAINT PK_LoyaltyTiers PRIMARY KEY (TierID),
     CONSTRAINT UQ_LoyaltyTiers_TierName UNIQUE (TierName),
-    CONSTRAINT CK_LoyaltyTiers_TierName CHECK (TierName IN ('silver', 'gold', 'platinum', 'megavip')),
     CONSTRAINT CK_LoyaltyTiers_MinPoints CHECK (MinPoints >= 0),
     CONSTRAINT CK_LoyaltyTiers_DiscountRate CHECK (DiscountRate >= 0 AND DiscountRate <= 1)
 );
@@ -277,7 +276,7 @@ CREATE TABLE Booking (
     CONSTRAINT FK_Booking_CreatedByStaff FOREIGN KEY (CreatedByStaffID) REFERENCES Users(UserID),
     CONSTRAINT CK_Booking_Amounts CHECK (SubTotal >= 0 AND DiscountAmount >= 0 AND FinalAmount >= 0),
     CONSTRAINT CK_Booking_Points CHECK (ISNULL(PointsEarned,0) >= 0 AND ISNULL(PointsRedeemed,0) >= 0),
-    CONSTRAINT CK_Booking_Status CHECK (Status IN ('pending', 'paid', 'cancelled', 'refunded', 'used', 'expired', 'payment_failed', 'partially_refunded'))
+    CONSTRAINT CK_Booking_Status CHECK (Status IN ('pending', 'paid', 'cancelled', 'refunded', 'used', 'expired', 'payment_failed', 'partially_refunded', 'no_show'))
 );
 GO
 

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CinemaBooking.API.Controllers;
 
-[ApiController, Route("api/notifications"), Authorize(Roles = $"{Roles.Customer},{Roles.Staff}")]
+[ApiController, Route("api/notifications"), Authorize(Roles = $"{Roles.Customer},{Roles.Staff},{Roles.Manager},{Roles.Admin}")]
 public sealed class NotificationController(INotificationService service) : ControllerBase
 {
     [HttpGet]

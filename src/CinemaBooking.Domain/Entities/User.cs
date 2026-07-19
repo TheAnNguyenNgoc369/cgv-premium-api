@@ -18,6 +18,7 @@ public class User
     public int TotalPoints { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public string? BarCode { get; set; }
 
     public Cinema? Cinema { get; set; }
     public LoyaltyTier? LoyaltyTier { get; set; }
@@ -35,4 +36,5 @@ public class User
     public ICollection<AdminActionLog> TargetedAdminActions { get; set; } = [];
     public ICollection<EmailLog> EmailLogs { get; set; } = [];
     public ICollection<Notification> Notifications { get; set; } = [];
+    public ICollection<MovieReview> Reviews { get; set; } = [];
 }

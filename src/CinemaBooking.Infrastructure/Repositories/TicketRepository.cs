@@ -3,16 +3,19 @@ using CinemaBooking.Domain.Entities;
 using CinemaBooking.Infrastructure.Persistence;
 using CinemaBooking.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace CinemaBooking.Infrastructure.Repositories;
 
 public sealed class TicketRepository : ITicketRepository
 {
     private readonly CinemaBookingDbContext _db;
+    private readonly ILogger<TicketRepository> _logger;
 
-    public TicketRepository(CinemaBookingDbContext db)
+    public TicketRepository(CinemaBookingDbContext db, ILogger<TicketRepository> logger)
     {
         _db = db;
+        _logger = logger;
     }
 
     public async Task<Ticket> CreateTicketAsync(
@@ -115,16 +118,16 @@ public sealed class TicketRepository : ITicketRepository
                     .ThenInclude(b => b.User)
             .Include(t => t.BookingSeat)
                 .ThenInclude(bs => bs.Booking)
-                    .ThenInclude(b => b.Showtime)
+                    .ThenInclude(b => b.Showtime!)
                         .ThenInclude(s => s.Movie)
             .Include(t => t.BookingSeat)
                 .ThenInclude(bs => bs.Booking)
-                    .ThenInclude(b => b.Showtime)
+                    .ThenInclude(b => b.Showtime!)
                         .ThenInclude(s => s.Room)
                             .ThenInclude(r => r.Cinema)
             .Include(t => t.BookingSeat)
                 .ThenInclude(bs => bs.Booking)
-                    .ThenInclude(b => b.Showtime)
+                    .ThenInclude(b => b.Showtime!)
                         .ThenInclude(s => s.Room)
                             .ThenInclude(r => r.RoomType)
             .Include(t => t.BookingSeat)
@@ -211,7 +214,7 @@ public sealed class TicketRepository : ITicketRepository
             catch (Exception ex)
             {
                 await transaction.RollbackAsync(cancellationToken);
-                Console.WriteLine($"Check-in failed: {ex.Message}");
+                _logger.LogError(ex, "Check-in failed for ticket {TicketId}, booking {BookingId}", ticketId, bookingId);
                 throw;
             }
         });

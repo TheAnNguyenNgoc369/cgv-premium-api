@@ -13,6 +13,10 @@ public interface IBookingRepository
         int showtimeId,
         CancellationToken cancellationToken = default);
 
+    Task<(int TotalSeats, int BookedSeats)> GetShowtimeOccupancyAsync(
+        int showtimeId,
+        CancellationToken cancellationToken = default);
+
     Task<List<Seat>> GetSeatsByIdsAsync(
         List<int> seatIds,
         CancellationToken cancellationToken = default);
@@ -60,6 +64,10 @@ public interface IBookingRepository
         string qrCode,
         CancellationToken cancellationToken = default);
 
+    Task<Booking?> GetBookingByCodeAsync(
+        string bookingCode,
+        CancellationToken cancellationToken = default);
+
     Task<Booking?> GetBookingWithFullDetailsForCheckInAsync(
         int bookingId,
         CancellationToken cancellationToken = default);
@@ -69,6 +77,15 @@ public interface IBookingRepository
         CancellationToken cancellationToken = default);
 
     Task<(List<Booking> Bookings, int TotalCount)> GetCheckInHistoryAsync(
+        int? staffId,
+        int? cinemaId,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
+    Task<(List<Booking> Bookings, int TotalCount)> GetFnBPickupHistoryAsync(
         int? staffId,
         int? cinemaId,
         DateTime? from,
@@ -121,5 +138,10 @@ public interface IBookingRepository
         CancellationToken cancellationToken = default);
 
     Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(
+        CancellationToken cancellationToken = default);
+
+    Task<bool> UpdateBookingFnBPickupAsync(
+        string bookingCode,
+        int staffId,
         CancellationToken cancellationToken = default);
 }

@@ -43,9 +43,7 @@ public sealed class CheckInService : ICheckInService
             return (false, "Booking data is incomplete (missing showtime/room/cinema).", null);
 
         var showtimeCinemaId = booking.Showtime.Room.Cinema.CinemaID;
-
-        if (staffCinemaId != showtimeCinemaId)
-            return (false, "You cannot check in tickets from another cinema.", null);
+        var isFromOtherCinema = staffCinemaId != showtimeCinemaId;
 
         var response = new CheckInLookupResult
         {
@@ -92,7 +90,11 @@ public sealed class CheckInService : ICheckInService
                 Quantity = fnb.Quantity,
                 UnitPrice = fnb.UnitPrice,
                 Subtotal = fnb.SubTotal
-            }).ToList()
+            }).ToList(),
+            IsFromOtherCinema = isFromOtherCinema,
+            WarningMessage = isFromOtherCinema
+                ? "This ticket belongs to another cinema. Check-in is not allowed here. Please inform the customer to go to the correct cinema."
+                : null
         };
 
         return (true, null, response);
@@ -133,6 +135,9 @@ public sealed class CheckInService : ICheckInService
         if (booking.Status == BookingStatus.Cancelled)
             return (false, "Booking has been cancelled.", null, null);
 
+        if (booking.Status == BookingStatus.NoShow)
+            return (false, "Booking has been marked as NoShow.", null, null);
+
         var hasCompletedRefund = booking.Refunds.Any(r => r.Status == "completed");
         if (hasCompletedRefund)
             return (false, "Ticket has been refunded.", null, null);
@@ -148,10 +153,13 @@ public sealed class CheckInService : ICheckInService
 
         var now = DateTime.UtcNow;
         var showtimeStart = booking.Showtime.StartTime;
-        var earliestCheckIn = showtimeStart.AddMinutes(-30);
+        var earliestCheckIn = showtimeStart.AddMinutes(-15);
         var latestCheckIn = booking.Showtime.EndTime;
 
-        if (now < earliestCheckIn || now > latestCheckIn)
+        if (now < earliestCheckIn)
+            return (false, "Check-in is not available yet. Customers can check in 15 minutes before the show starts.", null, null);
+
+        if (now > latestCheckIn)
             return (false, "Check-in time has expired.", null, null);
 
         var success = await _ticketRepository.PerformTicketCheckInAsync(
@@ -223,15 +231,20 @@ public sealed class CheckInService : ICheckInService
                 })
                 .ToList();
 
+            var showtime = b.Showtime;
+            var room = showtime?.Room;
+            var cinema = room?.Cinema;
+            var movie = showtime?.Movie;
+
             return new CheckInHistoryResult.CheckInRecord
             {
                 BookingId = b.BookingID,
                 BookingCode = b.BookingCode,
                 CustomerName = b.User?.FullName,
-                MovieTitle = b.Showtime.Movie.Title,
-                CinemaName = b.Showtime.Room.Cinema.CinemaName,
-                RoomName = b.Showtime.Room.RoomName,
-                ShowtimeStart = b.Showtime.StartTime,
+                MovieTitle = movie?.Title ?? "F&B Only",
+                CinemaName = cinema?.CinemaName ?? "N/A",
+                RoomName = room?.RoomName ?? "N/A",
+                ShowtimeStart = showtime?.StartTime ?? DateTime.MinValue,
                 CheckedInAt = mostRecentTicket?.CheckedInAt ?? DateTime.MinValue,
                 StaffName = mostRecentTicket?.CheckedInBy?.FullName ?? "Unknown",
                 SeatCount = b.BookingSeats.Count,
@@ -267,4 +280,93 @@ public sealed class CheckInService : ICheckInService
             isManager: false,
             isStaff: false,
             cancellationToken);
+
+    public async Task<FnBPickupHistoryResult> GetFnBPickupHistoryAsync(
+        int? staffId,
+        int? cinemaId,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize,
+        int currentUserId,
+        bool isAdmin,
+        bool isManager,
+        bool isStaff,
+        CancellationToken cancellationToken = default)
+    {
+        if (isStaff && !isManager && !isAdmin)
+        {
+            staffId = currentUserId;
+            cinemaId = await _bookingRepository.GetStaffCinemaIdAsync(currentUserId, cancellationToken)
+                ?? -1;
+        }
+        else if (isManager && !isAdmin)
+        {
+            cinemaId = await _bookingRepository.GetStaffCinemaIdAsync(currentUserId, cancellationToken)
+                ?? -1;
+        }
+
+        var (bookings, totalCount) = await _bookingRepository.GetFnBPickupHistoryAsync(
+            staffId,
+            cinemaId,
+            from,
+            to,
+            page,
+            pageSize,
+            cancellationToken);
+
+        var records = bookings.Select(b =>
+        {
+            var pickedUpFnbItems = b.BookingFnBs
+                .Where(fnb => fnb.PickedUp && fnb.PickedUpAt != null)
+                .ToList();
+
+            var mostRecentPickup = pickedUpFnbItems
+                .OrderByDescending(fnb => fnb.PickedUpAt)
+                .FirstOrDefault();
+
+            return new FnBPickupHistoryResult.FnBPickupRecord
+            {
+                BookingId = b.BookingID,
+                BookingCode = b.BookingCode,
+                CustomerName = b.User?.FullName,
+                CinemaName = b.Showtime?.Room?.Cinema?.CinemaName ?? "N/A",
+                PickedUpAt = mostRecentPickup?.PickedUpAt ?? DateTime.MinValue,
+                StaffName = mostRecentPickup?.PickedUpByStaff?.FullName ?? "Unknown",
+                TotalAmount = b.FinalAmount,
+                Items = pickedUpFnbItems.Select(fnb => new FnBPickupHistoryResult.FnBPickupItemRecord
+                {
+                    ItemId = fnb.ItemID,
+                    ItemName = fnb.Product.ItemName,
+                    Quantity = fnb.Quantity,
+                    UnitPrice = fnb.UnitPrice,
+                    SubTotal = fnb.SubTotal
+                }).ToList()
+            };
+        }).ToList();
+
+        return new FnBPickupHistoryResult
+        {
+            Records = records,
+            TotalCount = totalCount
+        };
+    }
+
+    public async Task<(bool Succeeded, string? ErrorMessage)> ConfirmFnBPickupAsync(
+        string bookingCode,
+        int staffId,
+        CancellationToken cancellationToken = default)
+    {
+        var staffCinemaId = await _bookingRepository.GetStaffCinemaIdAsync(staffId, cancellationToken);
+
+        if (staffCinemaId is null)
+            return (false, "Staff cinema assignment not found.");
+
+        var success = await _bookingRepository.UpdateBookingFnBPickupAsync(bookingCode, staffId, cancellationToken);
+
+        if (!success)
+            return (false, "Booking not found, not paid, cancelled, has no F&B items, or all items already picked up.");
+
+        return (true, "F&B pickup confirmed.");
+    }
 }

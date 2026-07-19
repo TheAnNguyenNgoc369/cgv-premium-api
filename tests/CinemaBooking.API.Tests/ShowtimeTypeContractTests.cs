@@ -74,4 +74,12 @@ public sealed class ShowtimeTypeContractTests
         var actions = service.GetActionTypes();
         Assert.Contains(AdminActionTypes.UpdateUser, actions);
     }
+
+    [Fact]
+    public void ActivityLog_DoesNotExposeCustomerRedeemVoucherAction()
+    {
+        var service = new ActivityLogService(null!);
+        var actions = service.GetActionTypes();
+        Assert.DoesNotContain("redeem_voucher", actions);
+    }
 }

@@ -36,7 +36,7 @@ public sealed class BookingEmailService : IBookingEmailService
             if (ticketSeats.Count == 0)
                 return;
 
-            var images = new List<EmailInlineImage>(ticketSeats.Count);
+            var images = new List<EmailInlineImage>(ticketSeats.Count + 1);
             var ticketsHtml = new StringBuilder();
             foreach (var bookingSeat in ticketSeats)
             {
@@ -55,7 +55,14 @@ public sealed class BookingEmailService : IBookingEmailService
                     $"ticket-{booking.BookingCode}-{bookingSeat.Seat.SeatRow}{bookingSeat.Seat.SeatCol}.png"));
             }
 
-            var showtime = booking.Showtime;
+            var barcodeContentId = $"booking-barcode-{booking.BookingCode}";
+            images.Add(new EmailInlineImage(
+                barcodeContentId,
+                BarcodeHelper.GenerateCode128(booking.BookingCode),
+                "image/png",
+                $"booking-barcode-{booking.BookingCode}.png"));
+
+            var showtime = booking.Showtime!;
             var localStart = VietnamTime.FromUtc(showtime.StartTime);
             var paymentMethod = booking.Payment?.PaymentMethod ?? "N/A";
             var html = BookingEmailTemplate.BuildBookingConfirmed(
@@ -69,11 +76,12 @@ public sealed class BookingEmailService : IBookingEmailService
                 showtime.Room.RoomName,
                 $"{booking.FinalAmount:N0}",
                 paymentMethod,
-                ticketsHtml.ToString());
+                ticketsHtml.ToString(),
+                barcodeContentId);
 
             await _emailQueue.EnqueueAsync(
                 booking.UserID, booking.User.Email, $"booking_confirmed:{booking.BookingID}", "booking_confirmed",
-                $"[CGV Premium] Booking confirmed successful - {booking.BookingCode}",
+                $"[CV Premium] Booking confirmed successful - {booking.BookingCode}",
                 html, images, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -98,7 +106,7 @@ public sealed class BookingEmailService : IBookingEmailService
             if (booking?.User is null || string.IsNullOrWhiteSpace(booking.User.Email))
                 return;
 
-            var localStart = VietnamTime.FromUtc(booking.Showtime.StartTime);
+            var localStart = VietnamTime.FromUtc(booking.Showtime!.StartTime);
             var localCompletedAt = VietnamTime.FromUtc(completedAt);
             var html = BookingEmailTemplate.BuildRefundProcessed(
                 booking.User.FullName,
@@ -110,7 +118,7 @@ public sealed class BookingEmailService : IBookingEmailService
 
             await _emailQueue.EnqueueAsync(
                 booking.UserID, booking.User.Email, $"refund_processed:{booking.BookingID}", "refund_processed",
-                $"[CGV Premium] Refund confirmed successful - Order number {booking.BookingCode}",
+                $"[CV Premium] Refund confirmed successful - Order number {booking.BookingCode}",
                 html, cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

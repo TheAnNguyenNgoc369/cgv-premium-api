@@ -8,7 +8,11 @@ public class BookingFnB
     public int Quantity { get; set; } = 1;
     public decimal UnitPrice { get; set; }
     public decimal SubTotal { get; set; }
+    public bool PickedUp { get; set; }
+    public DateTime? PickedUpAt { get; set; }
+    public int? PickedUpByStaffId { get; set; }
 
     public Booking Booking { get; set; } = null!;
     public Product Product { get; set; } = null!;
+    public User? PickedUpByStaff { get; set; }
 }
