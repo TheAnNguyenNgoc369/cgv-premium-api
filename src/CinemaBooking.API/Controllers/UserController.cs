@@ -323,7 +323,9 @@ public sealed class UserController : ControllerBase
             v.ValidFrom,
             v.ValidUntil,
             v.ImageUrl,
-            v.Description)).ToList();
+            v.Description,
+            [])).ToList();
+
 
         return new UserLookupResponse(
             true,

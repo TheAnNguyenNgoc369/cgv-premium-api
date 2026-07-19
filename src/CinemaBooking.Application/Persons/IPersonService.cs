@@ -15,6 +15,14 @@ public sealed record DeletePersonResult(
     string? ErrorMessage,
     IReadOnlyList<string> AssignedMovieTitles);
 
+public sealed record PersonFilmographyResult(
+    int PersonId,
+    string PersonName,
+    int TotalMovies,
+    int Page,
+    int PageSize,
+    IReadOnlyList<PersonFilmographyItem> Items);
+
 public interface IPersonService
 {
     Task<PersonPageResult> GetPersonsPageAsync(
@@ -25,6 +33,12 @@ public interface IPersonService
 
     Task<Person?> GetPersonByIdAsync(
         int personId,
+        CancellationToken cancellationToken = default);
+
+    Task<PersonFilmographyResult?> GetFilmographyPageAsync(
+        int personId,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, Person? Person)> CreatePersonAsync(

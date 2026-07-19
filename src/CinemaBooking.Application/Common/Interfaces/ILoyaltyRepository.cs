@@ -74,4 +74,8 @@ public interface ILoyaltyRepository
     Task<bool> HasPointsForBookingAsync(
         int bookingId,
         CancellationToken cancellationToken = default);
+
+    Task<List<LoyaltyTier>> GetTiersByIdsAsync(
+        List<int> tierIds,
+        CancellationToken cancellationToken = default);
 }

@@ -58,6 +58,42 @@ public sealed class PersonController : ControllerBase
         return Ok(ToResponse(person));
     }
 
+    [HttpGet("{personId:int}/movies")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(PersonFilmographyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPersonFilmography(
+        int personId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = PersonService.DefaultFilmographyPageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _personService.GetFilmographyPageAsync(personId, page, pageSize, cancellationToken);
+        if (result is null)
+        {
+            return NotFound(new { success = false, message = "Person not found." });
+        }
+
+        var items = result.Items
+            .Select(item => new FilmographyItem(
+                item.MovieId,
+                item.Title,
+                item.PosterUrl,
+                item.ReleaseDate,
+                item.Duration,
+                item.AgeRating,
+                item.Roles))
+            .ToList();
+
+        return Ok(new PersonFilmographyResponse(
+            result.PersonId,
+            result.PersonName,
+            result.TotalMovies,
+            result.Page,
+            result.PageSize,
+            items));
+    }
+
     [HttpPost]
     [Authorize(Roles = Roles.Admin)]
     [ProducesResponseType(typeof(PersonResponse), StatusCodes.Status201Created)]

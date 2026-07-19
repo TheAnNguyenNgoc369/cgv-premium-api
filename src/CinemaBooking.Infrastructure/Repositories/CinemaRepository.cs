@@ -166,4 +166,12 @@ public sealed class CinemaRepository : ICinemaRepository
 
         return cinema;
     }
+
+    public async Task<List<Cinema>> GetCinemasByIdsAsync(List<int> cinemaIds, CancellationToken cancellationToken = default)
+    {
+        return await _db.Cinemas
+            .AsNoTracking()
+            .Where(c => cinemaIds.Contains(c.CinemaID))
+            .ToListAsync(cancellationToken);
+    }
 }

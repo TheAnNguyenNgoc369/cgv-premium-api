@@ -71,4 +71,8 @@ public interface IMovieRepository
     Task<bool> DeleteMovieAsync(
         int movieId,
         CancellationToken cancellationToken = default);
+
+    Task<List<MovieEntity>> GetMoviesByIdsAsync(
+        List<int> movieIds,
+        CancellationToken cancellationToken = default);
 }

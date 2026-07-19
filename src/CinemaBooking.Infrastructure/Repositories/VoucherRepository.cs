@@ -81,6 +81,7 @@ public sealed class VoucherRepository : IVoucherRepository
         var now = DateTime.UtcNow;
         return await _db.Vouchers
             .AsNoTracking()
+            .Include(v => v.VoucherRules)
             .Where(v => v.IsActive
                 && v.IsRedeemable
                 && v.RequiredPoints.HasValue

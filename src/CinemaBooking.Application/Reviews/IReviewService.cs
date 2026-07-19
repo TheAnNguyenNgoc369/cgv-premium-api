@@ -23,6 +23,14 @@ public interface IReviewService
     Task<HideReviewResult> UnhideAsync(
         int reviewId,
         CancellationToken cancellationToken = default);
+
+    Task<AdminReviewPage> SearchAdminReviewsAsync(
+        string? keyword,
+        int? movieId,
+        AdminReviewStatusFilter status,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record CreateReviewResult(

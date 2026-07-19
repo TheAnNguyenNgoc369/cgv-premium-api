@@ -30,10 +30,35 @@ public interface IPersonRepository
     Task<bool> DeleteAsync(
         int personId,
         CancellationToken cancellationToken = default);
+
+    Task<PersonHeader?> GetHeaderByIdAsync(
+        int personId,
+        CancellationToken cancellationToken = default);
+
+    Task<PersonFilmographyPageResult> GetFilmographyPageAsync(
+        int personId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record PersonPageResult(
     IReadOnlyList<Person> Items,
+    int Total);
+
+public sealed record PersonHeader(int PersonId, string Name);
+
+public sealed record PersonFilmographyItem(
+    int MovieId,
+    string Title,
+    string? PosterUrl,
+    DateOnly? ReleaseDate,
+    int Duration,
+    string AgeRating,
+    IReadOnlyList<string> Roles);
+
+public sealed record PersonFilmographyPageResult(
+    IReadOnlyList<PersonFilmographyItem> Items,
     int Total);
 
 public sealed record PersonUpdateData(
