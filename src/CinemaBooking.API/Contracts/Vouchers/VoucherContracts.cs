@@ -72,5 +72,6 @@ public sealed record UserVoucherResponse(
     DateTimeOffset RedeemedAt,
     DateTimeOffset ExpiredAt,
     DateTimeOffset? UsedAt,
-    string? ImageUrl);
+    string? ImageUrl,
+    List<RedeemableVoucherRuleResponse> VoucherRules);
 

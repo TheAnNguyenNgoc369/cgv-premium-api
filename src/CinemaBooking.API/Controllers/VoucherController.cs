@@ -67,37 +67,7 @@ public sealed class VoucherController : ControllerBase
         var result = await _service.GetRedeemableVouchersAsync(ct);
         if (!result.Succeeded) return BadRequest(new { success = false, message = result.Error });
 
-        var movieIds = new HashSet<int>();
-        var cinemaIds = new HashSet<int>();
-        var tierIds = new HashSet<int>();
-
-        foreach (var voucher in result.Vouchers)
-        {
-            foreach (var rule in voucher.VoucherRules ?? [])
-            {
-                if (rule.RuleType == "Movie" && int.TryParse(rule.RuleValue, out var movieId))
-                    movieIds.Add(movieId);
-                else if (rule.RuleType == "Cinema" && int.TryParse(rule.RuleValue, out var cinemaId))
-                    cinemaIds.Add(cinemaId);
-                else if (rule.RuleType == "Membership" && int.TryParse(rule.RuleValue, out var tierId))
-                    tierIds.Add(tierId);
-            }
-        }
-
-        var movieNames = movieIds.Any()
-            ? (await _movieRepository.GetMoviesByIdsAsync(movieIds.ToList(), ct))
-                .ToDictionary(m => m.MovieID, m => m.Title)
-            : new Dictionary<int, string>();
-
-        var cinemaNames = cinemaIds.Any()
-            ? (await _cinemaRepository.GetCinemasByIdsAsync(cinemaIds.ToList(), ct))
-                .ToDictionary(c => c.CinemaID, c => c.CinemaName)
-            : new Dictionary<int, string>();
-
-        var tierNames = tierIds.Any()
-            ? (await _loyaltyRepository.GetTiersByIdsAsync(tierIds.ToList(), ct))
-                .ToDictionary(t => t.TierID, t => t.TierName)
-            : new Dictionary<int, string>();
+        var (movieNames, cinemaNames, tierNames) = await BuildRuleNameLookupsAsync(result.Vouchers, ct);
 
         return Ok(new
         {
@@ -127,7 +97,15 @@ public sealed class VoucherController : ControllerBase
         if (!TryUserId(out var userId)) return Unauthorized();
         var result = await _service.GetUserVouchersAsync(userId, ct);
         if (!result.Succeeded) return BadRequest(new { success = false, message = result.Error });
-        return Ok(new { success = true, vouchers = result.Vouchers.Select(MapUserVoucher).ToList() });
+
+        var (movieNames, cinemaNames, tierNames) = await BuildRuleNameLookupsAsync(
+            result.Vouchers.Select(uv => uv.Voucher), ct);
+
+        return Ok(new
+        {
+            success = true,
+            vouchers = result.Vouchers.Select(uv => MapUserVoucher(uv, movieNames, cinemaNames, tierNames)).ToList()
+        });
     }
 
     [HttpPost, Authorize(Roles = Roles.Admin), Consumes("application/json")]
@@ -185,6 +163,14 @@ public sealed class VoucherController : ControllerBase
         VietnamTime.FromUtc(v.ValidUntil),
         v.ImageURL,
         v.Description,
+        MapVoucherRules(v, movieNames, cinemaNames, tierNames)
+    );
+
+    private static List<RedeemableVoucherRuleResponse> MapVoucherRules(
+        Voucher v,
+        Dictionary<int, string> movieNames,
+        Dictionary<int, string> cinemaNames,
+        Dictionary<int, string> tierNames) =>
         (v.VoucherRules ?? [])
             .Select(r => new RedeemableVoucherRuleResponse(
                 r.RuleType,
@@ -198,8 +184,45 @@ public sealed class VoucherController : ControllerBase
                     null,
                     tierNames)
             ))
-            .ToList()
-    );
+            .ToList();
+
+    private async Task<(Dictionary<int, string> movieNames, Dictionary<int, string> cinemaNames, Dictionary<int, string> tierNames)>
+        BuildRuleNameLookupsAsync(IEnumerable<Voucher> vouchers, CancellationToken ct)
+    {
+        var movieIds = new HashSet<int>();
+        var cinemaIds = new HashSet<int>();
+        var tierIds = new HashSet<int>();
+
+        foreach (var voucher in vouchers)
+        {
+            foreach (var rule in voucher.VoucherRules ?? [])
+            {
+                if (rule.RuleType == "Movie" && int.TryParse(rule.RuleValue, out var movieId))
+                    movieIds.Add(movieId);
+                else if (rule.RuleType == "Cinema" && int.TryParse(rule.RuleValue, out var cinemaId))
+                    cinemaIds.Add(cinemaId);
+                else if (rule.RuleType == "Membership" && int.TryParse(rule.RuleValue, out var tierId))
+                    tierIds.Add(tierId);
+            }
+        }
+
+        var movieNames = movieIds.Any()
+            ? (await _movieRepository.GetMoviesByIdsAsync(movieIds.ToList(), ct))
+                .ToDictionary(m => m.MovieID, m => m.Title)
+            : new Dictionary<int, string>();
+
+        var cinemaNames = cinemaIds.Any()
+            ? (await _cinemaRepository.GetCinemasByIdsAsync(cinemaIds.ToList(), ct))
+                .ToDictionary(c => c.CinemaID, c => c.CinemaName)
+            : new Dictionary<int, string>();
+
+        var tierNames = tierIds.Any()
+            ? (await _loyaltyRepository.GetTiersByIdsAsync(tierIds.ToList(), ct))
+                .ToDictionary(t => t.TierID, t => t.TierName)
+            : new Dictionary<int, string>();
+
+        return (movieNames, cinemaNames, tierNames);
+    }
 
     private static string GetOperatorForRuleType(string ruleType) => ruleType switch
     {
@@ -219,10 +242,15 @@ public sealed class VoucherController : ControllerBase
         "ApplyScope" => "=",
         _ => "="
     };
-    private static UserVoucherResponse MapUserVoucher(UserVoucher uv) => new(uv.UserVoucherID, uv.VoucherID,
+    private static UserVoucherResponse MapUserVoucher(
+        UserVoucher uv,
+        Dictionary<int, string> movieNames,
+        Dictionary<int, string> cinemaNames,
+        Dictionary<int, string> tierNames) => new(uv.UserVoucherID, uv.VoucherID,
         uv.Voucher.VoucherCode, uv.Voucher.DiscountType, uv.Voucher.DiscountValue, uv.Status,
         VietnamTime.FromUtc(uv.RedeemedAt), VietnamTime.FromUtc(uv.ExpiredAt),
-        uv.UsedAt.HasValue ? VietnamTime.FromUtc(uv.UsedAt.Value) : null, uv.Voucher.ImageURL);
+        uv.UsedAt.HasValue ? VietnamTime.FromUtc(uv.UsedAt.Value) : null, uv.Voucher.ImageURL,
+        MapVoucherRules(uv.Voucher, movieNames, cinemaNames, tierNames));
     private static string Status(Voucher v, DateTime currentTime)
     {
         if (!v.IsActive) return "DISABLED";
