@@ -113,6 +113,8 @@ public sealed class AdminUserService : IAdminUserService
     {
         var existing = await _repository.GetByIdAsync(userId, cancellationToken);
         if (existing is null) return NotFound<User>();
+        if (existing.Role == Roles.Admin && adminId != userId)
+            return Forbidden<User>("Admins are not allowed to modify or delete another Admin account.");
         var fieldError = ValidateIdentityFields(command.FullName, command.Email, command.Phone);
         if (fieldError is not null) return Validation<User>(fieldError);
         var cinemaError = await ValidateCinemaAsync(existing.Role, command.CinemaId, cancellationToken);
@@ -168,6 +170,8 @@ public sealed class AdminUserService : IAdminUserService
     {
         var existing = await _repository.GetByIdAsync(userId, cancellationToken);
         if (existing is null) return NotFound<User>();
+        if (existing.Role == Roles.Admin && adminId != userId)
+            return Forbidden<User>("Admins are not allowed to modify or delete another Admin account.");
         var statusResult = NormalizeRequired(status, DatabaseEnumMappings.UserStatuses, "Invalid status");
         if (!statusResult.Succeeded) return Validation<User>(statusResult.Error!);
         if (adminId == userId && statusResult.Value is UserStatuses.Locked or UserStatuses.Inactive)
@@ -186,7 +190,10 @@ public sealed class AdminUserService : IAdminUserService
         CancellationToken cancellationToken = default)
     {
         if (!IsValidAdminPassword(password)) return Validation<User>(PasswordErrorMessage);
-        if (await _repository.GetByIdAsync(userId, cancellationToken) is null) return NotFound<User>();
+        var existing = await _repository.GetByIdAsync(userId, cancellationToken);
+        if (existing is null) return NotFound<User>();
+        if (existing.Role == Roles.Admin && adminId != userId)
+            return Forbidden<User>("Admins are not allowed to modify or delete another Admin account.");
         var log = BuildLog(adminId, userId, AdminActionTypes.UpdateUser,
             "Reset password by administrator request.", ipAddress);
         var user = await _repository.ResetPasswordAsync(
@@ -260,6 +267,8 @@ public sealed class AdminUserService : IAdminUserService
             return Forbidden<AdminUserDeleteResult>("Admin cannot delete their own account");
         var existing = await _repository.GetByIdAsync(userId, cancellationToken);
         if (existing is null) return NotFound<AdminUserDeleteResult>();
+        if (existing.Role == Roles.Admin)
+            return Forbidden<AdminUserDeleteResult>("Admins are not allowed to modify or delete another Admin account.");
 
         if (!string.IsNullOrWhiteSpace(existing.AvatarURL)
             && string.IsNullOrWhiteSpace(existing.AvatarPublicId))

@@ -185,6 +185,109 @@ public sealed class AdminUserServiceTests
         Assert.Equal(0, repository.DeleteCallCount);
     }
 
+    [Fact]
+    public async Task UpdateAsync_AdminUpdatesAnotherAdmin_ReturnsForbidden()
+    {
+        var repository = new StubAdminUserRepository
+        {
+            User = new User { UserID = 2, Role = Roles.Admin, Status = UserStatuses.Active }
+        };
+        var service = CreateService(repository);
+
+        var result = await service.UpdateAsync(
+            1, 2,
+            new AdminUserUpdateCommand("Name", "a@b.com", "0901234567", null),
+            null);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(AdminUserErrorType.Forbidden, result.ErrorType);
+        Assert.Contains("Admins are not allowed to modify or delete another Admin account", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_AdminDeletesAnotherAdmin_ReturnsForbidden()
+    {
+        var repository = new StubAdminUserRepository
+        {
+            User = new User { UserID = 2, Role = Roles.Admin, Status = UserStatuses.Active }
+        };
+        var service = CreateService(repository);
+
+        var result = await service.DeleteAsync(1, 2, null);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(AdminUserErrorType.Forbidden, result.ErrorType);
+        Assert.Contains("Admins are not allowed to modify or delete another Admin account", result.ErrorMessage);
+        Assert.Equal(0, repository.DeleteCallCount);
+    }
+
+    [Fact]
+    public async Task ChangeStatusAsync_AdminChangesAnotherAdminStatus_ReturnsForbidden()
+    {
+        var repository = new StubAdminUserRepository
+        {
+            User = new User { UserID = 2, Role = Roles.Admin, Status = UserStatuses.Active }
+        };
+        var service = CreateService(repository);
+
+        var result = await service.ChangeStatusAsync(1, 2, UserStatuses.Locked, null);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(AdminUserErrorType.Forbidden, result.ErrorType);
+        Assert.Contains("Admins are not allowed to modify or delete another Admin account", result.ErrorMessage);
+        Assert.Null(repository.ChangedStatus);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_AdminResetsAnotherAdminPassword_ReturnsForbidden()
+    {
+        var repository = new StubAdminUserRepository
+        {
+            User = new User { UserID = 2, Role = Roles.Admin, Status = UserStatuses.Active }
+        };
+        var service = CreateService(repository);
+
+        var result = await service.ResetPasswordAsync(1, 2, "NewPass@123", null);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(AdminUserErrorType.Forbidden, result.ErrorType);
+        Assert.Contains("Admins are not allowed to modify or delete another Admin account", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_AdminUpdatesStaffUser_Succeeds()
+    {
+        var repository = new StubAdminUserRepository
+        {
+            User = new User { UserID = 2, Role = Roles.Staff, Status = UserStatuses.Active, Phone = "0901234567" }
+        };
+        var service = CreateService(repository);
+
+        var result = await service.UpdateAsync(
+            1, 2,
+            new AdminUserUpdateCommand("Name", "a@b.com", "0901234567", null),
+            null);
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_AdminUpdatesOwnProfile_Succeeds()
+    {
+        var repository = new StubAdminUserRepository
+        {
+            User = new User { UserID = 1, Role = Roles.Admin, Status = UserStatuses.Active, Phone = "0901234567" }
+        };
+        var service = CreateService(repository);
+
+        var result = await service.UpdateAsync(
+            1, 1,
+            new AdminUserUpdateCommand("Name", "a@b.com", "0901234567", null),
+            null);
+
+        Assert.True(result.Succeeded);
+    }
+
     private static AdminUserService CreateService(StubAdminUserRepository repository) =>
         new(repository, new StubImageStorageService(), new StubUnitOfWork(),
             NullLogger<AdminUserService>.Instance);
