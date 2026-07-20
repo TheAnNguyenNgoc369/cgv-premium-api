@@ -32,7 +32,8 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
         CancellationToken cancellationToken = default)
     {
         var totalSpent = await _db.Bookings
-            .Where(b => b.UserID == userId && b.Status == BookingStatus.Paid)
+            .Where(b => b.UserID == userId
+                && (b.Status == BookingStatus.Paid || b.Status == BookingStatus.Used))
             .SumAsync(b => b.FinalAmount, cancellationToken);
 
         return totalSpent;
@@ -224,6 +225,27 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
             .AnyAsync(lp => lp.BookingID == bookingId
                          && lp.TransactionType == LoyaltyTransactionTypes.Earned,
                       cancellationToken);
+    }
+
+    public async Task<IReadOnlySet<int>> GetBookingIdsWithEarnedPointsAsync(
+        IReadOnlyCollection<int> bookingIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (bookingIds.Count == 0)
+        {
+            return new HashSet<int>();
+        }
+
+        var awarded = await _db.LoyaltyPoints
+            .AsNoTracking()
+            .Where(lp => lp.BookingID.HasValue
+                      && bookingIds.Contains(lp.BookingID.Value)
+                      && lp.TransactionType == LoyaltyTransactionTypes.Earned)
+            .Select(lp => lp.BookingID!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return new HashSet<int>(awarded);
     }
 
     public async Task<List<LoyaltyTier>> GetTiersByIdsAsync(List<int> tierIds, CancellationToken cancellationToken = default)

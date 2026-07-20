@@ -8,6 +8,7 @@ using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Collections.Generic;
 
 namespace CinemaBooking.API.Controllers;
 
@@ -20,17 +21,23 @@ public sealed class BookingController : ControllerBase
     private readonly IBookingRepository _bookingRepository;
     private readonly IPaymentService _paymentService;
     private readonly IMovieReviewRepository _movieReviewRepository;
+    private readonly ILoyaltyRepository _loyaltyRepository;
+    private readonly IReviewRewardSettingsRepository _reviewRewardSettingsRepository;
 
     public BookingController(
         IBookingService bookingService,
         IBookingRepository bookingRepository,
         IPaymentService paymentService,
-        IMovieReviewRepository movieReviewRepository)
+        IMovieReviewRepository movieReviewRepository,
+        ILoyaltyRepository loyaltyRepository,
+        IReviewRewardSettingsRepository reviewRewardSettingsRepository)
     {
         _bookingService = bookingService;
         _bookingRepository = bookingRepository;
         _paymentService = paymentService;
         _movieReviewRepository = movieReviewRepository;
+        _loyaltyRepository = loyaltyRepository;
+        _reviewRewardSettingsRepository = reviewRewardSettingsRepository;
     }
 
     [HttpPost("seat-holds")]
@@ -270,13 +277,39 @@ public sealed class BookingController : ControllerBase
                 booking, userId, isStaff: false, cancellationToken));
         }
 
+        var bookingIds = synchronized.Select(b => b.BookingID).ToList();
+
         var reviewIdsByBooking = await _movieReviewRepository.GetReviewIdsByBookingIdsAsync(
-            synchronized.Select(b => b.BookingID).ToList(),
+            bookingIds,
             cancellationToken);
 
-        return Ok(synchronized.Select(b => MapToMyResponse(
-            b,
-            reviewIdsByBooking.TryGetValue(b.BookingID, out var rid) ? rid : (int?)null)));
+        var bookingIdsWithAwardedPoints = await _loyaltyRepository
+            .GetBookingIdsWithEarnedPointsAsync(bookingIds, cancellationToken);
+
+        var rewardSettings = await _reviewRewardSettingsRepository.GetAsync(cancellationToken);
+        var firstReviewPoints = rewardSettings?.FirstReviewPoints ?? 0;
+        var nextReviewPoints = rewardSettings?.NextReviewPoints ?? 0;
+
+        var userHasAnyReview = await _movieReviewRepository.UserHasAnyReviewAsync(
+            userId, cancellationToken);
+        var reviewPoints = userHasAnyReview ? nextReviewPoints : firstReviewPoints;
+
+        return Ok(synchronized.Select(b =>
+        {
+            var reviewId = reviewIdsByBooking.TryGetValue(b.BookingID, out var rid) ? rid : (int?)null;
+            var isUsed = b.Status == BookingStatus.Used;
+
+            var purchaseReward = new PurchaseRewardResponse(
+                Earned: isUsed && bookingIdsWithAwardedPoints.Contains(b.BookingID),
+                Points: (int)(b.FinalAmount * MembershipTiers.PointsPerVnd));
+
+            var reviewReward = new ReviewRewardResponse(
+                Eligible: isUsed,
+                Earned: reviewId.HasValue,
+                Points: reviewPoints);
+
+            return MapToMyResponse(b, reviewId, purchaseReward, reviewReward);
+        }));
     }
 
     private int GetCurrentUserId()
@@ -337,7 +370,11 @@ public sealed class BookingController : ControllerBase
         );
     }
 
-    private static MyBookingResponse MapToMyResponse(Booking booking, int? reviewId)
+    private static MyBookingResponse MapToMyResponse(
+        Booking booking,
+        int? reviewId,
+        PurchaseRewardResponse purchaseReward,
+        ReviewRewardResponse reviewReward)
     {
         return new MyBookingResponse(
             booking.BookingID,
@@ -372,7 +409,9 @@ public sealed class BookingController : ControllerBase
                   )
                 : null,
             reviewId.HasValue,
-            reviewId
+            reviewId,
+            purchaseReward,
+            reviewReward
         );
     }
 

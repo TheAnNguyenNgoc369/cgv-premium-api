@@ -42,7 +42,20 @@ public sealed record MyBookingResponse(
     List<BookingFnBResponse> FnbItems,
     BookingVoucherResponse? VoucherApplied,
     bool HasReviewed,
-    int? ReviewId
+    int? ReviewId,
+    PurchaseRewardResponse PurchaseReward,
+    ReviewRewardResponse ReviewReward
+);
+
+public sealed record PurchaseRewardResponse(
+    bool Earned,
+    int Points
+);
+
+public sealed record ReviewRewardResponse(
+    bool Eligible,
+    bool Earned,
+    int Points
 );
 
 public sealed record BookingMovieResponse(

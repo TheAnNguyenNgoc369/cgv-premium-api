@@ -1,4 +1,5 @@
 using CinemaBooking.Application.Common.Interfaces;
+using CinemaBooking.Application.Membership;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 
@@ -8,13 +9,16 @@ public sealed class CheckInService : ICheckInService
 {
     private readonly ITicketRepository _ticketRepository;
     private readonly IBookingRepository _bookingRepository;
+    private readonly IMembershipService _membershipService;
 
     public CheckInService(
         ITicketRepository ticketRepository,
-        IBookingRepository bookingRepository)
+        IBookingRepository bookingRepository,
+        IMembershipService membershipService)
     {
         _ticketRepository = ticketRepository;
         _bookingRepository = bookingRepository;
+        _membershipService = membershipService;
     }
 
     public async Task<(bool Succeeded, string? ErrorMessage, CheckInLookupResult? Data)> LookupAsync(
@@ -162,7 +166,7 @@ public sealed class CheckInService : ICheckInService
         if (now > latestCheckIn)
             return (false, "Check-in time has expired.", null, null);
 
-        var success = await _ticketRepository.PerformTicketCheckInAsync(
+        var (success, bookingBecameUsed) = await _ticketRepository.PerformTicketCheckInAsync(
             ticket.TicketID,
             booking.BookingID,
             staffId,
@@ -172,6 +176,15 @@ public sealed class CheckInService : ICheckInService
 
         if (!success)
             return (false, "Failed to perform check-in.", null, null);
+
+        if (bookingBecameUsed && booking.UserID.HasValue)
+        {
+            await _membershipService.AddPointsAfterPaymentSuccessAsync(
+                booking.UserID.Value,
+                booking.BookingID,
+                booking.FinalAmount,
+                cancellationToken);
+        }
 
         return (true, null, booking.BookingCode, now);
     }

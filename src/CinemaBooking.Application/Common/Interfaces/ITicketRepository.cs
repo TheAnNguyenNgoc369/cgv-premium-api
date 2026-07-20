@@ -37,7 +37,7 @@ public interface ITicketRepository
         string qrCode,
         CancellationToken cancellationToken = default);
 
-    Task<bool> PerformTicketCheckInAsync(
+    Task<(bool Success, bool BookingBecameUsed)> PerformTicketCheckInAsync(
         int ticketId,
         int bookingId,
         int staffId,

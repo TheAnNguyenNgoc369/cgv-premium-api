@@ -388,16 +388,17 @@ Authorization: Bearer {customer_token}
   "success": true,
   "vouchers": [
     {
-      "userVoucherId": 1,
       "voucherId": 1,
       "voucherCode": "REDEEM50K",
       "discountType": "fixed",
       "discountValue": 50000,
       "status": "available",
+      "quantity": 1,
       "redeemedAt": "...",
       "expiredAt": "...",
       "usedAt": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "voucherRules": []
     }
   ]
 }

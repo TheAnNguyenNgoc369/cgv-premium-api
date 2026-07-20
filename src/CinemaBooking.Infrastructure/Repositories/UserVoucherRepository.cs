@@ -16,8 +16,10 @@ public sealed class UserVoucherRepository : IUserVoucherRepository
     {
         return await _db.Set<UserVoucher>()
             .Include(uv => uv.Voucher)
+                .ThenInclude(v => v.VoucherRules)
             .Where(uv => uv.UserID == userId)
             .OrderByDescending(uv => uv.RedeemedAt)
+            .AsSplitQuery()
             .ToListAsync(ct);
     }
 

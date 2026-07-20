@@ -140,5 +140,6 @@ public sealed class LoyaltyTierServiceTests
         public Task UpdateUserTierAsync(int userId, int tierID, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task UpdateUserTotalPointsAsync(int userId, int totalPoints, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> HasPointsForBookingAsync(int bookingId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlySet<int>> GetBookingIdsWithEarnedPointsAsync(IReadOnlyCollection<int> bookingIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }
