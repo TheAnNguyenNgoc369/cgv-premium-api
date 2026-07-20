@@ -18,7 +18,7 @@ public sealed record UserLookupResponse(
         UserMembershipInfo Membership,
         UserWalletInfo? Wallet,
         object? Cinema,
-        List<RedeemableVoucherResponse>? Vouchers);
+        List<UserVoucherResponse>? Vouchers);
 
     public sealed record UserMembershipInfo(
         string CurrentTier,

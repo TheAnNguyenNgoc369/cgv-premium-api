@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using CinemaBooking.API.Configuration;
+using CinemaBooking.API.Contracts.Vouchers;
 using CinemaBooking.API.OpenApi;
 using CinemaBooking.API.Services;
 using CinemaBooking.API.Serialization;
@@ -142,6 +143,7 @@ public static class DependencyInjection
         services.AddScoped<JwtTokenService>();
         services.AddScoped<ITokenRevocationService, DatabaseTokenRevocationService>();
         services.AddScoped<IReviewRewardSettingsService, ReviewRewardSettingsService>();
+        services.AddScoped<UserVoucherProjection>();
         services.AddSingleton<IAuthRequestRateLimiter, AuthRequestRateLimiter>();
         services.AddRateLimiter(options =>
         {

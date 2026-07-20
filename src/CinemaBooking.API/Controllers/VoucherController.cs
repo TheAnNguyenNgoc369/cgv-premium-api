@@ -1,7 +1,6 @@
 using CinemaBooking.API.Contracts.Vouchers;
 using CinemaBooking.Application.Vouchers;
 using CinemaBooking.Application.Vouchers.RuleEngine.Metadata;
-using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 using CinemaBooking.Shared.Time;
@@ -15,22 +14,16 @@ public sealed class VoucherController : ControllerBase
 {
     private readonly IVoucherService _service;
     private readonly IVoucherRuleMetadataProvider _ruleMetadata;
-    private readonly IMovieRepository _movieRepository;
-    private readonly ICinemaRepository _cinemaRepository;
-    private readonly ILoyaltyRepository _loyaltyRepository;
+    private readonly UserVoucherProjection _voucherProjection;
 
     public VoucherController(
         IVoucherService service,
         IVoucherRuleMetadataProvider ruleMetadata,
-        IMovieRepository movieRepository,
-        ICinemaRepository cinemaRepository,
-        ILoyaltyRepository loyaltyRepository)
+        UserVoucherProjection voucherProjection)
     {
         _service = service;
         _ruleMetadata = ruleMetadata;
-        _movieRepository = movieRepository;
-        _cinemaRepository = cinemaRepository;
-        _loyaltyRepository = loyaltyRepository;
+        _voucherProjection = voucherProjection;
     }
 
     [HttpGet, AllowAnonymous]
@@ -67,13 +60,8 @@ public sealed class VoucherController : ControllerBase
         var result = await _service.GetRedeemableVouchersAsync(ct);
         if (!result.Succeeded) return BadRequest(new { success = false, message = result.Error });
 
-        var (movieNames, cinemaNames, tierNames) = await BuildRuleNameLookupsAsync(result.Vouchers, ct);
-
-        return Ok(new
-        {
-            success = true,
-            vouchers = result.Vouchers.Select(v => MapRedeemable(v, movieNames, cinemaNames, tierNames)).ToList()
-        });
+        var vouchers = await _voucherProjection.ProjectRedeemableAsync(result.Vouchers, ct);
+        return Ok(new { success = true, vouchers });
     }
 
     /// <summary>
@@ -98,33 +86,8 @@ public sealed class VoucherController : ControllerBase
         var result = await _service.GetUserVouchersAsync(userId, ct);
         if (!result.Succeeded) return BadRequest(new { success = false, message = result.Error });
 
-        // Group by VoucherID so a customer with N copies of the same voucher sees one card
-        // with Quantity=N instead of N duplicate cards. Only USABLE copies (Available and
-        // not past ExpiredAt) count toward Quantity; groups with zero usable copies are
-        // dropped entirely. Redemption still operates on individual UserVoucher rows via
-        // (UserID, VoucherID) — the underlying rows are unchanged.
-        var now = DateTime.UtcNow;
-        var grouped = result.Vouchers
-            .Where(uv => uv.Status == UserVoucherStatus.Available && uv.ExpiredAt >= now)
-            .GroupBy(uv => uv.VoucherID)
-            .Select(g =>
-            {
-                var representative = g.OrderByDescending(uv => uv.RedeemedAt).First();
-                return (representative, quantity: g.Count());
-            })
-            .OrderByDescending(x => x.representative.RedeemedAt)
-            .ToList();
-
-        var (movieNames, cinemaNames, tierNames) = await BuildRuleNameLookupsAsync(
-            grouped.Select(x => x.representative.Voucher), ct);
-
-        return Ok(new
-        {
-            success = true,
-            vouchers = grouped
-                .Select(x => MapUserVoucher(x.representative, x.quantity, movieNames, cinemaNames, tierNames))
-                .ToList()
-        });
+        var vouchers = await _voucherProjection.ProjectAsync(result.Vouchers, ct);
+        return Ok(new { success = true, vouchers });
     }
 
     [HttpPost, Authorize(Roles = Roles.Admin), Consumes("application/json")]
@@ -167,124 +130,6 @@ public sealed class VoucherController : ControllerBase
         VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description, v.IsActive, Status(v, currentTime), v.CreatedAt,
         v.VoucherRules?.Select(r => new VoucherRuleResponse(r.RuleID, r.RuleType, r.RuleValue, r.CreatedAt)).ToList(),
         v.IsRedeemable, v.RequiredPoints, v.ExchangeLimit);
-    private static RedeemableVoucherResponse MapRedeemable(
-        Voucher v,
-        Dictionary<int, string> movieNames,
-        Dictionary<int, string> cinemaNames,
-        Dictionary<int, string> tierNames) => new(
-        v.VoucherID,
-        v.VoucherCode,
-        v.DiscountType,
-        v.DiscountValue,
-        v.RequiredPoints!.Value,
-        v.ExchangeLimit,
-        VietnamTime.FromUtc(v.ValidFrom),
-        VietnamTime.FromUtc(v.ValidUntil),
-        v.ImageURL,
-        v.Description,
-        MapVoucherRules(v, movieNames, cinemaNames, tierNames)
-    );
-
-    private static List<RedeemableVoucherRuleResponse> MapVoucherRules(
-        Voucher v,
-        Dictionary<int, string> movieNames,
-        Dictionary<int, string> cinemaNames,
-        Dictionary<int, string> tierNames) =>
-        (v.VoucherRules ?? [])
-            .Select(r => new RedeemableVoucherRuleResponse(
-                r.RuleType,
-                GetOperatorForRuleType(r.RuleType),
-                r.RuleValue,
-                RedeemableVoucherRuleDisplayTextGenerator.GenerateDisplayText(
-                    r.RuleType,
-                    r.RuleValue,
-                    movieNames,
-                    cinemaNames,
-                    null,
-                    tierNames)
-            ))
-            .ToList();
-
-    private async Task<(Dictionary<int, string> movieNames, Dictionary<int, string> cinemaNames, Dictionary<int, string> tierNames)>
-        BuildRuleNameLookupsAsync(IEnumerable<Voucher> vouchers, CancellationToken ct)
-    {
-        var movieIds = new HashSet<int>();
-        var cinemaIds = new HashSet<int>();
-        var tierIds = new HashSet<int>();
-
-        foreach (var voucher in vouchers)
-        {
-            foreach (var rule in voucher.VoucherRules ?? [])
-            {
-                if (rule.RuleType == "Movie" && int.TryParse(rule.RuleValue, out var movieId))
-                    movieIds.Add(movieId);
-                else if (rule.RuleType == "Cinema" && int.TryParse(rule.RuleValue, out var cinemaId))
-                    cinemaIds.Add(cinemaId);
-                else if (rule.RuleType == "Membership" && int.TryParse(rule.RuleValue, out var tierId))
-                    tierIds.Add(tierId);
-            }
-        }
-
-        var movieNames = movieIds.Any()
-            ? (await _movieRepository.GetMoviesByIdsAsync(movieIds.ToList(), ct))
-                .ToDictionary(m => m.MovieID, m => m.Title)
-            : new Dictionary<int, string>();
-
-        var cinemaNames = cinemaIds.Any()
-            ? (await _cinemaRepository.GetCinemasByIdsAsync(cinemaIds.ToList(), ct))
-                .ToDictionary(c => c.CinemaID, c => c.CinemaName)
-            : new Dictionary<int, string>();
-
-        var tierNames = tierIds.Any()
-            ? (await _loyaltyRepository.GetTiersByIdsAsync(tierIds.ToList(), ct))
-                .ToDictionary(t => t.TierID, t => t.TierName)
-            : new Dictionary<int, string>();
-
-        return (movieNames, cinemaNames, tierNames);
-    }
-
-    private static string GetOperatorForRuleType(string ruleType) => ruleType switch
-    {
-        "MinimumSpend" => ">=",
-        "MaximumSpend" => "<=",
-        "TicketQuantity" => ">=",
-        "Movie" => "=",
-        "Cinema" => "=",
-        "SeatType" => "=",
-        "Room" => "=",
-        "Membership" => "=",
-        "PaymentMethod" => "=",
-        "DayOfWeek" => "=",
-        "Product" => "=",
-        "FoodCategory" => "=",
-        "FoodAndDrink" => "=",
-        "ApplyScope" => "=",
-        _ => "="
-    };
-    private static UserVoucherResponse MapUserVoucher(
-        UserVoucher uv,
-        int quantity,
-        Dictionary<int, string> movieNames,
-        Dictionary<int, string> cinemaNames,
-        Dictionary<int, string> tierNames) => new(
-        // Voucher information
-        uv.VoucherID,
-        uv.Voucher.VoucherCode,
-        uv.Voucher.DiscountType,
-        uv.Voucher.DiscountValue,
-
-        // Display information
-        uv.Voucher.ImageURL,
-        MapVoucherRules(uv.Voucher, movieNames, cinemaNames, tierNames),
-
-        // Ownership information
-        quantity,
-        uv.Status,
-
-        // Lifecycle
-        VietnamTime.FromUtc(uv.RedeemedAt),
-        VietnamTime.FromUtc(uv.ExpiredAt),
-        uv.UsedAt.HasValue ? VietnamTime.FromUtc(uv.UsedAt.Value) : null);
     private static string Status(Voucher v, DateTime currentTime)
     {
         if (!v.IsActive) return "DISABLED";

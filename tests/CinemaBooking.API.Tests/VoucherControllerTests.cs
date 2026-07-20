@@ -406,7 +406,8 @@ public sealed class VoucherControllerTests
             new Claim(ClaimTypes.Role, Roles.Admin)
         ], "Test");
 
-        return new VoucherController(new StubVoucherService(createResult), new StubVoucherRuleMetadataProvider())
+        // Projection is null because Create/Update paths tested here never invoke it.
+        return new VoucherController(new StubVoucherService(createResult), new StubVoucherRuleMetadataProvider(), null!)
         {
             ControllerContext = new ControllerContext
             {
