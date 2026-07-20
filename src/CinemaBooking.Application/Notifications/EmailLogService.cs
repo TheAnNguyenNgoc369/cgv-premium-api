@@ -6,7 +6,7 @@ namespace CinemaBooking.Application.Notifications;
 
 public sealed class EmailLogService : IEmailLogService
 {
-    private static readonly HashSet<string> DeliveryStatuses = ["pending", "processing", "sent", "failed", "retrying"];
+    private static readonly HashSet<string> DeliveryStatuses = ["pending", "queued", "processing", "sent", "failed", "retrying"];
 
     private readonly IEmailLogRepository _repository;
 

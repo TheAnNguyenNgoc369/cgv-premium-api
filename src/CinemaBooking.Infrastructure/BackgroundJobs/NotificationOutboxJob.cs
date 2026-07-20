@@ -88,6 +88,9 @@ public sealed class NotificationOutboxJob(IServiceScopeFactory scopeFactory, ILo
                 else if (item.EventType == "RoomUpdated") await ProcessRoomUpdatedAsync(db, notificationService, item, ct);
                 else if (item.EventType == "RoomInactive") await ProcessRoomInactiveAsync(db, notificationService, item, ct);
                 else if (item.EventType == "ShowtimeStartingSoon") await ProcessShowtimeStartingSoonAsync(db, notificationService, item, ct);
+                else if (item.EventType == "ShowtimeCreated") await ProcessShowtimeCreatedAsync(db, notificationService, item, ct);
+                else if (item.EventType == "ShowtimeUpdated") await ProcessShowtimeUpdatedAsync(db, notificationService, item, ct);
+                else if (item.EventType == "ShowtimeDeleted") await ProcessShowtimeDeletedAsync(db, notificationService, item, ct);
                 item.Status = "processed"; item.ProcessedAt = DateTime.UtcNow; item.LastError = null; item.NextAttemptAt = null;
 
                 await db.SaveChangesAsync(ct);
@@ -429,6 +432,61 @@ public sealed class NotificationOutboxJob(IServiceScopeFactory scopeFactory, ILo
             "Showtime",
             showtimeId,
             $"/staff/showtimes/{showtimeId}",
+            item.EventId,
+            ct);
+    }
+
+    private static async Task ProcessShowtimeCreatedAsync(CinemaBookingDbContext db, INotificationService notificationService, NotificationOutbox item, CancellationToken ct)
+    {
+        var showtimeId = item.ReferenceId;
+        var showtime = await db.Showtimes.AsNoTracking().Include(x => x.Movie).FirstOrDefaultAsync(x => x.ShowtimeID == showtimeId, ct);
+        var movieName = showtime?.Movie?.Title ?? "Movie";
+        var showtimeStr = showtime?.StartTime.ToString("HH:mm dd/MM/yyyy") ?? "";
+
+        await notificationService.SendToRolesAsync(
+            [Roles.Manager],
+            "Showtime Created",
+            item.Message ?? $"Showtime for {movieName} at {showtimeStr} has been created.",
+            "showtime",
+            "ShowtimeCreated",
+            "Showtime",
+            showtimeId,
+            $"/manager/showtimes/{showtimeId}",
+            item.EventId,
+            ct);
+    }
+
+    private static async Task ProcessShowtimeUpdatedAsync(CinemaBookingDbContext db, INotificationService notificationService, NotificationOutbox item, CancellationToken ct)
+    {
+        var showtimeId = item.ReferenceId;
+        var showtime = await db.Showtimes.AsNoTracking().Include(x => x.Movie).FirstOrDefaultAsync(x => x.ShowtimeID == showtimeId, ct);
+        var movieName = showtime?.Movie?.Title ?? "Movie";
+        var showtimeStr = showtime?.StartTime.ToString("HH:mm dd/MM/yyyy") ?? "";
+
+        await notificationService.SendToRolesAsync(
+            [Roles.Manager],
+            "Showtime Updated",
+            item.Message ?? $"Showtime for {movieName} at {showtimeStr} has been updated.",
+            "showtime",
+            "ShowtimeUpdated",
+            "Showtime",
+            showtimeId,
+            $"/manager/showtimes/{showtimeId}",
+            item.EventId,
+            ct);
+    }
+
+    private static async Task ProcessShowtimeDeletedAsync(CinemaBookingDbContext db, INotificationService notificationService, NotificationOutbox item, CancellationToken ct)
+    {
+        await notificationService.SendToRolesAsync(
+            [Roles.Manager],
+            "Showtime Deleted",
+            item.Message ?? "A showtime has been deleted.",
+            "showtime",
+            "ShowtimeDeleted",
+            "Showtime",
+            item.ReferenceId,
+            "/manager/showtimes",
             item.EventId,
             ct);
     }
