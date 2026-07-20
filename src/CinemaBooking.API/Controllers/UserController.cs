@@ -13,6 +13,8 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+
+
 namespace CinemaBooking.API.Controllers;
 
 [ApiController]
@@ -23,15 +25,18 @@ public sealed class UserController : ControllerBase
     private readonly IUserService _userService;
     private readonly IMembershipService _membershipService;
     private readonly IVoucherService _voucherService;
+    private readonly UserVoucherProjection _voucherProjection;
 
     public UserController(
         IUserService userService,
         IMembershipService membershipService,
-        IVoucherService voucherService)
+        IVoucherService voucherService,
+        UserVoucherProjection voucherProjection)
     {
         _userService = userService;
         _membershipService = membershipService;
         _voucherService = voucherService;
+        _voucherProjection = voucherProjection;
     }
 
     [HttpGet("profile")]
@@ -214,7 +219,10 @@ public sealed class UserController : ControllerBase
         }
 
         var membership = await _membershipService.GetMyMembershipAsync(user.UserID, cancellationToken);
-        var vouchers = await _voucherService.GetUserRedeemableVouchersAsync(user.UserID, cancellationToken);
+        var ownedResult = await _voucherService.GetUserVouchersAsync(user.UserID, cancellationToken);
+        var vouchers = ownedResult.Succeeded
+            ? await _voucherProjection.ProjectAsync(ownedResult.Vouchers, cancellationToken)
+            : [];
 
         return Ok(ToLookupResponse(user, membership, vouchers));
     }
@@ -311,22 +319,8 @@ public sealed class UserController : ControllerBase
     private static UserLookupResponse ToLookupResponse(
         User user,
         MembershipInfo membership,
-        UserRedeemableVouchersResult redeemableVouchers)
+        List<UserVoucherResponse> vouchers)
     {
-        var voucherResponses = redeemableVouchers.Vouchers?.Select(v => new RedeemableVoucherResponse(
-            v.VoucherId,
-            v.VoucherCode,
-            v.DiscountType,
-            v.DiscountValue,
-            v.RequiredPoints,
-            v.ExchangeLimit,
-            v.ValidFrom,
-            v.ValidUntil,
-            v.ImageUrl,
-            v.Description,
-            [])).ToList();
-
-
         return new UserLookupResponse(
             true,
             "User found.",
@@ -348,6 +342,6 @@ public sealed class UserController : ControllerBase
                     ? null
                     : new UserLookupResponse.UserWalletInfo(user.Wallet.WalletID, user.Wallet.Balance),
                 null,
-                voucherResponses));
+                vouchers));
     }
 }
