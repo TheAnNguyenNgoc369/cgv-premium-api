@@ -49,6 +49,12 @@ public sealed class NotificationOutbox : INotificationOutbox
         $"RoomInactive:{roomId}", "RoomInactive", roomId, null, null, message, ct);
     public Task EnqueueShowtimeStartingSoonAsync(int showtimeId, string message, int minutesRemaining, CancellationToken ct = default) => EnqueueAsync(
         $"ShowtimeStartingSoon:{showtimeId}:{minutesRemaining}m", "ShowtimeStartingSoon", showtimeId, null, null, message, ct);
+    public Task EnqueueShowtimeCreatedAsync(int showtimeId, string message, CancellationToken ct = default) => EnqueueAsync(
+        $"ShowtimeCreated:{showtimeId}", "ShowtimeCreated", showtimeId, null, null, message, ct);
+    public Task EnqueueShowtimeUpdatedAsync(int showtimeId, string message, CancellationToken ct = default) => EnqueueAsync(
+        $"ShowtimeUpdated:{showtimeId}:{DateTime.UtcNow:yyyyMMddHHmmss}", "ShowtimeUpdated", showtimeId, null, null, message, ct);
+    public Task EnqueueShowtimeDeletedAsync(int showtimeId, string message, CancellationToken ct = default) => EnqueueAsync(
+        $"ShowtimeDeleted:{showtimeId}:{DateTime.UtcNow:yyyyMMddHHmmss}", "ShowtimeDeleted", showtimeId, null, null, message, ct);
 
     private async Task EnqueueAsync(string eventId, string eventType, int referenceId, decimal? amount, DateTime? occurredAt, string? message, CancellationToken ct)
     {

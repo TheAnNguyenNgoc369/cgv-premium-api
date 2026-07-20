@@ -26,4 +26,7 @@ public interface INotificationOutbox
     Task EnqueueRoomUpdatedAsync(int roomId, string message, CancellationToken cancellationToken = default);
     Task EnqueueRoomInactiveAsync(int roomId, string message, CancellationToken cancellationToken = default);
     Task EnqueueShowtimeStartingSoonAsync(int showtimeId, string message, int minutesRemaining, CancellationToken cancellationToken = default);
+    Task EnqueueShowtimeCreatedAsync(int showtimeId, string message, CancellationToken cancellationToken = default);
+    Task EnqueueShowtimeUpdatedAsync(int showtimeId, string message, CancellationToken cancellationToken = default);
+    Task EnqueueShowtimeDeletedAsync(int showtimeId, string message, CancellationToken cancellationToken = default);
 }

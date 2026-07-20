@@ -1,6 +1,7 @@
 using CinemaBooking.Application.Common.Enums;
 using CinemaBooking.Application.Common.Interfaces;
 using CinemaBooking.Application.Common.Security;
+using CinemaBooking.Application.Notifications;
 using CinemaBooking.Domain.Entities;
 using CinemaBooking.Shared.Constants;
 
@@ -15,12 +16,15 @@ public sealed class ShowtimeService : IShowtimeService
         "StartTime must be normalized to UTC";
     private readonly IShowtimeRepository _showtimeRepository;
     private readonly IUnitOfWork? _unitOfWork;
+    private readonly INotificationOutbox _notificationOutbox;
 
     public ShowtimeService(
         IShowtimeRepository showtimeRepository,
+        INotificationOutbox notificationOutbox,
         IUnitOfWork? unitOfWork = null)
     {
         _showtimeRepository = showtimeRepository;
+        _notificationOutbox = notificationOutbox;
         _unitOfWork = unitOfWork;
     }
 
@@ -109,7 +113,11 @@ public sealed class ShowtimeService : IShowtimeService
 
             existing.Status = "cancelled";
             var cancelled = await _showtimeRepository.UpdateAsync(existing, cancellationToken);
-            return cancelled is null ? (false, "Showtime not found", null) : (true, null, cancelled);
+            if (cancelled is null) return (false, "Showtime not found", null);
+            await _notificationOutbox.EnqueueShowtimeUpdatedAsync(id,
+                $"Showtime for {existing.Movie.Title} in {existing.Room.RoomName} at {existing.StartTime:HH:mm dd/MM/yyyy} has been deleted.",
+                cancellationToken);
+            return (true, null, cancelled);
         }
 
         return await SaveAsync(
@@ -125,8 +133,12 @@ public sealed class ShowtimeService : IShowtimeService
             return (false, CinemaScopeMessages.AccessDenied);
         if (await _showtimeRepository.HasAnyBookingOrHoldAsync(id, cancellationToken))
             return (false, "Showtime has booking or seat hold history");
-        return await _showtimeRepository.DeleteAsync(id, cancellationToken)
-            ? (true, null) : (false, "Showtime not found");
+        if (!await _showtimeRepository.DeleteAsync(id, cancellationToken))
+            return (false, "Showtime not found");
+        await _notificationOutbox.EnqueueShowtimeDeletedAsync(id,
+            $"Showtime for {showtime.Movie.Title} in {showtime.Room.RoomName} at {showtime.StartTime:HH:mm dd/MM/yyyy} has been deleted.",
+            cancellationToken);
+        return (true, null);
     }
 
     public async Task<bool> IsSoldOutAsync(
@@ -203,7 +215,7 @@ public sealed class ShowtimeService : IShowtimeService
             ? CalculateStatus(startTime, DateTime.UtcNow)
             : manualStatus ?? existing.Status;
 
-        return await ExecuteInTransactionAsync(async () =>
+        var (succeeded, errorMsg, savedShowtime) = await ExecuteInTransactionAsync(async () =>
         {
             var cinemaIds = existing is null || existing.RoomID == roomId
                 ? [room.CinemaID]
@@ -249,6 +261,15 @@ public sealed class ShowtimeService : IShowtimeService
                 ? (false, "Showtime not found", (Showtime?)null)
                 : (true, (string?)null, saved);
         }, cancellationToken);
+
+        if (succeeded && savedShowtime is not null)
+        {
+            var action = existing is null ? "created" : "updated";
+            await _notificationOutbox.EnqueueShowtimeUpdatedAsync(savedShowtime.ShowtimeID,
+                $"Showtime for {movie.Title} in {room.RoomName} at {startTime:HH:mm dd/MM/yyyy} has been {action}.",
+                cancellationToken);
+        }
+        return (succeeded, (string?)null, savedShowtime);
     }
 
     private Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken) =>

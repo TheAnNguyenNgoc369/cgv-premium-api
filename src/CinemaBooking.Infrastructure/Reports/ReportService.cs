@@ -5,6 +5,7 @@ using CinemaBooking.Infrastructure.Persistence;
 using CinemaBooking.Shared.Constants;
 using CinemaBooking.Shared.Time;
 using Microsoft.EntityFrameworkCore;
+using QuestPDF.Drawing;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -15,14 +16,42 @@ namespace CinemaBooking.Infrastructure.Reports;
 public sealed class ReportService : IReportService
 {
     private readonly CinemaBookingDbContext _db;
-    public ReportService(CinemaBookingDbContext db) { _db = db; QuestPDF.Settings.License = LicenseType.Community; }
+    private static bool _fontRegistered;
+
+    public ReportService(CinemaBookingDbContext db)
+    {
+        _db = db;
+        QuestPDF.Settings.License = LicenseType.Community;
+        RegisterDefaultFont();
+    }
+
+    private static void RegisterDefaultFont()
+    {
+        if (_fontRegistered) return;
+        try
+        {
+            var fontPath = OperatingSystem.IsWindows()
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Fonts", "arial.ttf")
+                : "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf";
+            if (File.Exists(fontPath))
+            {
+                using var stream = File.OpenRead(fontPath);
+                FontManager.RegisterFont(stream);
+                _fontRegistered = true;
+            }
+        }
+        catch
+        {
+        }
+    }
 
     private IQueryable<Payment> Payments(DateTime from, DateTime to, int? cinemaId)
     {
         var query = _db.Payments.AsNoTracking().Where(p => p.Status == PaymentStatus.Completed
             && p.PaidAt.HasValue && p.PaidAt.Value >= from && p.PaidAt.Value < to
             && p.Booking.Status != BookingStatus.Cancelled
-            && p.Booking.Status != BookingStatus.Refunded);
+            && p.Booking.Status != BookingStatus.Refunded
+            && p.Booking.ShowtimeID != null);
         return cinemaId.HasValue ? query.Where(p => p.Booking.Showtime!.Room.CinemaID == cinemaId) : query;
     }
 
@@ -44,7 +73,8 @@ public sealed class ReportService : IReportService
         IQueryable<Payment> payments = Payments(from, to, cinemaId).Include(p => p.Booking).ThenInclude(b => b.BookingSeats)
             .ThenInclude(bookingSeat => bookingSeat.Seat).ThenInclude(seat => seat.SeatType)
             .Include(p => p.Booking).ThenInclude(b => b.Showtime!).ThenInclude(s => s.Movie)
-            .Include(p => p.Booking).ThenInclude(b => b.Showtime!).ThenInclude(s => s.Room);
+            .Include(p => p.Booking).ThenInclude(b => b.Showtime!).ThenInclude(s => s.Room)
+            .AsSplitQuery();
         if (!string.IsNullOrWhiteSpace(search)) payments = payments.Where(p => p.Booking.Showtime!.Movie.Title.Contains(search));
         var rows = await payments.ToListAsync(ct);
         var result = rows.GroupBy(p => new { p.Booking.Showtime!.MovieID, p.Booking.Showtime!.Movie.Title })

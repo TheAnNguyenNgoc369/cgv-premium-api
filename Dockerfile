@@ -22,7 +22,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends curl \
+    && apt-get install --yes --no-install-recommends curl fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/publish ./

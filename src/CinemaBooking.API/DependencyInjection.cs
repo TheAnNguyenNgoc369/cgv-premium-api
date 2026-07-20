@@ -82,6 +82,12 @@ public static class DependencyInjection
                             return new BadRequestObjectResult(new { success = false, message = $"{fieldName} is required. Expected format: yyyy-MM-dd." });
                         }
 
+                        if (context.HttpContext?.Request.Path.StartsWithSegments("/api/admin/email-logs", StringComparison.OrdinalIgnoreCase) == true
+                            && (fieldName == "fromDate" || fieldName == "toDate"))
+                        {
+                            return new BadRequestObjectResult(new { success = false, message = $"{fieldName} has an invalid format. Expected format: yyyy-MM-dd." });
+                        }
+
                         if (context.HttpContext?.Request.Path.StartsWithSegments("/api/vouchers", StringComparison.OrdinalIgnoreCase) == true)
                         {
                             var isRequiredError = errorText.Contains("required", StringComparison.OrdinalIgnoreCase)
