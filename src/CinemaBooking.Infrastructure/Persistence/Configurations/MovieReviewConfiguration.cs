@@ -47,10 +47,6 @@ public class MovieReviewConfiguration : IEntityTypeConfiguration<MovieReview>
         builder.HasIndex(r => r.BookingId).IsUnique().HasDatabaseName("UQ_MovieReviews_BookingId");
         builder.HasIndex(r => r.IsHidden).HasDatabaseName("IX_MovieReviews_IsHidden");
 
-        builder.HasIndex(r => new { r.UserId, r.MovieId })
-            .IsUnique()
-            .HasDatabaseName("UQ_MovieReviews_UserId_MovieId");
-
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_MovieReviews_Rating", "[Rating] BETWEEN 1 AND 5");

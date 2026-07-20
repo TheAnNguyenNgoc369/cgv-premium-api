@@ -67,19 +67,13 @@ public sealed class ReviewService : IReviewService
 
         var movieId = booking.Showtime.MovieID;
 
-        // 7. User has never reviewed this Movie before.
-        if (await _reviewRepository.UserHasReviewedMovieAsync(userId, movieId, cancellationToken))
-        {
-            return new CreateReviewResult(false, "You have already reviewed this movie.", null, "conflict");
-        }
-
-        // 8. Rating must be integer 1~5 only.
+        // 7. Rating must be integer 1~5 only.
         if (rating < 1 || rating > 5)
         {
             return new CreateReviewResult(false, "Rating must be between 1 and 5.", null, "invalid_input");
         }
 
-        // 9. Comment optional. Trim whitespace. Max 2000 chars.
+        // 8. Comment optional. Trim whitespace. Max 2000 chars.
         string? normalizedComment = null;
         if (!string.IsNullOrWhiteSpace(comment))
         {
