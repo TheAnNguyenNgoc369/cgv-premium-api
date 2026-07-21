@@ -187,6 +187,8 @@ public sealed class ShowtimeService : IShowtimeService
             return (false, StartTimeMustBeUtcMessage, null);
         if (startTime <= DateTime.UtcNow)
             return (false, "StartTime must be in the future.", null);
+        if (startTime <= DateTime.UtcNow.AddMinutes(30))
+            return (false, "StartTime must be at least 30 minutes from now.", null);
         if (basePrice < 0) return (false, "Base price must be greater than or equal to 0", null);
 
         var movie = await _showtimeRepository.GetMovieAsync(movieId, cancellationToken);

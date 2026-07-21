@@ -205,6 +205,14 @@ public sealed class MovieService : IMovieService
             return (false, "Status must be coming_soon, now_showing, or ended", null);
         }
 
+        if (normalizedStatus == "ended" && existingMovie.Status != "ended")
+        {
+            if (await _movieRepository.HasActiveOrUpcomingShowtimesAsync(movieId, DateTime.UtcNow, cancellationToken))
+            {
+                return (false, "Cannot mark this movie as Ended because it still has active showtimes. Please cancel or complete those showtimes first.", null);
+            }
+        }
+
         var normalizedTitle = NormalizeName(title);
         if (await _movieRepository.TitleExistsAsync(normalizedTitle, movieId, cancellationToken))
             return (false, "Movie title already exists.", null);
