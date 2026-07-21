@@ -195,19 +195,6 @@ public sealed class TicketRepository : ITicketRepository
                     }
                 }
 
-                var auditLog = new Domain.Entities.AdminActionLog
-                {
-                    AdminID = staffId,
-                    TargetTable = "Ticket",
-                    TargetID = ticket.TicketID,
-                    ActionType = AdminActionTypes.CheckIn,
-                    Description = $"Staff checked in ticket {ticket.QRCode} for booking {bookingId}",
-                    IPAddress = ipAddress ?? "unknown",
-                    CreatedAt = checkedInAt
-                };
-
-                await _db.AdminActionLogs.AddAsync(auditLog, cancellationToken);
-
                 await _db.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
