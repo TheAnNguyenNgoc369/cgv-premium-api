@@ -41,18 +41,42 @@ public sealed record RedeemableVoucherRuleResponse(
     string RuleValue,
     string DisplayText);
 
+// Response for GET /api/vouchers/redeemable. Same JSON schema as
+// MyVoucherResponse so a single frontend voucher card can render both a
+// customer's owned copies and the redeemable catalog. Ownership-only fields
+// (Quantity, RedeemedAt, ExpiredAt, UsedAt) are always null here because a
+// catalog entry has no per-user copy.
 public sealed record RedeemableVoucherResponse(
     int VoucherId,
     string VoucherCode,
     string DiscountType,
     decimal DiscountValue,
-    int RequiredPoints,
-    int? ExchangeLimit,
+
+    decimal? MinOrderValue,
+    int? MaxUses,
+    int UsedCount,
+
     DateTimeOffset ValidFrom,
     DateTimeOffset ValidUntil,
+
     string? ImageUrl,
     string? Description,
-    List<RedeemableVoucherRuleResponse> VoucherRules);
+
+    bool IsActive,
+    string Status,
+
+    DateTime CreatedAt,
+
+    List<RedeemableVoucherRuleResponse> VoucherRules,
+
+    bool IsRedeemable,
+    int RequiredPoints,
+    int? ExchangeLimit,
+
+    int? Quantity,
+    DateTimeOffset? RedeemedAt,
+    DateTimeOffset? ExpiredAt,
+    DateTimeOffset? UsedAt);
 
 public sealed record RedeemVoucherRequest(int VoucherId);
 
@@ -62,6 +86,10 @@ public sealed record RedeemVoucherResponse(
     string VoucherCode,
     string? Message = null);
 
+// Response for the `vouchers` array embedded in GET /api/users/lookup.
+// Carries the full voucher metadata the staff UI needs, keeping the ownership
+// `Status` as the per-copy UserVoucher status (available/used/expired) — NOT
+// the admin voucher lifecycle string used by MyVoucherResponse.
 public sealed record UserVoucherResponse(
     // Voucher information
     int VoucherId,
@@ -69,15 +97,70 @@ public sealed record UserVoucherResponse(
     string DiscountType,
     decimal DiscountValue,
 
+    decimal? MinOrderValue,
+    int? MaxUses,
+    int UsedCount,
+
+    DateTimeOffset ValidFrom,
+    DateTimeOffset ValidUntil,
+
     // Display information
     string? ImageUrl,
+    string? Description,
+
+    bool IsActive,
+    // Ownership status of this specific copy (available/used/expired), not the
+    // voucher's lifecycle status.
+    string Status,
+
+    DateTime CreatedAt,
+
     List<RedeemableVoucherRuleResponse> VoucherRules,
+
+    bool IsRedeemable,
+    int? RequiredPoints,
+    int? ExchangeLimit,
 
     // Ownership information
     int Quantity,
-    string Status,
 
     // Lifecycle
+    DateTimeOffset RedeemedAt,
+    DateTimeOffset ExpiredAt,
+    DateTimeOffset? UsedAt);
+
+// Response for GET /api/vouchers/my-vouchers. Same set of voucher-metadata
+// fields as UserVoucherResponse, but Status is the admin voucher lifecycle
+// string (ACTIVE/EXPIRED/EXHAUSTED/UPCOMING/DISABLED) instead of the per-copy
+// ownership status.
+public sealed record MyVoucherResponse(
+    int VoucherId,
+    string VoucherCode,
+    string DiscountType,
+    decimal DiscountValue,
+
+    decimal? MinOrderValue,
+    int? MaxUses,
+    int UsedCount,
+
+    DateTimeOffset ValidFrom,
+    DateTimeOffset ValidUntil,
+
+    string? ImageUrl,
+    string? Description,
+
+    bool IsActive,
+    string Status,
+
+    DateTime CreatedAt,
+
+    List<RedeemableVoucherRuleResponse> VoucherRules,
+
+    bool IsRedeemable,
+    int? RequiredPoints,
+    int? ExchangeLimit,
+
+    int Quantity,
     DateTimeOffset RedeemedAt,
     DateTimeOffset ExpiredAt,
     DateTimeOffset? UsedAt);
