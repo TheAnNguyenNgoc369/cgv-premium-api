@@ -82,3 +82,39 @@ public sealed record UserVoucherResponse(
     DateTimeOffset ExpiredAt,
     DateTimeOffset? UsedAt);
 
+// Response for GET /api/vouchers/my-vouchers. Superset of UserVoucherResponse
+// carrying the full voucher metadata the customer wallet UI needs. Kept
+// separate from UserVoucherResponse so /api/users/lookup stays byte-for-byte
+// unchanged.
+public sealed record MyVoucherResponse(
+    int VoucherId,
+    string VoucherCode,
+    string DiscountType,
+    decimal DiscountValue,
+
+    decimal? MinOrderValue,
+    int? MaxUses,
+    int UsedCount,
+
+    DateTimeOffset ValidFrom,
+    DateTimeOffset ValidUntil,
+
+    string? ImageUrl,
+    string? Description,
+
+    bool IsActive,
+    string Status,
+
+    DateTime CreatedAt,
+
+    List<RedeemableVoucherRuleResponse> VoucherRules,
+
+    bool IsRedeemable,
+    int? RequiredPoints,
+    int? ExchangeLimit,
+
+    int Quantity,
+    DateTimeOffset RedeemedAt,
+    DateTimeOffset ExpiredAt,
+    DateTimeOffset? UsedAt);
+

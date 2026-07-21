@@ -33,6 +33,40 @@ public sealed class UserVoucherProjection
         IEnumerable<UserVoucher> userVouchers,
         CancellationToken ct)
     {
+        var (grouped, _, movieNames, cinemaNames, tierNames) =
+            await GroupUsableAndLookupNamesAsync(userVouchers, ct);
+
+        return grouped
+            .Select(x => MapUserVoucher(x.representative, x.quantity, movieNames, cinemaNames, tierNames))
+            .ToList();
+    }
+
+    // Same grouping semantics as ProjectAsync but returns the richer MyVoucherResponse
+    // shape (full voucher metadata) used only by /api/vouchers/my-vouchers.
+    public async Task<List<MyVoucherResponse>> ProjectMyVouchersAsync(
+        IEnumerable<UserVoucher> userVouchers,
+        CancellationToken ct)
+    {
+        var (grouped, now, movieNames, cinemaNames, tierNames) =
+            await GroupUsableAndLookupNamesAsync(userVouchers, ct);
+
+        return grouped
+            .Select(x => MapMyVoucher(x.representative, x.quantity, now, movieNames, cinemaNames, tierNames))
+            .ToList();
+    }
+
+    // Shared preamble for the two owned-voucher projections: filter → group by
+    // VoucherID → pick representative → batch rule-name lookups. Returning `now`
+    // lets callers that need current-time-dependent fields (e.g. lifecycle status)
+    // reuse the exact same reference point used for the ExpiredAt filter.
+    private async Task<(
+        List<(UserVoucher representative, int quantity)> grouped,
+        DateTime now,
+        Dictionary<int, string> movieNames,
+        Dictionary<int, string> cinemaNames,
+        Dictionary<int, string> tierNames)>
+        GroupUsableAndLookupNamesAsync(IEnumerable<UserVoucher> userVouchers, CancellationToken ct)
+    {
         var now = DateTime.UtcNow;
         var grouped = userVouchers
             .Where(uv => uv.Status == UserVoucherStatus.Available && uv.ExpiredAt >= now)
@@ -48,9 +82,7 @@ public sealed class UserVoucherProjection
         var (movieNames, cinemaNames, tierNames) = await BuildRuleNameLookupsAsync(
             grouped.Select(x => x.representative.Voucher), ct);
 
-        return grouped
-            .Select(x => MapUserVoucher(x.representative, x.quantity, movieNames, cinemaNames, tierNames))
-            .ToList();
+        return (grouped, now, movieNames, cinemaNames, tierNames);
     }
 
     // Build a redeemable-voucher card list from the vouchers themselves (no ownership
@@ -144,6 +176,52 @@ public sealed class UserVoucherProjection
         VietnamTime.FromUtc(uv.RedeemedAt),
         VietnamTime.FromUtc(uv.ExpiredAt),
         uv.UsedAt.HasValue ? VietnamTime.FromUtc(uv.UsedAt.Value) : null);
+
+    private static MyVoucherResponse MapMyVoucher(
+        UserVoucher uv,
+        int quantity,
+        DateTime currentTime,
+        Dictionary<int, string> movieNames,
+        Dictionary<int, string> cinemaNames,
+        Dictionary<int, string> tierNames)
+    {
+        var v = uv.Voucher;
+        return new MyVoucherResponse(
+            v.VoucherID,
+            v.VoucherCode,
+            v.DiscountType,
+            v.DiscountValue,
+            v.MinOrderValue,
+            v.MaxUses,
+            v.UsedCount,
+            VietnamTime.FromUtc(v.ValidFrom),
+            VietnamTime.FromUtc(v.ValidUntil),
+            v.ImageURL,
+            v.Description,
+            v.IsActive,
+            VoucherLifecycleStatus(v, currentTime),
+            v.CreatedAt,
+            MapVoucherRules(v, movieNames, cinemaNames, tierNames),
+            v.IsRedeemable,
+            v.RequiredPoints,
+            v.ExchangeLimit,
+            quantity,
+            VietnamTime.FromUtc(uv.RedeemedAt),
+            VietnamTime.FromUtc(uv.ExpiredAt),
+            uv.UsedAt.HasValue ? VietnamTime.FromUtc(uv.UsedAt.Value) : null);
+    }
+
+    // Canonical DISABLED/EXPIRED/EXHAUSTED/UPCOMING/ACTIVE lifecycle string used
+    // by both the admin voucher list and /api/vouchers/my-vouchers so the two
+    // views can never drift apart.
+    public static string VoucherLifecycleStatus(Voucher v, DateTime currentTime)
+    {
+        if (!v.IsActive) return "DISABLED";
+        if (currentTime > v.ValidUntil) return "EXPIRED";
+        if (v.MaxUses.HasValue && v.UsedCount >= v.MaxUses.Value) return "EXHAUSTED";
+        if (currentTime < v.ValidFrom) return "UPCOMING";
+        return "ACTIVE";
+    }
 
     private static RedeemableVoucherResponse MapRedeemable(
         Voucher v,

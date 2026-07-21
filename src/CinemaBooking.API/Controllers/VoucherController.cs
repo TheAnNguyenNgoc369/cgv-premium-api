@@ -86,7 +86,7 @@ public sealed class VoucherController : ControllerBase
         var result = await _service.GetUserVouchersAsync(userId, ct);
         if (!result.Succeeded) return BadRequest(new { success = false, message = result.Error });
 
-        var vouchers = await _voucherProjection.ProjectAsync(result.Vouchers, ct);
+        var vouchers = await _voucherProjection.ProjectMyVouchersAsync(result.Vouchers, ct);
         return Ok(new { success = true, vouchers });
     }
 
@@ -127,17 +127,10 @@ public sealed class VoucherController : ControllerBase
     private static VoucherResponse Map(Voucher v) => Map(v, DateTime.UtcNow);
     private static VoucherResponse Map(Voucher v, DateTime currentTime) => new(v.VoucherID, v.VoucherCode, v.DiscountType,
         v.DiscountValue, v.MinOrderValue, v.MaxUses, v.UsedCount, VietnamTime.FromUtc(v.ValidFrom),
-        VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description, v.IsActive, Status(v, currentTime), v.CreatedAt,
+        VietnamTime.FromUtc(v.ValidUntil), v.ImageURL, v.Description, v.IsActive,
+        UserVoucherProjection.VoucherLifecycleStatus(v, currentTime), v.CreatedAt,
         v.VoucherRules?.Select(r => new VoucherRuleResponse(r.RuleID, r.RuleType, r.RuleValue, r.CreatedAt)).ToList(),
         v.IsRedeemable, v.RequiredPoints, v.ExchangeLimit);
-    private static string Status(Voucher v, DateTime currentTime)
-    {
-        if (!v.IsActive) return "DISABLED";
-        if (currentTime > v.ValidUntil) return "EXPIRED";
-        if (v.MaxUses.HasValue && v.UsedCount >= v.MaxUses.Value) return "EXHAUSTED";
-        if (currentTime < v.ValidFrom) return "UPCOMING";
-        return "ACTIVE";
-    }
     private bool TryUserId(out int id) => int.TryParse(User.FindFirst("userId")?.Value, out id);
     private string? Ip() => HttpContext.Connection.RemoteIpAddress?.ToString();
 
