@@ -86,6 +86,10 @@ public sealed record RedeemVoucherResponse(
     string VoucherCode,
     string? Message = null);
 
+// Response for the `vouchers` array embedded in GET /api/users/lookup.
+// Carries the full voucher metadata the staff UI needs, keeping the ownership
+// `Status` as the per-copy UserVoucher status (available/used/expired) — NOT
+// the admin voucher lifecycle string used by MyVoucherResponse.
 public sealed record UserVoucherResponse(
     // Voucher information
     int VoucherId,
@@ -93,23 +97,42 @@ public sealed record UserVoucherResponse(
     string DiscountType,
     decimal DiscountValue,
 
+    decimal? MinOrderValue,
+    int? MaxUses,
+    int UsedCount,
+
+    DateTimeOffset ValidFrom,
+    DateTimeOffset ValidUntil,
+
     // Display information
     string? ImageUrl,
+    string? Description,
+
+    bool IsActive,
+    // Ownership status of this specific copy (available/used/expired), not the
+    // voucher's lifecycle status.
+    string Status,
+
+    DateTime CreatedAt,
+
     List<RedeemableVoucherRuleResponse> VoucherRules,
+
+    bool IsRedeemable,
+    int? RequiredPoints,
+    int? ExchangeLimit,
 
     // Ownership information
     int Quantity,
-    string Status,
 
     // Lifecycle
     DateTimeOffset RedeemedAt,
     DateTimeOffset ExpiredAt,
     DateTimeOffset? UsedAt);
 
-// Response for GET /api/vouchers/my-vouchers. Superset of UserVoucherResponse
-// carrying the full voucher metadata the customer wallet UI needs. Kept
-// separate from UserVoucherResponse so /api/users/lookup stays byte-for-byte
-// unchanged.
+// Response for GET /api/vouchers/my-vouchers. Same set of voucher-metadata
+// fields as UserVoucherResponse, but Status is the admin voucher lifecycle
+// string (ACTIVE/EXPIRED/EXHAUSTED/UPCOMING/DISABLED) instead of the per-copy
+// ownership status.
 public sealed record MyVoucherResponse(
     int VoucherId,
     string VoucherCode,

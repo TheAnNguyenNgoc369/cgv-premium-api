@@ -153,31 +153,62 @@ public sealed class UserVoucherProjection
                     tierNames)))
             .ToList();
 
+    // Populates the metadata block that is identical between MyVoucherResponse
+    // and UserVoucherResponse. Only the `Status` field differs between the two
+    // callers, so each mapping method builds this once and then plugs in its
+    // own status value below.
+    private static (
+        int VoucherId, string VoucherCode, string DiscountType, decimal DiscountValue,
+        decimal? MinOrderValue, int? MaxUses, int UsedCount,
+        DateTimeOffset ValidFrom, DateTimeOffset ValidUntil,
+        string? ImageUrl, string? Description,
+        bool IsActive, DateTime CreatedAt,
+        List<RedeemableVoucherRuleResponse> VoucherRules,
+        bool IsRedeemable, int? RequiredPoints, int? ExchangeLimit,
+        int Quantity,
+        DateTimeOffset RedeemedAt, DateTimeOffset ExpiredAt, DateTimeOffset? UsedAt)
+        BuildVoucherFields(
+            UserVoucher uv,
+            int quantity,
+            Dictionary<int, string> movieNames,
+            Dictionary<int, string> cinemaNames,
+            Dictionary<int, string> tierNames)
+    {
+        var v = uv.Voucher;
+        return (
+            v.VoucherID, v.VoucherCode, v.DiscountType, v.DiscountValue,
+            v.MinOrderValue, v.MaxUses, v.UsedCount,
+            VietnamTime.FromUtc(v.ValidFrom), VietnamTime.FromUtc(v.ValidUntil),
+            v.ImageURL, v.Description,
+            v.IsActive, v.CreatedAt,
+            MapVoucherRules(v, movieNames, cinemaNames, tierNames),
+            v.IsRedeemable, v.RequiredPoints, v.ExchangeLimit,
+            quantity,
+            VietnamTime.FromUtc(uv.RedeemedAt), VietnamTime.FromUtc(uv.ExpiredAt),
+            uv.UsedAt.HasValue ? VietnamTime.FromUtc(uv.UsedAt.Value) : null);
+    }
+
+    // Ownership status (available/used/expired) — used by /api/users/lookup.
     private static UserVoucherResponse MapUserVoucher(
         UserVoucher uv,
         int quantity,
         Dictionary<int, string> movieNames,
         Dictionary<int, string> cinemaNames,
-        Dictionary<int, string> tierNames) => new(
-        // Voucher information
-        uv.VoucherID,
-        uv.Voucher.VoucherCode,
-        uv.Voucher.DiscountType,
-        uv.Voucher.DiscountValue,
+        Dictionary<int, string> tierNames)
+    {
+        var f = BuildVoucherFields(uv, quantity, movieNames, cinemaNames, tierNames);
+        return new UserVoucherResponse(
+            f.VoucherId, f.VoucherCode, f.DiscountType, f.DiscountValue,
+            f.MinOrderValue, f.MaxUses, f.UsedCount,
+            f.ValidFrom, f.ValidUntil,
+            f.ImageUrl, f.Description,
+            f.IsActive, uv.Status, f.CreatedAt,
+            f.VoucherRules,
+            f.IsRedeemable, f.RequiredPoints, f.ExchangeLimit,
+            f.Quantity, f.RedeemedAt, f.ExpiredAt, f.UsedAt);
+    }
 
-        // Display information
-        uv.Voucher.ImageURL,
-        MapVoucherRules(uv.Voucher, movieNames, cinemaNames, tierNames),
-
-        // Ownership information
-        quantity,
-        uv.Status,
-
-        // Lifecycle
-        VietnamTime.FromUtc(uv.RedeemedAt),
-        VietnamTime.FromUtc(uv.ExpiredAt),
-        uv.UsedAt.HasValue ? VietnamTime.FromUtc(uv.UsedAt.Value) : null);
-
+    // Voucher lifecycle status (ACTIVE/EXPIRED/…) — used by /api/vouchers/my-vouchers.
     private static MyVoucherResponse MapMyVoucher(
         UserVoucher uv,
         int quantity,
@@ -186,30 +217,16 @@ public sealed class UserVoucherProjection
         Dictionary<int, string> cinemaNames,
         Dictionary<int, string> tierNames)
     {
-        var v = uv.Voucher;
+        var f = BuildVoucherFields(uv, quantity, movieNames, cinemaNames, tierNames);
         return new MyVoucherResponse(
-            v.VoucherID,
-            v.VoucherCode,
-            v.DiscountType,
-            v.DiscountValue,
-            v.MinOrderValue,
-            v.MaxUses,
-            v.UsedCount,
-            VietnamTime.FromUtc(v.ValidFrom),
-            VietnamTime.FromUtc(v.ValidUntil),
-            v.ImageURL,
-            v.Description,
-            v.IsActive,
-            VoucherLifecycleStatus(v, currentTime),
-            v.CreatedAt,
-            MapVoucherRules(v, movieNames, cinemaNames, tierNames),
-            v.IsRedeemable,
-            v.RequiredPoints,
-            v.ExchangeLimit,
-            quantity,
-            VietnamTime.FromUtc(uv.RedeemedAt),
-            VietnamTime.FromUtc(uv.ExpiredAt),
-            uv.UsedAt.HasValue ? VietnamTime.FromUtc(uv.UsedAt.Value) : null);
+            f.VoucherId, f.VoucherCode, f.DiscountType, f.DiscountValue,
+            f.MinOrderValue, f.MaxUses, f.UsedCount,
+            f.ValidFrom, f.ValidUntil,
+            f.ImageUrl, f.Description,
+            f.IsActive, VoucherLifecycleStatus(uv.Voucher, currentTime), f.CreatedAt,
+            f.VoucherRules,
+            f.IsRedeemable, f.RequiredPoints, f.ExchangeLimit,
+            f.Quantity, f.RedeemedAt, f.ExpiredAt, f.UsedAt);
     }
 
     // Canonical DISABLED/EXPIRED/EXHAUSTED/UPCOMING/ACTIVE lifecycle string used
