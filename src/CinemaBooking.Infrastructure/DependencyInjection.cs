@@ -41,7 +41,8 @@ public static class DependencyInjection
         services.AddDbContext<CinemaBookingDbContext>(options =>
             options.UseSqlServer(
                 connectionString,
-                b => b.MigrationsAssembly(typeof(CinemaBookingDbContext).Assembly.FullName)));
+                b => b.MigrationsAssembly(typeof(CinemaBookingDbContext).Assembly.FullName)
+                    .UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
         var emailSection = configuration.GetRequiredSection(EmailSettings.SectionName);
         var emailSettings = new EmailSettings

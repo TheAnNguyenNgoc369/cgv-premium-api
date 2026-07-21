@@ -185,12 +185,16 @@ public sealed class ShowtimeService : IShowtimeService
         if (manualStatus == InvalidManualStatus) return (false, InvalidStatusMessage, null);
         if (startTime.Kind != DateTimeKind.Utc)
             return (false, StartTimeMustBeUtcMessage, null);
+        if (startTime <= DateTime.UtcNow)
+            return (false, "StartTime must be in the future.", null);
+        if (startTime <= DateTime.UtcNow.AddMinutes(30))
+            return (false, "StartTime must be at least 30 minutes from now.", null);
         if (basePrice < 0) return (false, "Base price must be greater than or equal to 0", null);
 
         var movie = await _showtimeRepository.GetMovieAsync(movieId, cancellationToken);
         if (movie is null) return (false, "Movie not found", null);
-        if (movie.Status != "now_showing")
-            return (false, "The movie must be 'now_showing' to update or create showtimes.", null);
+        if (movie.Status is not ("now_showing" or "coming_soon"))
+            return (false, "The movie must be 'now_showing' or 'coming_soon' to update or create showtimes.", null);
 
         var room = await _showtimeRepository.GetRoomAsync(roomId, cancellationToken);
         if (room is null) return (false, "Room not found", null);
@@ -269,7 +273,7 @@ public sealed class ShowtimeService : IShowtimeService
                 $"Showtime for {movie.Title} in {room.RoomName} at {startTime:HH:mm dd/MM/yyyy} has been {action}.",
                 cancellationToken);
         }
-        return (succeeded, (string?)null, savedShowtime);
+        return (succeeded, errorMsg, savedShowtime);
     }
 
     private Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken) =>

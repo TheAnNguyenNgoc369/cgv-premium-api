@@ -49,6 +49,7 @@ public sealed class ShowtimeTypeService(IShowtimeTypeRepository repository) : IS
             var begin = VietnamTime.ToUtc(date, TimeOnly.FromTimeSpan(slot.StartTime)); var finish = begin.AddMinutes(movie.DurationMin + 30); string? code = null; string? reason = null;
             if (!type.IsActive) (code, reason) = ("TEMPLATE_INACTIVE", "Showtime type is inactive.");
             else if (room.Status != "active" || room.Cinema.Status != "active") (code, reason) = ("ROOM_INACTIVE", "Room and cinema must be active.");
+            else if (begin <= DateTime.UtcNow.AddMinutes(30)) (code, reason) = ("START_TIME_TOO_SOON", "Showtime must start at least 30 minutes from now.");
             else if (movie.DurationMin <= 0 || movie.Status is not ("now_showing" or "coming_soon")) (code, reason) = ("MOVIE_INVALID", "Movie is not eligible for scheduling.");
             else if (accepted.Any(x => begin < x.End && finish > x.Start)) (code, reason) = ("SELF_OVERLAP", "Overlap within generated showtimes.");
             else if (await repository.HasConflictAsync(roomId, begin, finish, ct)) (code, reason) = ("ROOM_OVERLAP", "Overlap with existing showtime in the same room.");
