@@ -271,7 +271,7 @@ public sealed class ShowtimeService : IShowtimeService
                 $"Showtime for {movie.Title} in {room.RoomName} at {startTime:HH:mm dd/MM/yyyy} has been {action}.",
                 cancellationToken);
         }
-        return (succeeded, (string?)null, savedShowtime);
+        return (succeeded, errorMsg, savedShowtime);
     }
 
     private Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken) =>
