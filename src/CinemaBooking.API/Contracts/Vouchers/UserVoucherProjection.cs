@@ -91,8 +91,9 @@ public sealed class UserVoucherProjection
         IEnumerable<Voucher> vouchers,
         CancellationToken ct)
     {
+        var now = DateTime.UtcNow;
         var (movieNames, cinemaNames, tierNames) = await BuildRuleNameLookupsAsync(vouchers, ct);
-        return vouchers.Select(v => MapRedeemable(v, movieNames, cinemaNames, tierNames)).ToList();
+        return vouchers.Select(v => MapRedeemable(v, now, movieNames, cinemaNames, tierNames)).ToList();
     }
 
     private async Task<(Dictionary<int, string> movieNames, Dictionary<int, string> cinemaNames, Dictionary<int, string> tierNames)>
@@ -225,6 +226,7 @@ public sealed class UserVoucherProjection
 
     private static RedeemableVoucherResponse MapRedeemable(
         Voucher v,
+        DateTime currentTime,
         Dictionary<int, string> movieNames,
         Dictionary<int, string> cinemaNames,
         Dictionary<int, string> tierNames) => new(
@@ -232,13 +234,25 @@ public sealed class UserVoucherProjection
         v.VoucherCode,
         v.DiscountType,
         v.DiscountValue,
-        v.RequiredPoints!.Value,
-        v.ExchangeLimit,
+        v.MinOrderValue,
+        v.MaxUses,
+        v.UsedCount,
         VietnamTime.FromUtc(v.ValidFrom),
         VietnamTime.FromUtc(v.ValidUntil),
         v.ImageURL,
         v.Description,
-        MapVoucherRules(v, movieNames, cinemaNames, tierNames));
+        v.IsActive,
+        VoucherLifecycleStatus(v, currentTime),
+        v.CreatedAt,
+        MapVoucherRules(v, movieNames, cinemaNames, tierNames),
+        v.IsRedeemable,
+        v.RequiredPoints!.Value,
+        v.ExchangeLimit,
+        // Ownership-only fields — always null for a catalog entry
+        Quantity: null,
+        RedeemedAt: null,
+        ExpiredAt: null,
+        UsedAt: null);
 
     private static string GetOperatorForRuleType(string ruleType) => ruleType switch
     {

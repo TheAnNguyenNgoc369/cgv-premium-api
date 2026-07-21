@@ -41,18 +41,42 @@ public sealed record RedeemableVoucherRuleResponse(
     string RuleValue,
     string DisplayText);
 
+// Response for GET /api/vouchers/redeemable. Same JSON schema as
+// MyVoucherResponse so a single frontend voucher card can render both a
+// customer's owned copies and the redeemable catalog. Ownership-only fields
+// (Quantity, RedeemedAt, ExpiredAt, UsedAt) are always null here because a
+// catalog entry has no per-user copy.
 public sealed record RedeemableVoucherResponse(
     int VoucherId,
     string VoucherCode,
     string DiscountType,
     decimal DiscountValue,
-    int RequiredPoints,
-    int? ExchangeLimit,
+
+    decimal? MinOrderValue,
+    int? MaxUses,
+    int UsedCount,
+
     DateTimeOffset ValidFrom,
     DateTimeOffset ValidUntil,
+
     string? ImageUrl,
     string? Description,
-    List<RedeemableVoucherRuleResponse> VoucherRules);
+
+    bool IsActive,
+    string Status,
+
+    DateTime CreatedAt,
+
+    List<RedeemableVoucherRuleResponse> VoucherRules,
+
+    bool IsRedeemable,
+    int RequiredPoints,
+    int? ExchangeLimit,
+
+    int? Quantity,
+    DateTimeOffset? RedeemedAt,
+    DateTimeOffset? ExpiredAt,
+    DateTimeOffset? UsedAt);
 
 public sealed record RedeemVoucherRequest(int VoucherId);
 
