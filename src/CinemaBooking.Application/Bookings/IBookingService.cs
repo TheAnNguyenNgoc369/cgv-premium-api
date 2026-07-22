@@ -24,6 +24,7 @@ public interface IBookingService
         List<int> seatIds,
         List<BookingFnBItemDto> fnbItems,
         string? voucherCode,
+        int? staffCinemaId = null,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, PricingCalculationResult? Result)> CalculatePricingAsync(
@@ -32,6 +33,7 @@ public interface IBookingService
         List<int> seatIds,
         List<BookingFnBItemDto> fnbItems,
         string? voucherCode,
+        int? staffCinemaId = null,
         CancellationToken cancellationToken = default);
 
     Task<Booking?> GetBookingByIdAsync(

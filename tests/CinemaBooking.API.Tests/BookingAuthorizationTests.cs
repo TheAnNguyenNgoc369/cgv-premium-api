@@ -106,6 +106,7 @@ public sealed class BookingAuthorizationTests
             List<int> seatIds,
             List<BookingFnBItemDto> fnbItems,
             string? voucherCode,
+            int? staffCinemaId = null,
             CancellationToken cancellationToken = default)
         {
             CreateBookingCallCount++;
@@ -119,6 +120,7 @@ public sealed class BookingAuthorizationTests
             List<int> seatIds,
             List<BookingFnBItemDto> fnbItems,
             string? voucherCode,
+            int? staffCinemaId = null,
             CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
