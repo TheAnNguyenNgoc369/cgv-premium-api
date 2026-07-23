@@ -465,6 +465,15 @@ public async Task<Booking?> GetBookingByIdAsync(
         return true;
     }
 
+    public async Task DeleteSeatHoldsByBookingIdAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default)
+    {
+        await _db.SeatHolds
+            .Where(hold => hold.BookingID == bookingId)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
     public async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(
         CancellationToken cancellationToken = default)
     {

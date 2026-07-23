@@ -379,6 +379,8 @@ public sealed class PaymentService : IPaymentService
                     payment.BookingID, BookingStatus.Expired, cancellationToken);
                 await _paymentRepository.UpdatePaymentSessionsForPaymentAsync(
                     payment.PaymentID, "expired", cancellationToken);
+                await _bookingRepository.DeleteSeatHoldsByBookingIdAsync(
+                    payment.BookingID, cancellationToken);
                 await _userVoucherRepository.ReleaseReservedByBookingAsync(
                     payment.BookingID, cancellationToken);
                 return true;
@@ -400,6 +402,8 @@ public sealed class PaymentService : IPaymentService
                 payment.BookingID, BookingStatus.Cancelled, cancellationToken);
             await _paymentRepository.UpdatePaymentSessionsForPaymentAsync(
                 payment.PaymentID, "cancelled", cancellationToken);
+            await _bookingRepository.DeleteSeatHoldsByBookingIdAsync(
+                payment.BookingID, cancellationToken);
             await _userVoucherRepository.ReleaseReservedByBookingAsync(
                 payment.BookingID, cancellationToken);
             return true;

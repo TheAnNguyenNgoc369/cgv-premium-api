@@ -144,4 +144,8 @@ public interface IBookingRepository
         string bookingCode,
         int staffId,
         CancellationToken cancellationToken = default);
+
+    Task DeleteSeatHoldsByBookingIdAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default);
 }
