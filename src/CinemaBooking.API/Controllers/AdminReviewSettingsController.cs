@@ -45,7 +45,7 @@ public sealed class AdminReviewSettingsController(
 
         try
         {
-            var userId = int.TryParse(User.FindFirst("uid")?.Value, out var id) ? id : (int?)null;
+            var userId = int.TryParse(User.FindFirst("userId")?.Value, out var id) ? id : (int?)null;
             await service.UpdateSettingsAsync(
                 request.FirstReviewPoints,
                 request.NextReviewPoints,

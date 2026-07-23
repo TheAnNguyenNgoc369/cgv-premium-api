@@ -32,6 +32,9 @@ public sealed class RecommendationEngine : IRecommendationEngine
     {
         var movies = await _movieRepository.GetMoviesAsync("now_showing", [], null, cancellationToken);
 
+        var movieIds = movies.Select(m => m.MovieID).ToList();
+        var statsMap = await _reviewRepository.GetVisibleStatsForMoviesAsync(movieIds, cancellationToken);
+
         var scored = new List<(Domain.Entities.Movie Movie, decimal Score, List<string> Reasons)>();
 
         foreach (var movie in movies)
@@ -72,7 +75,7 @@ public sealed class RecommendationEngine : IRecommendationEngine
             }
 
             // Review sentiment (higher rating = better)
-            var stats = await _reviewRepository.GetVisibleStatsForMovieAsync(movie.MovieID, cancellationToken);
+            var stats = statsMap[movie.MovieID];
             if (stats.TotalReviews > 0 && stats.AverageRating.HasValue)
             {
                 var avgRating = stats.AverageRating.Value;

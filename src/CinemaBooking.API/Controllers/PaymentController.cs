@@ -27,7 +27,8 @@ public sealed class PaymentController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new { success = false, message = "Invalid request." });
 
-        var userId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
         var isStaff = User.IsInRole(Roles.Staff);
 
         var result = await _paymentService.InitiatePaymentAsync(
@@ -49,8 +50,11 @@ public sealed class PaymentController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new { success = false, message = "Invalid request." });
 
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
         var result = await _paymentService.ConfirmCashPaymentAsync(
-            request, GetCurrentUserId(), cancellationToken);
+            request, userId, cancellationToken);
 
         return MapResult(result);
     }
@@ -79,8 +83,11 @@ public sealed class PaymentController : ControllerBase
         [FromQuery] long orderCode,
         CancellationToken cancellationToken)
     {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
         var result = await _paymentService.SyncPayOSPaymentAsync(
-            bookingId, orderCode, GetCurrentUserId(), User.IsInRole(Roles.Staff), cancellationToken);
+            bookingId, orderCode, userId, User.IsInRole(Roles.Staff), cancellationToken);
 
         return MapResult(result);
     }
@@ -119,8 +126,11 @@ public sealed class PaymentController : ControllerBase
         int id,
         CancellationToken cancellationToken)
     {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
         var result = await _paymentService.GetPaymentByIdAsync(
-            id, GetCurrentUserId(), User.IsInRole(Roles.Staff), cancellationToken);
+            id, userId, User.IsInRole(Roles.Staff), cancellationToken);
         return MapResult(result);
     }
 
@@ -130,12 +140,19 @@ public sealed class PaymentController : ControllerBase
         int bookingId,
         CancellationToken cancellationToken)
     {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
         var result = await _paymentService.GetPaymentByBookingIdAsync(
-            bookingId, GetCurrentUserId(), User.IsInRole(Roles.Staff), cancellationToken);
+            bookingId, userId, User.IsInRole(Roles.Staff), cancellationToken);
         return MapResult(result);
     }
 
-    private int GetCurrentUserId() => int.Parse(User.FindFirst("userId")!.Value);
+    private bool TryGetCurrentUserId(out int userId)
+    {
+        var userIdValue = User.FindFirst("userId")?.Value;
+        return int.TryParse(userIdValue, out userId);
+    }
 
     private IActionResult MapResult(PaymentOperationResult result)
     {

@@ -28,7 +28,8 @@ public sealed class RefundController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new { success = false, message = "Invalid request." });
 
-        var userId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
         var isStaff = User.IsInRole(Roles.Staff) || User.IsInRole(Roles.Admin);
 
         var result = await _refundService.ProcessRefundAsync(
@@ -61,7 +62,8 @@ public sealed class RefundController : ControllerBase
     [HttpGet("refunds")]
     public async Task<IActionResult> GetRefundHistory(CancellationToken cancellationToken)
     {
-        var userId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
         var isStaffOrAdmin = User.IsInRole(Roles.Staff) || User.IsInRole(Roles.Admin);
 
         var refunds = await _refundService.GetRefundHistoryAsync(
@@ -77,7 +79,8 @@ public sealed class RefundController : ControllerBase
         int id,
         CancellationToken cancellationToken)
     {
-        var userId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
         var isStaffOrAdmin = User.IsInRole(Roles.Staff) || User.IsInRole(Roles.Admin);
 
         var refund = await _refundService.GetRefundByIdAsync(
@@ -92,9 +95,10 @@ public sealed class RefundController : ControllerBase
         return Ok(MapToDetailResponse(refund));
     }
 
-    private int GetCurrentUserId()
+    private bool TryGetCurrentUserId(out int userId)
     {
-        return int.Parse(User.FindFirst("userId")!.Value);
+        var userIdValue = User.FindFirst("userId")?.Value;
+        return int.TryParse(userIdValue, out userId);
     }
 
     private static RefundDetailResponse MapToDetailResponse(Refund refund)

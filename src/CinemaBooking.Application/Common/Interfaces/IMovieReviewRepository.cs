@@ -23,6 +23,10 @@ public interface IMovieReviewRepository
         int movieId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyDictionary<int, MovieReviewStats>> GetVisibleStatsForMoviesAsync(
+        IReadOnlyCollection<int> movieIds,
+        CancellationToken cancellationToken = default);
+
     Task<List<ReviewListItem>> GetVisibleReviewsForMovieAsync(
         int movieId,
         int page,

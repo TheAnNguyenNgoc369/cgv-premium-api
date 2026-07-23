@@ -81,7 +81,7 @@ public static class CinemaBookingDbSeeder
             {
                 FullName = "Customer 1",
                 Email = "c1@cinema.com",
-                Phone = "0900000003",
+                Phone = "0900000031",
                 PasswordHash = PasswordHasher.Hash("Password@123"),
                 Role = "customer",
                 Status = "active",

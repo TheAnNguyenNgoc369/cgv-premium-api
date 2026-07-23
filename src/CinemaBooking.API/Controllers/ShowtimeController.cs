@@ -74,7 +74,8 @@ public sealed class ShowtimeController : ControllerBase
             request.MovieId, request.RoomId, request.StartTime.UtcDateTime,
             request.BasePrice, scope, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.CreateShowtime,
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.CreateShowtime,
             "Showtime", result.Showtime!.ShowtimeID, $"Created showtime {result.Showtime.ShowtimeID}", this.AuditIpAddress(), cancellationToken);
         var response = await ToManagementResponseAsync(result.Showtime!, cancellationToken);
         return CreatedAtAction(nameof(GetShowtimeById), new { id = response.ShowtimeId }, response);
@@ -134,10 +135,11 @@ public sealed class ShowtimeController : ControllerBase
             id, request.MovieId, request.RoomId, request.StartTime.UtcDateTime,
             request.BasePrice, request.Status, scope, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateShowtime,
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.UpdateShowtime,
             "Showtime", id, $"Updated showtime {id}", this.AuditIpAddress(), cancellationToken);
         if (previous is not null && previous.BasePrice != request.BasePrice)
-            await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateTicketPrice,
+            await _activityLogs.RecordAsync(adminId, AdminActionTypes.UpdateTicketPrice,
                 "Showtime", id, $"Updated ticket price for showtime {id}", this.AuditIpAddress(), cancellationToken);
         return Ok(await ToManagementResponseAsync(result.Showtime!, cancellationToken));
     }
@@ -150,7 +152,8 @@ public sealed class ShowtimeController : ControllerBase
         if (!scope.HasValue) return CinemaScopeForbidden();
         var result = await _showtimeService.DeleteShowtimeAsync(id, scope, cancellationToken);
         if (!result.Succeeded) return MapWriteError(result.ErrorMessage);
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.DeleteShowtime,
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.DeleteShowtime,
             "Showtime", id, $"Deleted showtime {id}", this.AuditIpAddress(), cancellationToken);
         return NoContent();
     }

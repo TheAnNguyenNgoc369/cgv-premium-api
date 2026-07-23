@@ -12,7 +12,7 @@ namespace CinemaBooking.Application.Bookings;
 
 public sealed class BookingService : IBookingService
 {
-    private const int HoldDurationMinutes = 10;
+    private const int HoldDurationMinutes = 15;
 
     private readonly IBookingRepository _bookingRepository;
     private readonly IUserRepository _userRepository;

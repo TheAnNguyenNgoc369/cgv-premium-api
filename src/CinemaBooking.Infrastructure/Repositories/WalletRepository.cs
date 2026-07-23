@@ -37,17 +37,16 @@ public sealed class WalletRepository : IWalletRepository
         decimal amount,
         CancellationToken cancellationToken = default)
     {
-        var wallet = await _db.Wallets
-            .FirstOrDefaultAsync(w => w.UserID == userId, cancellationToken);
+        var affectedRows = await _db.Wallets
+            .Where(wallet => wallet.UserID == userId && wallet.Balance >= amount)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    wallet => wallet.Balance,
+                    wallet => wallet.Balance - amount),
+                cancellationToken);
 
-        if (wallet is null)
-            throw new InvalidOperationException($"Wallet not found for user {userId}");
-
-        if (wallet.Balance < amount)
-            throw new InvalidOperationException("Insufficient balance");
-
-        wallet.Balance -= amount;
-        await _db.SaveChangesAsync(cancellationToken);
+        if (affectedRows == 0)
+            throw new InvalidOperationException("Insufficient balance or wallet not found");
     }
 
     public async Task<bool> TryDeductBalanceAsync(
@@ -71,14 +70,16 @@ public sealed class WalletRepository : IWalletRepository
         decimal amount,
         CancellationToken cancellationToken = default)
     {
-        var wallet = await _db.Wallets
-            .FirstOrDefaultAsync(w => w.UserID == userId, cancellationToken);
+        var affectedRows = await _db.Wallets
+            .Where(wallet => wallet.UserID == userId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    wallet => wallet.Balance,
+                    wallet => wallet.Balance + amount),
+                cancellationToken);
 
-        if (wallet is null)
+        if (affectedRows == 0)
             throw new InvalidOperationException($"Wallet not found for user {userId}");
-
-        wallet.Balance += amount;
-        await _db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<WalletTransaction> CreateTransactionAsync(

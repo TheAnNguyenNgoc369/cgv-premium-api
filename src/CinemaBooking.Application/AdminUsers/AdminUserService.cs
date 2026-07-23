@@ -178,7 +178,9 @@ public sealed class AdminUserService : IAdminUserService
             return Forbidden<User>("Admin cannot lock or deactivate their own account");
 
         var log = BuildLog(adminId, userId,
-            statusResult.Value == UserStatuses.Locked ? AdminActionTypes.LockUser : AdminActionTypes.UnlockUser,
+            statusResult.Value == UserStatuses.Locked ? AdminActionTypes.LockUser
+            : statusResult.Value == UserStatuses.Inactive ? AdminActionTypes.DeactivateUser
+            : AdminActionTypes.UnlockUser,
             $"Changed status from {existing.Status} to {statusResult.Value}.", ipAddress);
         var user = await _repository.ChangeStatusAsync(
             userId, statusResult.Value!, log, cancellationToken);

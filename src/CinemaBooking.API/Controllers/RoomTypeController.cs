@@ -23,7 +23,8 @@ public sealed class RoomTypeController(IRoomTypeService service, IActivityLogSer
     {
         var result = await service.CreateAsync(request.TypeName, request.ExtraPrice, request.Description, ct);
         if (!result.Succeeded) return BadRequest(new { success = false, message = result.ErrorMessage });
-        await activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.CreateRoomType, "RoomType", result.RoomType!.RoomTypeID, $"Created room type {result.RoomType.RoomTypeID}", this.AuditIpAddress(), ct);
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await activityLogs.RecordAsync(adminId, AdminActionTypes.CreateRoomType, "RoomType", result.RoomType!.RoomTypeID, $"Created room type {result.RoomType.RoomTypeID}", this.AuditIpAddress(), ct);
         return CreatedAtAction(nameof(GetById), new { id = result.RoomType.RoomTypeID }, ToResponse(result.RoomType));
     }
 
@@ -32,7 +33,8 @@ public sealed class RoomTypeController(IRoomTypeService service, IActivityLogSer
     {
         var result = await service.UpdateAsync(id, request.TypeName, request.ExtraPrice, request.Description, ct);
         if (!result.Succeeded) return result.ErrorMessage == "Room type not found." ? NotFound(new { success = false, message = result.ErrorMessage }) : BadRequest(new { success = false, message = result.ErrorMessage });
-        await activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateRoomType, "RoomType", id, $"Updated room type {id}", this.AuditIpAddress(), ct);
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await activityLogs.RecordAsync(adminId, AdminActionTypes.UpdateRoomType, "RoomType", id, $"Updated room type {id}", this.AuditIpAddress(), ct);
         return Ok(ToResponse(result.RoomType!));
     }
 
@@ -41,7 +43,8 @@ public sealed class RoomTypeController(IRoomTypeService service, IActivityLogSer
     {
         var result = await service.DeleteAsync(id, ct);
         if (!result.Succeeded) return result.ErrorMessage == "Room type not found." ? NotFound(new { success = false, message = result.ErrorMessage }) : Conflict(new { success = false, message = result.ErrorMessage });
-        await activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.DeleteRoomType, "RoomType", id, $"Deleted room type {id}", this.AuditIpAddress(), ct);
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await activityLogs.RecordAsync(adminId, AdminActionTypes.DeleteRoomType, "RoomType", id, $"Deleted room type {id}", this.AuditIpAddress(), ct);
         return NoContent();
     }
 

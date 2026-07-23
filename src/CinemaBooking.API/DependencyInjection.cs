@@ -238,6 +238,11 @@ public static class DependencyInjection
             .Get<JwtSettings>()
             ?? throw new InvalidOperationException("Jwt configuration section is required.");
 
+        if (jwtSettings.IsPlaceholderKey)
+            throw new InvalidOperationException(
+                "Jwt:SigningKey contains a placeholder value. " +
+                "Set a real signing key via environment variable or user secrets before starting in production.");
+
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {

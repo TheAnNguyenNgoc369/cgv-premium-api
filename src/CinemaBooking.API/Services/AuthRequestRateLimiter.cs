@@ -6,8 +6,9 @@ namespace CinemaBooking.API.Services;
 public sealed class AuthRequestRateLimiter : IAuthRequestRateLimiter, IDisposable
 {
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan StaleThreshold = TimeSpan.FromMinutes(10);
 
-    private readonly ConcurrentDictionary<string, FixedWindowRateLimiter> _limiters = new();
+    private readonly ConcurrentDictionary<string, RateLimiterEntry> _limiters = new();
 
     public async ValueTask<bool> TryAcquireAsync(
         string action,
@@ -15,23 +16,42 @@ public sealed class AuthRequestRateLimiter : IAuthRequestRateLimiter, IDisposabl
         CancellationToken cancellationToken = default)
     {
         var key = $"{action}:{email.Trim().ToLowerInvariant()}";
-        var limiter = _limiters.GetOrAdd(key, _ => new FixedWindowRateLimiter(new FixedWindowRateLimiterOptions
+        var entry = _limiters.GetOrAdd(key, _ =>
         {
-            AutoReplenishment = true,
-            PermitLimit = GetPermitLimit(action),
-            QueueLimit = 0,
-            Window = Window
-        }));
+            var limiter = new FixedWindowRateLimiter(new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = GetPermitLimit(action),
+                QueueLimit = 0,
+                Window = Window
+            });
+            return new RateLimiterEntry(limiter);
+        });
 
-        using var lease = await limiter.AcquireAsync(permitCount: 1, cancellationToken);
+        entry.LastAccessedUtc = DateTime.UtcNow;
+
+        using var lease = await entry.Limiter.AcquireAsync(permitCount: 1, cancellationToken);
         return lease.IsAcquired;
     }
 
     public void Dispose()
     {
-        foreach (var limiter in _limiters.Values)
+        foreach (var entry in _limiters.Values)
+            entry.Limiter.Dispose();
+    }
+
+    internal void CleanupStaleEntries()
+    {
+        var cutoff = DateTime.UtcNow - StaleThreshold;
+        var staleKeys = _limiters
+            .Where(kvp => kvp.Value.LastAccessedUtc < cutoff)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in staleKeys)
         {
-            limiter.Dispose();
+            if (_limiters.TryRemove(key, out var entry))
+                entry.Limiter.Dispose();
         }
     }
 
@@ -45,5 +65,17 @@ public sealed class AuthRequestRateLimiter : IAuthRequestRateLimiter, IDisposabl
             "resend-verification-email" => 3,
             _ => 5
         };
+    }
+
+    internal sealed class RateLimiterEntry
+    {
+        public FixedWindowRateLimiter Limiter { get; }
+        public DateTime LastAccessedUtc { get; set; }
+
+        public RateLimiterEntry(FixedWindowRateLimiter limiter)
+        {
+            Limiter = limiter;
+            LastAccessedUtc = DateTime.UtcNow;
+        }
     }
 }

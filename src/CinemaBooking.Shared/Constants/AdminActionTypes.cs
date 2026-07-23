@@ -15,7 +15,7 @@ public static class AdminActionTypes
     public const string UnlockUser = "unlock_user";
     public const string ChangeRole = "change_role";
     public const string DeleteUser = "delete_user";
-    public const string DeactivateUser = "lock_user";
+    public const string DeactivateUser = "deactivate_user";
     public const string CreateVoucher = "create_voucher";
     public const string UpdateVoucher = "update_voucher";
     public const string DeleteVoucher = "delete_voucher";

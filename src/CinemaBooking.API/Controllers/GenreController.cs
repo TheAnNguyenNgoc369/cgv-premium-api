@@ -61,8 +61,9 @@ public sealed class GenreController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
         var response = ToResponse(result.Genre!);
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.CreateGenre,
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.CreateGenre,
             "Genre", response.GenreId, $"Created genre {response.GenreId}", this.AuditIpAddress(), cancellationToken);
 
         return CreatedAtAction(
@@ -93,7 +94,8 @@ public sealed class GenreController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateGenre,
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.UpdateGenre,
             "Genre", id, $"Updated genre {id}", this.AuditIpAddress(), cancellationToken);
         return Ok(ToResponse(result.Genre!));
     }
@@ -116,7 +118,8 @@ public sealed class GenreController : ControllerBase
             return Conflict(new { success = false, message = result.ErrorMessage });
         }
 
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.DeleteGenre,
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.DeleteGenre,
             "Genre", id, $"Deleted genre {id}", this.AuditIpAddress(), cancellationToken);
         return NoContent();
     }

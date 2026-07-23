@@ -49,7 +49,8 @@ public sealed class BookingController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new { success = false, message = "Invalid request." });
 
-        var userId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
 
         var result = await _bookingService.HoldSeatsAsync(
             userId, request.ShowtimeId, request.SeatIds, cancellationToken);
@@ -81,8 +82,11 @@ public sealed class BookingController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new { success = false, message = "Invalid request." });
 
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
         var result = await _bookingService.ReleaseSeatHoldsAsync(
-            GetCurrentUserId(), request.ShowtimeId, request.SeatIds, cancellationToken);
+            userId, request.ShowtimeId, request.SeatIds, cancellationToken);
         if (!result.Succeeded)
             return BadRequest(new { success = false, message = result.ErrorMessage });
 
@@ -98,7 +102,8 @@ public sealed class BookingController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new { success = false, message = "Invalid request." });
 
-        var currentUserId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var currentUserId))
+            return Unauthorized();
         var isStaff = User.IsInRole(Roles.Staff);
         var userId = isStaff ? request.CustomerId : currentUserId;
 
@@ -138,7 +143,8 @@ public sealed class BookingController : ControllerBase
             });
         }
 
-        var userId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
         var isStaff = User.IsInRole(Roles.Staff);
         var customerId = isStaff ? request.CustomerId : userId;
 
@@ -177,7 +183,9 @@ public sealed class BookingController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new { success = false, message = "Invalid request." });
 
-        var staffId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var staffId))
+            return Unauthorized();
+
         var result = await _bookingService.LookupBookingFnbAsync(
             request.BookingCode, staffId, cancellationToken);
 
@@ -233,7 +241,8 @@ public sealed class BookingController : ControllerBase
         if (booking is null)
             return NotFound(new { success = false, message = "Booking not found." });
 
-        var currentUserId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var currentUserId))
+            return Unauthorized();
         if (booking.UserID != currentUserId && !User.IsInRole(Roles.Admin) && !User.IsInRole(Roles.Staff))
             return Forbid();
 
@@ -275,7 +284,8 @@ public sealed class BookingController : ControllerBase
     [HttpGet("bookings/my")]
     public async Task<IActionResult> GetMyBookings(CancellationToken cancellationToken)
     {
-        var userId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
         var bookings = await _bookingService.GetMyBookingsAsync(userId, cancellationToken);
         var synchronized = new List<Booking>(bookings.Count);
 
@@ -320,9 +330,10 @@ public sealed class BookingController : ControllerBase
         }));
     }
 
-    private int GetCurrentUserId()
+    private bool TryGetCurrentUserId(out int userId)
     {
-        return int.Parse(User.FindFirst("userId")!.Value);
+        var userIdValue = User.FindFirst("userId")?.Value;
+        return int.TryParse(userIdValue, out userId);
     }
 
     private async Task<Booking> SynchronizePendingPayOSBookingAsync(

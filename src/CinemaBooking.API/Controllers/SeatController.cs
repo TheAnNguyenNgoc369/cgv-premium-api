@@ -95,7 +95,8 @@ public sealed class SeatController : ControllerBase
             return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
         }
 
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.GenerateSeat,
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.GenerateSeat,
             "Room", roomId, $"Generated seats for room {roomId}", this.AuditIpAddress(), cancellationToken);
 
         return Ok(ToSeatMapResponse(roomId, result.Result!.Seats));
@@ -124,7 +125,8 @@ public sealed class SeatController : ControllerBase
             return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
         }
 
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateSeat,
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.UpdateSeat,
             "Room", roomId, $"Updated seats in room {roomId}", this.AuditIpAddress(), cancellationToken);
 
         var seats = await _seatService.GetSeatsByRoomAsync(roomId, cancellationToken);
@@ -151,7 +153,8 @@ public sealed class SeatController : ControllerBase
             return await ToErrorResponseAsync(result.ErrorMessage, cancellationToken);
         }
 
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.DeleteSeat,
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.DeleteSeat,
             "Room", roomId, $"Deleted seats in room {roomId}", this.AuditIpAddress(), cancellationToken);
 
         var seats = await _seatService.GetSeatsByRoomAsync(roomId, cancellationToken);

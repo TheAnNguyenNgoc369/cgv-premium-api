@@ -104,6 +104,50 @@ public sealed class MovieReviewRepository : IMovieReviewRepository
         return new MovieReviewStats(average, total, breakdown);
     }
 
+    public async Task<IReadOnlyDictionary<int, MovieReviewStats>> GetVisibleStatsForMoviesAsync(
+        IReadOnlyCollection<int> movieIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (movieIds.Count == 0)
+            return new Dictionary<int, MovieReviewStats>();
+
+        var buckets = await _db.MovieReviews
+            .AsNoTracking()
+            .Where(r => movieIds.Contains(r.MovieId) && !r.IsHidden)
+            .GroupBy(r => new { r.MovieId, r.Rating })
+            .Select(g => new { g.Key.MovieId, g.Key.Rating, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        var grouped = buckets.GroupBy(b => b.MovieId);
+        var result = new Dictionary<int, MovieReviewStats>();
+
+        foreach (var group in grouped)
+        {
+            var breakdown = new Dictionary<int, int> { { 5, 0 }, { 4, 0 }, { 3, 0 }, { 2, 0 }, { 1, 0 } };
+            var total = 0;
+            var weightedSum = 0L;
+
+            foreach (var bucket in group)
+            {
+                if (breakdown.ContainsKey(bucket.Rating))
+                    breakdown[bucket.Rating] = bucket.Count;
+                total += bucket.Count;
+                weightedSum += (long)bucket.Rating * bucket.Count;
+            }
+
+            double? average = total == 0 ? null : Math.Round(weightedSum / (double)total, 1);
+            result[group.Key] = new MovieReviewStats(average, total, breakdown);
+        }
+
+        foreach (var movieId in movieIds)
+        {
+            if (!result.ContainsKey(movieId))
+                result[movieId] = new MovieReviewStats(null, 0, new Dictionary<int, int> { { 5, 0 }, { 4, 0 }, { 3, 0 }, { 2, 0 }, { 1, 0 } });
+        }
+
+        return result;
+    }
+
     public async Task<List<ReviewListItem>> GetVisibleReviewsForMovieAsync(
         int movieId,
         int page,

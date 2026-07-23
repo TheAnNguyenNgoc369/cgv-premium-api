@@ -13,7 +13,6 @@ public static class DependencyInjection
     {
         var assembly = typeof(DependencyInjection).Assembly;
 
-        services.AddAutoMapper(_ => { }, assembly);
         services.AddScopedByConvention(assembly, "Service");
         services.AddScoped<IVoucherRuleEngine, VoucherRuleEngine>();
 

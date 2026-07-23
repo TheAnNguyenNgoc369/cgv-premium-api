@@ -33,6 +33,11 @@ public sealed class NotificationController(INotificationService service) : Contr
     [HttpDelete("read")]
     public async Task<IActionResult> DeleteRead(CancellationToken ct) { var count = await service.DeleteReadAsync(UserId(), ct); return Ok(new { success = true, deletedCount = count, message = "Read notifications deleted successfully." }); }
     private IActionResult Mutation(NotificationMutationResult x, string message) => x.Succeeded ? Ok(new { success = true, message }) : x.ErrorType == "forbidden" ? StatusCode(403, new { success = false, message = x.Error }) : NotFound(new { success = false, message = x.Error });
-    private int UserId() => int.Parse(User.FindFirst("userId")!.Value);
+    private int UserId()
+    {
+        if (!int.TryParse(User.FindFirst("userId")?.Value, out var userId))
+            throw new UnauthorizedAccessException();
+        return userId;
+    }
     private static object Map(NotificationItem x) => new { x.NotificationId, x.Title, x.Message, x.Type, x.EventType, x.ReferenceType, x.ReferenceId, x.ActionUrl, x.IsRead, readAt = x.ReadAt.HasValue ? VietnamTime.FromUtc(x.ReadAt.Value) : (DateTimeOffset?)null, createdAt = VietnamTime.FromUtc(x.CreatedAt) };
 }
