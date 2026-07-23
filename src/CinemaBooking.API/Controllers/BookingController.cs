@@ -106,9 +106,13 @@ public sealed class BookingController : ControllerBase
             .Select(item => new BookingFnBItemDto(item.ItemId, item.Quantity))
             .ToList();
 
+        int? staffCinemaId = isStaff
+            ? await _bookingRepository.GetStaffCinemaIdAsync(currentUserId, cancellationToken)
+            : null;
+
         var result = await _bookingService.CalculatePricingAsync(
             userId, request.ShowtimeId, request.SeatIds, fnbItems,
-            request.VoucherCode, cancellationToken);
+            request.VoucherCode, staffCinemaId, cancellationToken);
 
         if (!result.Succeeded)
             return BadRequest(new { success = false, message = result.ErrorMessage });
@@ -142,9 +146,13 @@ public sealed class BookingController : ControllerBase
             .Select(item => new BookingFnBItemDto(item.ItemId, item.Quantity))
             .ToList();
 
+        int? staffCinemaId = isStaff
+            ? await _bookingRepository.GetStaffCinemaIdAsync(userId, cancellationToken)
+            : null;
+
         var result = await _bookingService.CreateBookingAsync(
             userId, customerId, isStaff, request.ShowtimeId, request.SeatIds, fnbItems,
-            request.VoucherCode, cancellationToken);
+            request.VoucherCode, staffCinemaId, cancellationToken);
 
         if (!result.Succeeded)
         {

@@ -125,6 +125,7 @@ public sealed class BookingService : IBookingService
         List<int> seatIds,
         List<BookingFnBItemDto> fnbItems,
         string? voucherCode,
+        int? staffCinemaId = null,
         CancellationToken cancellationToken = default)
     {
         var isFnbOnly = !showtimeId.HasValue && seatIds.Count == 0;
@@ -165,7 +166,7 @@ public sealed class BookingService : IBookingService
         }
 
         var pricingResult = await CalculatePricingAsync(
-            customerId, showtimeId, seatIds, fnbItems, voucherCode, cancellationToken);
+            customerId, showtimeId, seatIds, fnbItems, voucherCode, staffCinemaId, cancellationToken);
 
         if (!pricingResult.Succeeded)
             return (false, pricingResult.ErrorMessage, null, null);
@@ -358,6 +359,7 @@ public sealed class BookingService : IBookingService
         List<int> seatIds,
         List<BookingFnBItemDto> fnbItems,
         string? voucherCode,
+        int? staffCinemaId = null,
         CancellationToken cancellationToken = default)
     {
         var isFnbOnly = !showtimeId.HasValue && seatIds.Count == 0;
@@ -511,10 +513,10 @@ public sealed class BookingService : IBookingService
             {
                 BookingId = 0,
                 CustomerId = userId,
-                CinemaId = showtime?.Room.CinemaID ?? 0,
+                CinemaId = showtime?.Room.CinemaID ?? staffCinemaId ?? 0,
                 MovieId = showtime?.MovieID ?? 0,
                 RoomId = showtime?.RoomID ?? 0,
-                ShowtimeDateTime = showtime?.StartTime ?? DateTime.MinValue,
+                ShowtimeDateTime = showtime?.StartTime ?? now,
                 MembershipTier = user?.LoyaltyTier?.TierName,
                 Seats = !isFnbOnly ? seatDetails.Select(s => new Vouchers.RuleEngine.SeatValidationData
                 {
