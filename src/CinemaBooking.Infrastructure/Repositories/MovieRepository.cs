@@ -283,6 +283,7 @@ public sealed class MovieRepository : IMovieRepository
 
             _dbContext.MovieGenres.RemoveRange(movie.MovieGenres);
             _dbContext.MoviePersons.RemoveRange(movie.MoviePersons);
+            _dbContext.MovieReviews.RemoveRange(movie.Reviews);
             _dbContext.Movie.Remove(movie);
 
             await _dbContext.SaveChangesAsync(cancellationToken);
