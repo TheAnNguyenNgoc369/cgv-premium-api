@@ -170,10 +170,14 @@ public sealed class PaymentService : IPaymentService
                 EnumValueMapper.ToApiValue(payment.Booking.Status));
 
         if (verified.Code != "00")
+        {
+            payment = await SynchronizePendingPayOSPaymentAsync(
+                payment, verified.OrderCode, cancellationToken);
             return new(true, $"PayOS webhook acknowledged with code {verified.Code}.",
-                payment.PaymentID, payment.BookingID,
+                payment!.PaymentID, payment.BookingID,
                 EnumValueMapper.ToApiValue(payment.Status),
                 EnumValueMapper.ToApiValue(payment.Booking.Status));
+        }
 
         var completed = await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
