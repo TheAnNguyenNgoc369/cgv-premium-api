@@ -119,34 +119,31 @@ public sealed class SeatTypeRepository : ISeatTypeRepository
         int seatTypeId,
         CancellationToken cancellationToken)
     {
-        var roomIds = await _dbContext.Seats
+        var capacities = await _dbContext.Seats
             .AsNoTracking()
-            .Where(seat => seat.SeatTypeID == seatTypeId && seat.IsCurrentLayout)
-            .Select(seat => seat.RoomID)
-            .Distinct()
+            .Where(seat => seat.SeatTypeID == seatTypeId
+                && seat.IsCurrentLayout
+                && seat.Status == "active"
+                && !seat.IsGap)
+            .Join(
+                _dbContext.SeatTypes,
+                seat => seat.SeatTypeID,
+                seatType => seatType.SeatTypeID,
+                (seat, seatType) => new { seat.RoomID, seatType.Capacity })
+            .GroupBy(x => x.RoomID)
+            .Select(g => new { RoomId = g.Key, Capacity = g.Sum(x => x.Capacity) })
             .ToListAsync(cancellationToken);
 
-        foreach (var roomId in roomIds)
+        var roomIds = capacities.Select(c => c.RoomId).ToList();
+        var rooms = await _dbContext.Rooms
+            .Where(r => roomIds.Contains(r.RoomID))
+            .ToListAsync(cancellationToken);
+
+        foreach (var room in rooms)
         {
-            var capacity = await _dbContext.Seats
-                .Where(seat => seat.RoomID == roomId
-                    && seat.IsCurrentLayout
-                    && seat.Status == "active"
-                    && !seat.IsGap)
-                .Join(
-                    _dbContext.SeatTypes,
-                    seat => seat.SeatTypeID,
-                    seatType => seatType.SeatTypeID,
-                    (_, seatType) => seatType.Capacity)
-                .SumAsync(cancellationToken);
-
-            var room = await _dbContext.Rooms
-                .FirstOrDefaultAsync(item => item.RoomID == roomId, cancellationToken);
-
-            if (room is not null)
-            {
-                room.Capacity = capacity;
-            }
+            var newCapacity = capacities.FirstOrDefault(c => c.RoomId == room.RoomID);
+            if (newCapacity is not null)
+                room.Capacity = newCapacity.Capacity;
         }
     }
 }

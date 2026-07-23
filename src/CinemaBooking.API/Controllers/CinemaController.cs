@@ -73,8 +73,9 @@ public sealed class CinemaController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
         var response = ToResponse(result.Cinema!);
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.CreateCinema,
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.CreateCinema,
             "Cinema", response.CinemaId, $"Created cinema {response.CinemaId}", this.AuditIpAddress(), cancellationToken);
 
         return CreatedAtAction(
@@ -113,7 +114,8 @@ public sealed class CinemaController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateCinema,
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.UpdateCinema,
             "Cinema", id, $"Updated cinema {id}", this.AuditIpAddress(), cancellationToken);
         return Ok(ToResponse(result.Cinema!));
     }
@@ -136,7 +138,8 @@ public sealed class CinemaController : ControllerBase
             return Conflict(new { success = false, message = result.ErrorMessage });
         }
 
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.DeleteCinema,
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.DeleteCinema,
             "Cinema", id, $"Deleted cinema {id}", this.AuditIpAddress(), cancellationToken);
         return NoContent();
     }

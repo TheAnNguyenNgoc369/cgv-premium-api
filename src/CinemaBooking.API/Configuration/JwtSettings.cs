@@ -18,4 +18,8 @@ public sealed class JwtSettings
 
     [Range(1, 1440)]
     public int AccessTokenExpirationMinutes { get; init; } = 60;
+
+    public bool IsPlaceholderKey =>
+        SigningKey.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase)
+        || SigningKey.Contains("ChangeMe", StringComparison.OrdinalIgnoreCase);
 }

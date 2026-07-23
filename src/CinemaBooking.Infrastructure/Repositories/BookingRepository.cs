@@ -376,12 +376,10 @@ public async Task<Booking?> GetBookingByIdAsync(
         int voucherId,
         CancellationToken cancellationToken = default)
     {
-        var voucher = await _db.Vouchers.FindAsync(new object[] { voucherId }, cancellationToken);
-        if (voucher is not null)
-        {
-            voucher.UsedCount++;
-            await _db.SaveChangesAsync(cancellationToken);
-        }
+        await _db.Database.ExecuteSqlInterpolatedAsync($@"
+            UPDATE Voucher
+               SET UsedCount = UsedCount + 1
+             WHERE VoucherID = {voucherId}", cancellationToken);
     }
 
     public async Task ExtendBookingHoldsAsync(

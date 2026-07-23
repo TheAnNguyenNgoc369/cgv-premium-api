@@ -21,7 +21,8 @@ public sealed class MembershipController : ControllerBase
     [HttpGet("me")]
     public async Task<IActionResult> GetMyMembership(CancellationToken cancellationToken)
     {
-        var userId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
 
         var membership = await _membershipService.GetMyMembershipAsync(userId, cancellationToken);
 
@@ -89,7 +90,8 @@ public sealed class MembershipController : ControllerBase
     [HttpGet("points-history")]
     public async Task<IActionResult> GetPointsHistory(CancellationToken cancellationToken)
     {
-        var userId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
 
         var history = await _membershipService.GetPointHistoryAsync(userId, cancellationToken);
 
@@ -103,8 +105,9 @@ public sealed class MembershipController : ControllerBase
         return Ok(response);
     }
 
-    private int GetCurrentUserId()
+    private bool TryGetCurrentUserId(out int userId)
     {
-        return int.Parse(User.FindFirst("userId")!.Value);
+        var userIdValue = User.FindFirst("userId")?.Value;
+        return int.TryParse(userIdValue, out userId);
     }
 }

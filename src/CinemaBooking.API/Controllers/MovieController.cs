@@ -219,8 +219,9 @@ public sealed class MovieController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
         var response = ToDetailResponse(result.Movie!);
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.CreateMovie,
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.CreateMovie,
             "Movie", response.MovieId, $"Created movie {response.MovieId}", this.AuditIpAddress(), cancellationToken);
 
         return CreatedAtAction(
@@ -267,7 +268,8 @@ public sealed class MovieController : ControllerBase
             return BadRequest(new { success = false, message = result.ErrorMessage });
         }
 
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateMovie,
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.UpdateMovie,
             "Movie", id, $"Updated movie {id}", this.AuditIpAddress(), cancellationToken);
         return Ok(ToDetailResponse(result.Movie!));
     }
@@ -296,7 +298,8 @@ public sealed class MovieController : ControllerBase
                 ? NotFound(new { success = false, message = result.ErrorMessage })
                 : BadRequest(new { success = false, message = result.ErrorMessage });
 
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.UpdateMovie,
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.UpdateMovie,
             "Movie", id, $"Updated poster for movie {id}", this.AuditIpAddress(), cancellationToken);
         return Ok(ToDetailResponse(result.Movie!));
     }
@@ -319,7 +322,8 @@ public sealed class MovieController : ControllerBase
             return Conflict(new { success = false, message = result.ErrorMessage });
         }
 
-        await _activityLogs.RecordAsync(this.AuditActorId(), AdminActionTypes.DeleteMovie,
+        if (!this.TryAuditActorId(out var adminId)) return Unauthorized();
+        await _activityLogs.RecordAsync(adminId, AdminActionTypes.DeleteMovie,
             "Movie", id, $"Deleted movie {id}", this.AuditIpAddress(), cancellationToken);
         return NoContent();
     }

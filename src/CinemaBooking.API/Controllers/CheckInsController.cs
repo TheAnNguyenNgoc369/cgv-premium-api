@@ -3,7 +3,6 @@ using CinemaBooking.Application.CheckIns;
 using CinemaBooking.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace CinemaBooking.API.Controllers;
 
@@ -30,7 +29,9 @@ public sealed class CheckInsController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new { success = false, message = "Invalid request." });
 
-        var staffId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var staffId))
+            return Unauthorized();
+
         var result = await _checkInService.LookupAsync(
             request.QRCode,
             staffId,
@@ -109,7 +110,8 @@ public sealed class CheckInsController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new { success = false, message = "Invalid request." });
 
-        var staffId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var staffId))
+            return Unauthorized();
         var ipAddress = GetClientIpAddress();
 
         var result = await _checkInService.CheckInAsync(
@@ -153,7 +155,8 @@ public sealed class CheckInsController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new { success = false, message = "Invalid request." });
 
-        var staffId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var staffId))
+            return Unauthorized();
 
         var result = await _checkInService.ConfirmFnBPickupAsync(
             request.BookingCode,
@@ -171,10 +174,10 @@ public sealed class CheckInsController : ControllerBase
         return Ok(new { success = true, message = result.ErrorMessage });
     }
 
-    private int GetCurrentUserId()
+    private bool TryGetCurrentUserId(out int userId)
     {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        return int.TryParse(userIdClaim, out var userId) ? userId : 0;
+        var userIdValue = User.FindFirst("userId")?.Value;
+        return int.TryParse(userIdValue, out userId);
     }
 
     private string? GetClientIpAddress()
@@ -203,6 +206,9 @@ public sealed class CheckInsController : ControllerBase
             return BadRequest(new { success = false, message = error });
         }
 
+        if (!TryGetCurrentUserId(out var staffId))
+            return Unauthorized();
+
         var result = await _checkInService.GetHistoryAsync(
             request.StaffId,
             request.CinemaId,
@@ -210,7 +216,7 @@ public sealed class CheckInsController : ControllerBase
             request.To,
             request.Page,
             request.PageSize,
-            GetCurrentUserId(),
+            staffId,
             User.IsInRole(Roles.Admin),
             User.IsInRole(Roles.Manager),
             User.IsInRole(Roles.Staff),
@@ -268,6 +274,9 @@ public sealed class CheckInsController : ControllerBase
             return BadRequest(new { success = false, message = error });
         }
 
+        if (!TryGetCurrentUserId(out var staffId))
+            return Unauthorized();
+
         var result = await _checkInService.GetFnBPickupHistoryAsync(
             request.StaffId,
             request.CinemaId,
@@ -275,7 +284,7 @@ public sealed class CheckInsController : ControllerBase
             request.To,
             request.Page,
             request.PageSize,
-            GetCurrentUserId(),
+            staffId,
             User.IsInRole(Roles.Admin),
             User.IsInRole(Roles.Manager),
             User.IsInRole(Roles.Staff),

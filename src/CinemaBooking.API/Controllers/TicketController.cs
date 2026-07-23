@@ -24,7 +24,9 @@ public sealed class TicketController : ControllerBase
         int bookingId,
         CancellationToken cancellationToken)
     {
-        var userId = int.Parse(User.FindFirst("userId")!.Value);
+        if (!int.TryParse(User.FindFirst("userId")?.Value, out var userId))
+            return Unauthorized();
+
         var isStaff = User.IsInRole(Roles.Staff);
 
         var tickets = await _ticketService.GetTicketsByBookingIdAsync(
@@ -53,7 +55,9 @@ public sealed class TicketController : ControllerBase
     [Authorize(Roles = Roles.Customer)]
     public async Task<IActionResult> GetMyTickets(CancellationToken cancellationToken)
     {
-        var userId = int.Parse(User.FindFirst("userId")!.Value);
+        if (!int.TryParse(User.FindFirst("userId")?.Value, out var userId))
+            return Unauthorized();
+
         var tickets = await _ticketService.GetMyTicketsAsync(userId, cancellationToken);
 
         return Ok(new { success = true, tickets, count = tickets.Count });

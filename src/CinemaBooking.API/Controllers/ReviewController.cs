@@ -26,7 +26,8 @@ public sealed class ReviewController : ControllerBase
             return BadRequest(new { success = false, message = "Invalid request." });
         }
 
-        var userId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
 
         var result = await _reviewService.CreateAsync(
             userId,
@@ -107,9 +108,10 @@ public sealed class ReviewController : ControllerBase
         });
     }
 
-    private int GetCurrentUserId()
+    private bool TryGetCurrentUserId(out int userId)
     {
-        return int.Parse(User.FindFirst("userId")!.Value);
+        var userIdValue = User.FindFirst("userId")?.Value;
+        return int.TryParse(userIdValue, out userId);
     }
 }
 

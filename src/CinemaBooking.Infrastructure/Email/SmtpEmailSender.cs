@@ -54,25 +54,6 @@ public sealed class SmtpEmailSender : IEmailSender
             };
             message.To.Add(toEmail);
 
-            if (inlineImages is { Count: > 0 })
-            {
-                var htmlView = AlternateView.CreateAlternateViewFromString(
-                    htmlBody, null, MediaTypeNames.Text.Html);
-                foreach (var image in inlineImages)
-                {
-                    var stream = new MemoryStream(image.Content, writable: false);
-                    var resource = new LinkedResource(stream, image.MediaType)
-                    {
-                        ContentId = image.ContentId,
-                        TransferEncoding = TransferEncoding.Base64
-                    };
-                    resource.ContentType.Name = image.FileName;
-                    htmlView.LinkedResources.Add(resource);
-                }
-
-                message.AlternateViews.Add(htmlView);
-            }
-
             using var client = new SmtpClient(_emailSettings.Host, _emailSettings.Port)
             {
                 EnableSsl = _emailSettings.EnableSsl
@@ -85,7 +66,40 @@ public sealed class SmtpEmailSender : IEmailSender
                     _emailSettings.Password);
             }
 
-            await client.SendMailAsync(message, cancellationToken);
+            List<MemoryStream>? streams = null;
+            try
+            {
+                if (inlineImages is { Count: > 0 })
+                {
+                    var htmlView = AlternateView.CreateAlternateViewFromString(
+                        htmlBody, null, MediaTypeNames.Text.Html);
+                    streams = new List<MemoryStream>();
+                    foreach (var image in inlineImages)
+                    {
+                        var stream = new MemoryStream(image.Content, writable: false);
+                        streams.Add(stream);
+                        var resource = new LinkedResource(stream, image.MediaType)
+                        {
+                            ContentId = image.ContentId,
+                            TransferEncoding = TransferEncoding.Base64
+                        };
+                        resource.ContentType.Name = image.FileName;
+                        htmlView.LinkedResources.Add(resource);
+                    }
+
+                    message.AlternateViews.Add(htmlView);
+                }
+
+                await client.SendMailAsync(message, cancellationToken);
+            }
+            finally
+            {
+                if (streams is not null)
+                {
+                    foreach (var stream in streams)
+                        await stream.DisposeAsync();
+                }
+            }
 
             _logger.LogInformation("Email successfully sent to {ToEmail}", toEmail);
             return true;

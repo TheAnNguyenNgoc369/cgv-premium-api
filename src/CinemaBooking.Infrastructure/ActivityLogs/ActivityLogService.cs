@@ -13,6 +13,7 @@ public sealed class ActivityLogService : IActivityLogService
     {
         [AdminActionTypes.CreateUser]="UserManagement", [AdminActionTypes.UpdateUser]="UserManagement",
         [AdminActionTypes.LockUser]="UserManagement", [AdminActionTypes.UnlockUser]="UserManagement",
+        [AdminActionTypes.DeactivateUser]="UserManagement",
         [AdminActionTypes.ChangeRole]="UserManagement", [AdminActionTypes.DeleteUser]="UserManagement",
         [AdminActionTypes.CreateVoucher]="Voucher", [AdminActionTypes.UpdateVoucher]="Voucher", [AdminActionTypes.DeleteVoucher]="Voucher",
         [AdminActionTypes.CreateShowtime]="Showtime", [AdminActionTypes.UpdateShowtime]="Showtime", [AdminActionTypes.DeleteShowtime]="Showtime",

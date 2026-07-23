@@ -73,7 +73,8 @@ public sealed class AdminReviewController : ControllerBase
     [HttpPatch("{reviewId:int}/hide")]
     public async Task<IActionResult> Hide(int reviewId, CancellationToken cancellationToken)
     {
-        var adminId = GetCurrentUserId();
+        if (!TryGetCurrentUserId(out var adminId))
+            return Unauthorized();
         var result = await _reviewService.HideAsync(reviewId, adminId, cancellationToken);
 
         if (result.Succeeded)
@@ -105,8 +106,9 @@ public sealed class AdminReviewController : ControllerBase
         };
     }
 
-    private int GetCurrentUserId()
+    private bool TryGetCurrentUserId(out int userId)
     {
-        return int.Parse(User.FindFirst("userId")!.Value);
+        var userIdValue = User.FindFirst("userId")?.Value;
+        return int.TryParse(userIdValue, out userId);
     }
 }
